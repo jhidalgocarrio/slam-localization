@@ -1,9 +1,9 @@
-#include "Dummy.hpp"
+#include "sckf.hpp"
 
-namespace dummy_project
+namespace localization
 {
 
-	void DummyClass::welcome()
+	void sckf::welcome()
 	{
 		std::cout << "You successfully compiled and executed DummyProject. Welcome!" << std::endl;
 	}
