@@ -113,15 +113,23 @@ void sckf::setStatex(Eigen::Matrix< double, Eigen::Dynamic, 1  > &x_0)
     this->xki_k = x_0;
 }
 
+void sckf::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz)
+{
+    this->eccx = eccx;
+    this->eccy = eccy;
+    this->eccz = eccz;
+}
+
+
  /**
 * @brief This function Initilize the vectors and matrices
 */
 void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Qec,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qbg, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba,
-		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
-		Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Rz,
+		Eigen::Matrix< double, NUMAXIS, NUMAXIS >& Rv, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
+		Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Ren,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rm,
-		Eigen::Matrix <double,NUMAXIS,1> ecc, double g, double alpha)
+		double g, double alpha)
 {
     
     /** Set the matrix and vector dimension to the static values of the class **/
@@ -131,7 +139,6 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     A.resize(sckf::ASTATEVECTORSIZE,sckf::ASTATEVECTORSIZE);
     Fki.resize(sckf::XSTATEVECTORSIZE,sckf::XSTATEVECTORSIZE);
     
-    Qa.resize(sckf::ASTATEVECTORSIZE,sckf::ASTATEVECTORSIZE);
     Qk.resize(sckf::XSTATEVECTORSIZE,sckf::XSTATEVECTORSIZE);
     
     Pk_k.resize(sckf::XSTATEVECTORSIZE,sckf::XSTATEVECTORSIZE);
@@ -145,10 +152,12 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     
     Rk.resize(sckf::ZMEASUREMENTVECTORSIZE, sckf::ZMEASUREMENTVECTORSIZE);
     
+    K.resize(sckf::XSTATEVECTORSIZE, sckf::ZMEASUREMENTVECTORSIZE);
+    
     /** Resizing dynamic arguments to the correct dimension to avoid matrices errors **/
     P_0.resize(sckf::XSTATEVECTORSIZE, sckf::XSTATEVECTORSIZE);
     Qec.resize((sckf::ESTATEVECTORSIZE*sckf::NUMBEROFWHEELS), (sckf::ESTATEVECTORSIZE*sckf::NUMBEROFWHEELS));
-    Rz.resize(sckf::ZMEASUREMENTVECTORSIZE, sckf::ZMEASUREMENTVECTORSIZE);
+    Ren.resize(sckf::EMEASUREMENTVECTORSIZE-(2*NUMAXIS), sckf::EMEASUREMENTVECTORSIZE-(2*NUMAXIS));
     
     /** Gravitation acceleration **/
     gtilde << 0, 0, g;
@@ -157,9 +166,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     mtilde(0) = cos(alpha);
     mtilde(1) = 0;
     mtilde(2) = -sin(alpha);
-    
-    /** Eccentricity of the inertial sensors **/
-    eccentricity = ecc;
+
     
     /** Kalman filter state, error covariance and process noise covariance **/
     xki_k = Matrix <double,sckf::XSTATEVECTORSIZE,1>::Zero();
@@ -189,9 +196,11 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     Rk = Matrix <double,sckf::ZMEASUREMENTVECTORSIZE,sckf::ZMEASUREMENTVECTORSIZE>::Zero();
     RHist = Eigen::Matrix <double,NUMAXIS,NUMAXIS*M1>::Zero();
     
-    /** Fill matrix Rq, Ra and Rm **/
-    this->Ra = Ra;
+    /** Fill matrix Rv, Rg, Re, Ra and Rm **/
+    this->Rv = Rv;
     this->Rg = Rg;
+    this->Ren = Ren;
+    this->Ra = Ra;
     this->Rm = Rm;
     
     /** Initial bias **/
@@ -204,11 +213,11 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
 	0 , 0 , 0 , 0,
 	0 , 0 , 0 , 0;
     
-    /** Initial quaternion in Init**/
-    q4.w() = 1.00;
-    q4.x() = 0.00;
-    q4.y() = 0.00;
-    q4.z() = 0.00;
+    /** Initial quaternion in Init is NaN**/
+    q4.w() = std::numeric_limits<double>::quiet_NaN();
+    q4.x() = std::numeric_limits<double>::quiet_NaN();
+    q4.y() = std::numeric_limits<double>::quiet_NaN();
+    q4.z() = std::numeric_limits<double>::quiet_NaN();
     
     /** Default initial bias **/
     bghat << 0.00, 0.00, 0.00;
@@ -228,10 +237,11 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     std::cout<< "A:\n"<<A<<"\n";
     std::cout<< "mtilde:\n"<<mtilde<<"\n";
     std::cout<< "gtilde:\n"<<gtilde<<"\n";
-    std::cout<< "Ra:\n"<<Ra<<"\n";
+    std::cout<< "Rv:\n"<<Rv<<"\n";
     std::cout<< "Rg:\n"<<Rg<<"\n";
+    std::cout<< "Ra:\n"<<Ra<<"\n";
+    std::cout<< "Ren:\n"<<Ren<<"\n";
     std::cout<< "Rm:\n"<<Rm<<"\n";
-    std::cout<< "Rz:\n"<<Rz<<"\n";
 
 }
 
@@ -242,7 +252,7 @@ void sckf::predict(Eigen::Matrix< double, 3 , 1  >& u, double dt)
 {
     
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> vec2product; /** Vec 2 product  matrix */
-    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Vec 2 product  matrix */
+    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
     Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4; /** Quaternion integration matrix */
     Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
     Eigen::Matrix <double,ESTATEVECTORSIZE, ESTATEVECTORSIZE> Fe; /** System matrix of a single wheel position error */
@@ -315,6 +325,7 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> gtilde2product; /** Vec 2 product  matrix for the gravioty vector in body frame*/
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> gyros2product; /** Vec 2 product  matrix for the gyroscopes (angular velocity) */
+    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> fooR2; /**  Measurement noise matrix from accelerometers matrix Ra*/
     Eigen::Matrix <double,ASTATEVECTORSIZE,1> xa_k; /** Attitude part of the state vector xk+i|k */
     Eigen::Matrix <double,ASTATEVECTORSIZE,ASTATEVECTORSIZE> P1a; /** Error convariance matrix for measurement 1 of the attitude */
@@ -341,7 +352,7 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     /** First measurement step (Pitch and Roll correction from Acc) **/
     
     /** Copy the attitude part of the state vector and covariance matrix **/
-    xa_k = xki_k.block<ASTATEVECTORSIZE, 1> ((ESTATEVECTORSIZE*NUMBEROFWHEELS), 1);
+    xa_k = xki_k.block<ASTATEVECTORSIZE, 1> ((ESTATEVECTORSIZE*NUMBEROFWHEELS), 0);
     P1a = Pki_k.block<ASTATEVECTORSIZE, ASTATEVECTORSIZE> ((ESTATEVECTORSIZE*NUMBEROFWHEELS), (ESTATEVECTORSIZE*NUMBEROFWHEELS));
     
     /** Calculate the gravity vector in the body frame **/
@@ -349,16 +360,20 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     gtilde2product << 0, -gtilde_body(2), gtilde_body(1),
 		gtilde_body(2), 0, -gtilde_body(0),
 		-gtilde_body(1), gtilde_body(0), 0;
-		
-    /** In order to remove the centripetal velocities **/
-    gyros2product << 0, -gyro[2], gyro[1],
-		    gyro[2], 0, -gyro[0],
-		    -gyro[1], gyro[0], 0;
+	
+    /** Eliminate the Bias from gyros**/
+    angvelo = gyro - bghat; 
+
+    /** Compute the vector2product matrix with the angular velocity **/
+    /** in order to In order to remove the centripetal velocities **/
+    gyros2product << 0, -angvelo(2), angvelo(1),
+		angvelo(2), 0, -angvelo(0),
+		-angvelo(1), angvelo(0), 0;
 		
     /** Form the observation matrix Hk **/
     Hk.block<EMEASUREMENTVECTORSIZE, XSTATEVECTORSIZE> (0,0) = He;
     
-    /** Form the matrix for the measurement 1 of the attitude **/
+    /** Form the matrix for the measurement 1 of the attitude (acc correction) **/
     H1a.block<NUMAXIS, NUMAXIS> (0,0) = 2*gtilde2product;
     
     /** Copy to the whole observation matrix **/
@@ -367,17 +382,19 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     /** Form the measurement vector z1a for the attitude **/
     z1a = acc - bahat - gtilde_body;
     
-    /** Form the measurement vector ze of the rover position error (Be*ye) **/
-    ye.block<NUMAXIS, 1> (0,0) = (z1a * dt) - (gyros2product * eccentricity);
-    ye.block<NUMAXIS, 1> (NUMAXIS, 1) = gyro;
-    ye.block<EMEASUREMENTVECTORSIZE-(2*NUMAXIS), 1> ((2*NUMAXIS), 1) = encoders;
+    /** Form the measurement vector ye of the rover position error (Be*ye) **/
+    ye(0,0) = (z1a[0] * dt) - (gyros2product.row(0) * eccx);
+    ye(1,0) = (z1a[1] * dt) - (gyros2product.row(1) * eccy);
+    ye(2,0) = (z1a[2] * dt) - (gyros2product.row(2) * eccz);
+    ye.block<NUMAXIS, 1> (NUMAXIS, 0) = angvelo;
+    ye.block<EMEASUREMENTVECTORSIZE-(2*NUMAXIS), 1> ((2*NUMAXIS), 0) = encoders;
     
     /** Form the complete zk vector **/
     zki.block<EMEASUREMENTVECTORSIZE, 1> (0,0)= Be*ye;
-    zki.block<NUMAXIS, 1> (EMEASUREMENTVECTORSIZE, 1)= z1a;
+    zki.block<NUMAXIS, 1> (EMEASUREMENTVECTORSIZE, 0)= z1a;
    
     
-    /** The adaptive algorithm, the Uk matrix and SVD part **/
+    /** The adaptive algorithm for the attitude, the Uk matrix and SVD part **/
     R1a = (z1a - H1a*xa_k) * (z1a - H1a*xa_k).transpose();
     RHist.block <NUMAXIS, NUMAXIS> (0, (r1count*(M1-1))%M1) = R1a;
     
@@ -399,10 +416,10 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     /**
     * Single Value Decomposition
     */
-    JacobiSVD <MatrixXd > svdOfR(Uk, ComputeThinU);
+    JacobiSVD <MatrixXd > svdOfR1a(Uk, ComputeThinU);
 
-    s = svdOfR.singularValues();
-    u = svdOfR.matrixU();
+    s = svdOfR1a.singularValues();
+    u = svdOfR1a.matrixU();
     
     lambda << s(0), s(1), s(2);
     
@@ -428,43 +445,118 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
 	    Qstar = Matrix<double, NUMAXIS, NUMAXIS>::Zero();
     }
     
-    
+    /** Form the Rk matrix **/
+    Rk.block<NUMAXIS, NUMAXIS>(0,0) = Rv; /** For the linear velocity **/
+    Rk.block<NUMAXIS, NUMAXIS>(NUMAXIS,NUMAXIS) = Rg; /** For the angular velocity **/
+    Rk.block<EMEASUREMENTVECTORSIZE-(2*NUMAXIS), EMEASUREMENTVECTORSIZE-(2*NUMAXIS)>((2*NUMAXIS),(2*NUMAXIS)) = Ren; /** For the encoders **/
+    Rk.block<NUMAXIS, NUMAXIS>(EMEASUREMENTVECTORSIZE,EMEASUREMENTVECTORSIZE) = Ra + Qstar; /** For the attitude correction **/
     
     /** Compute the Kalman Gain Matrix **/
-//     K1 = P1 * H1.transpose() * (H1 * P1 * H1.transpose() + Ra + Qstar).inverse(); //Qstart is the external acceleration covariance
-//     
-//     /** Update the state vector and the covariance matrix **/
-//     x = x + K1 * (z1 - H1 * x);
-// //       std::cout<<"z1:\n"<<z1<<"\n H1 * x:\n"<<(H1 * x)<<"\n";
-//     P = (Matrix<double,IKFSTATEVECTORSIZE,IKFSTATEVECTORSIZE>::Identity()-K1*H1)*P*(Matrix<double,IKFSTATEVECTORSIZE,IKFSTATEVECTORSIZE>::Identity()-K1*H1).transpose() + K1*(Ra+Qstar)*K1.transpose();
-//     P = 0.5 * (P + P.transpose());
-//     
-//     /** Update the quaternion with the Indirect approach **/
-//     /** This is necessary mainly because after(in the 2 measurement) C(q) is computed **/
-//     qe.w() = 1;
-//     qe.x() = x(0);
-//     qe.y() = x(1);
-//     qe.z() = x(2);
-//     q4 = q4 * qe;
-//     
-//     /** Normalize quaternion **/
-//     q4.normalize();
-// 
-//     
-//     /** Reset the quaternion part of the state vector **/
-//     x.block<NUMAXIS,1>(0,0) = Matrix<double, NUMAXIS, 1>::Zero();
-//     
-//     /**---------------------------- **/
-//     /** Reset the rest of the state **/
-//     /**---------------------------- **/
-//     bghat = bghat + x.block<NUMAXIS, 1> (3,0);
-//     x.block<NUMAXIS, 1> (3,0) = Matrix <double, NUMAXIS, 1>::Zero();
-//     
-//     bahat = bahat + x.block<NUMAXIS, 1> (6,0);
-//     x.block<NUMAXIS, 1> (6,0) = Matrix <double, NUMAXIS, 1>::Zero();
-//     
-//     return;
+    K = Pki_k * Hk.transpose() * (Hk * Pki_k * Hk.transpose() + Rk).inverse();
+    
+    /** Update the state vector and the covariance matrix **/
+    xki_k = xki_k + K * (zki - Hk*xki_k);
+        
+    Pki_k = (Matrix<double,XSTATEVECTORSIZE,XSTATEVECTORSIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,XSTATEVECTORSIZE,XSTATEVECTORSIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
+    Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
+         
+    /** Update the quaternion with the Indirect approach **/
+    qe.w() = 1;
+    qe.x() = xki_k((ESTATEVECTORSIZE*NUMBEROFWHEELS));
+    qe.y() = xki_k((ESTATEVECTORSIZE*NUMBEROFWHEELS)+1);
+    qe.z() = xki_k((ESTATEVECTORSIZE*NUMBEROFWHEELS)+2);
+    q4 = q4 * qe;
+    
+    /** Normalize quaternion **/
+    q4.normalize();
 
+    
+    /** Reset the quaternion part of the state vector **/
+    xki_k.block<NUMAXIS,1>((ESTATEVECTORSIZE*NUMBEROFWHEELS),0) = Matrix<double, NUMAXIS, 1>::Zero();
+    
+    /**---------------------------- **/
+    /** Reset the rest of the state **/
+    /**---------------------------- **/
+    bghat = bghat + xki_k.block<NUMAXIS, 1> ((ESTATEVECTORSIZE*NUMBEROFWHEELS) + NUMAXIS,0);
+    xki_k.block<NUMAXIS, 1> ((ESTATEVECTORSIZE*NUMBEROFWHEELS) + NUMAXIS,0) = Matrix <double, NUMAXIS, 1>::Zero();
+    
+    bahat = bahat + xki_k.block<NUMAXIS, 1> ((ESTATEVECTORSIZE*NUMBEROFWHEELS) + (2*NUMAXIS),0);
+    xki_k.block<NUMAXIS, 1> ((ESTATEVECTORSIZE*NUMBEROFWHEELS) + (2*NUMAXIS),0) = Matrix <double, NUMAXIS, 1>::Zero();
+    
+    return;
+
+}
+
+
+/**
+* @brief This computes the theoretical gravity value according to the WGS-84 ellipsoid earth model.
+*/
+double localization::GravityModel(double latitude, double altitude)
+{
+    double g; /**< g magnitude at zero altitude **/
+
+    /** Nominal Gravity model **/
+    g = GWGS0*((1+GWGS1*pow(sin(latitude),2))/sqrt(1-pow(ECC,2)*pow(sin(latitude),2)));
+
+    /** Gravity affects by the altitude (aprox the value r = Re **/
+    g = g*pow(Re/(Re+altitude), 2);
+
+    std::cout<<"Theoretical gravity for this location (WGS-84 ellipsoid model): "<< g<<" [m/s^2]\n";
+
+    return g;
+
+}
+
+/**
+* @brief Substract the Earth rotation from the gyroscopes readout
+*/
+void localization::SubstractEarthRotation(Eigen::Matrix <double, NUMAXIS, 1> *u, Eigen::Quaternion <double> *qb_g, double latitude)
+{
+    Eigen::Matrix <double, NUMAXIS, 1> v (EARTHW*cos(latitude), 0, EARTHW*sin(latitude)); /**< vector of earth rotation components expressed in the geografic frame according to the latitude **/
+
+    /** Compute the v vector expressed in the body frame **/
+    v = (*qb_g) * v;
+    
+//     std::cout<<"Earth Rotation:"<<v<<"\n";
+
+    /** Subtract the earth rotation to the vector of inputs (u = u-v**/
+    (*u)  = (*u) - v;
+    
+    return;
+}
+
+/**
+* @brief Correct the magnetic declination of the North 
+*/
+int localization::CorrectMagneticDeclination(Eigen::Quaternion< double >* quat, double magnetic_declination, int mode)
+{
+    Eigen::Matrix <double, NUMAXIS, 1> euler;
+	
+    euler[2] = quat->toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
+    euler[1] = quat->toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
+    euler[0] = quat->toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
+    
+    if (mode == EAST)
+    {
+	std::cout << "[EAST] magnetic declination\n";
+	euler[2] -= magnetic_declination; /** Magnetic declination is positive **/
+    }
+    else if (mode == WEST)
+    {
+	std::cout << "[WEST] magnetic declination\n";
+	euler[2] += magnetic_declination; /** Magnetic declination is negative **/
+    }
+    else
+    {
+	std::cerr << "[ERROR] In the correction of the magnetic declination\n";
+	return ERROR;
+    }
+    
+    *quat = Eigen::Quaternion <double> (Eigen::AngleAxisd(euler[0], Eigen::Vector3d::UnitX())*
+			Eigen::AngleAxisd(euler[1], Eigen::Vector3d::UnitY()) *
+			Eigen::AngleAxisd(euler[2], Eigen::Vector3d::UnitZ()));
+    
+    return OK;
 }
 
 

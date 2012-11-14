@@ -47,6 +47,14 @@ namespace localization
     #define EARTHW  7.292115e-05 /** Earth angular velocity in rad/s **/
     #endif
     
+    #ifndef EAST
+    #define EAST 1 /** EAST is 1 and means positive magnetic declination **/
+    #endif
+    
+    #ifndef WEST
+    #define WEST 2 /** WEST is 2 and means negative magnetic declination **/
+    #endif
+    
     /** Inertial Sensors constant parameters **/
     #ifndef NUMAXIS
     #define NUMAXIS 3 /** Number of axis sensed by the IMU **/
@@ -58,8 +66,13 @@ namespace localization
     #define GAMMA 0.1 /**< Parameter for adaptive algorithm */
     #define R2COUNT 100 /**< Parameter for adaptive algorithm */
 
-    #define D2R PI/180.00 /**< Convert degree to radian **/
-    #define R2D 180.00/PI /**< Convert radian to degree **/
+    #ifndef D2R
+    #define D2R M_PI/180.00 /** Convert degree to radian **/
+    #endif
+    
+    #ifndef R2D
+    #define R2D 180.00/M_PI /** Convert radian to degree **/
+    #endif
     
     class sckf
     {
@@ -71,7 +84,7 @@ namespace localization
 	static const int ESTATEVECTORSIZE = 4; /** Rover position state vector error (3 elements for slip + 1 for contact angle) **/
 	static const int ASTATEVECTORSIZE = 9; /** Attitude state vector error **/
 	static const int XSTATEVECTORSIZE = ((ESTATEVECTORSIZE*NUMBEROFWHEELS) + ASTATEVECTORSIZE); /** State vector error **/
-	static const int EMEASUREMENTVECTORSIZE = 11; /** Measurement vector for the pover [psition state error **/
+	static const int EMEASUREMENTVECTORSIZE = 11; /** Measurement vector for the pover [position state error **/
 	static const int ZMEASUREMENTVECTORSIZE = (EMEASUREMENTVECTORSIZE + NUMAXIS); /** Whole rover measurement vector (6D for rover velosities + 4 of wheels encoders + 1 of passive joint) + IMU sensor **/
 
 	
@@ -88,7 +101,6 @@ namespace localization
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Fki; /** System matrix associated to vector Xk+i|k*/
 	
 	/** Error process matrix **/
-	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Qa; /** Attitude Process noise convariance matrix */
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Qk; /** System Process noise convariance matrix of vector Xk+i|k and therefore Xk|k*/
 	
 	/** System covariance matrices **/
@@ -105,10 +117,16 @@ namespace localization
 	
 	/** Error measurement matrices **/
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS*M1> RHist; /** History of M1 measurement noise convariance matrix (for the adaptive algorithm) */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rv; /** Measurement noise convariance matrix for linear velocities */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement and system noise convariance matrix for gyros (gyros are used in both: predict and update) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Ra; /** Measurement noise convariance matrix for acc */
-	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement noise convariance matrix for gyros */
+	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Ren; /** Measurement noise convariance matrix for motor and joint encoders */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rm; /** Measurement noise convariance matrix for mag */
+	
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Rk; /** Noise convariance matrix for the measurement vector of the filter */
+	
+	/** Kalman Gain matrix **/
+	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> K; /** Kalman gain associted to the vector Xk+i|k */
 	
 	/** For the attitude computation **/
 	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
@@ -118,7 +136,7 @@ namespace localization
 	
 	unsigned int r1count; /** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
 	double r2count; /** Variable used in the adaptive algorithm, to compute the final Qstart cov. matrix*/
-	Eigen::Matrix <double,NUMAXIS,1> eccentricity; /** In case the IMU is not located in the body center of the robot **/
+	Eigen::Matrix <double,NUMAXIS,1> eccx, eccy, eccz; /** Accelerometers excentricity with respect to the body center of the robot **/
 	
 	
 	
@@ -225,6 +243,23 @@ namespace localization
 	int setOmega (Eigen::Matrix <double,NUMAXIS,1>  &u);
 	
 	/**
+	* @brief This function set the Accelerometers excentricity
+	* 
+	* Here the eccentricity is defined as the vector of the distance
+	* between the Body center and the accelerometer of the IMU.
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @param[in] eccx vector of the distance in meters for Accelerometers X axis
+	* @param[in] eccy vector of the distance in meters for Accelerometers Y axis
+	* @param[in] eccz vector of the distance in meters for Accelerometers Z axis
+	*
+	* @return OK is everything all right. ERROR on other cases.
+	*
+	*/
+	void setEccentricity (Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz);
+	
+	/**
 	* @brief This function Initilize the vectors and matrix of the Filter
 	* 
 	* This method receives the measurement noise matrix of the sensors
@@ -250,12 +285,12 @@ namespace localization
 	* @return void
 	*
 	*/
-	void Init(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &P_0,
-		  Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Qec,
-		  Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Qbg, Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Qba,
-		  Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Rg, Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Rz, 
-		  Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Ra, Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Rm,
-		  Eigen::Matrix <double,NUMAXIS,1> ecc, double g, double alpha);
+	void Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Qec,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qbg, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba,
+		Eigen::Matrix< double, NUMAXIS, NUMAXIS >& Rv, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
+		Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Ren,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rm,
+		double g, double alpha);
 	
 	/**
 	* @brief Performs the prediction step of the filter.
@@ -306,6 +341,57 @@ namespace localization
 		    Eigen::Matrix <double,NUMAXIS,1>  &mag, double dt, bool magn_on_off);
 	    
     };
+    
+    /**
+    * @brief This computes the theoretical gravity value according to the WGS-84 ellipsoid earth model.
+    *
+    * @author Javier Hidalgo Carrio.
+    *
+    * @param[in] latitude double the latitude value in radian
+    * @param[in] altitude double with the altitude value in meters
+    *
+    * @return double. the theoretical value of the local gravity
+    *
+    */
+    double GravityModel(double latitude, double altitude);
+    
+    /**
+    * @brief Substract the Earth rotation from the gyroscopes readout
+    *
+    * This function computes the substraction of the rotation of the Earth (EARTHW)
+    * from the gyroscope values. This function uses quaternion of transformation from
+    * the body to the geographic frame and the latitude in radians.
+    *
+    * @author Javier Hidalgo Carrio.
+    *
+    * @param[in, out] *u pointer to angular velocity
+    * @param[in] *qb_g quaternion from body frame to geographic frame
+    * @param[in] latitude location latitude angle in radians
+    *
+    * @return void
+    *
+    */
+    void SubstractEarthRotation(Eigen::Matrix <double, NUMAXIS, 1> *u, Eigen::Quaternion <double> *qb_g, double latitude);
+    
+    /**
+    * @brief Correct the magnetic declination of the North
+    *
+    * Magnetic North and geographic North (Ertah rotation axis)
+    * are different depending on geograohic location according
+    * to a Declination Map. The function correct this bias.
+    * See: http://www.magnetic-declination.com for futher information
+    * about the declination angle of your location.
+    *
+    * @author Javier Hidalgo Carrio.
+    *
+    * @param[in, out] *quat pointer to quaternion with the orientation 
+    * @param[in] double magnetic declination angle in radians
+    * @param[in] mode. EAST or WEST depending on the magnetic declination
+    *
+    * @return OK is everything all right. ERROR on other cases.
+    *
+    */
+    int CorrectMagneticDeclination (Eigen::Quaternion <double> *quat, double magnetic_declination,  int mode);
 
 } // end namespace localization
 
