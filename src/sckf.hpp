@@ -11,6 +11,10 @@
 
 namespace localization	
 {
+//     #ifndef EIGEN_NO_AUTOMATIC_RESIZING
+//     #define EIGEN_NO_AUTOMATIC_RESIZING
+//     #endif
+    
     /** General defines **/
     #ifndef OK
     #define OK	0  /** Integer value in order to return when everything is all right. */
@@ -80,12 +84,12 @@ namespace localization
     public:
 	
 	/** CONSTANT VALUES TO THE CLASS**/
-	static const int NUMBEROFWHEELS = 4;
-	static const int ESTATEVECTORSIZE = 4; /** Rover position state vector error (3 elements for slip + 1 for contact angle) **/
-	static const int ASTATEVECTORSIZE = 9; /** Attitude state vector error **/
-	static const int XSTATEVECTORSIZE = ((ESTATEVECTORSIZE*NUMBEROFWHEELS) + ASTATEVECTORSIZE); /** State vector error **/
-	static const int EMEASUREMENTVECTORSIZE = 11; /** Measurement vector for the pover [position state error **/
-	static const int ZMEASUREMENTVECTORSIZE = (EMEASUREMENTVECTORSIZE + NUMAXIS); /** Whole rover measurement vector (6D for rover velosities + 4 of wheels encoders + 1 of passive joint) + IMU sensor **/
+	static const int NUMBER_OF_WHEELS = 4;
+	static const int E_STATE_VECTOR_SIZE = NUMAXIS + 1; /** Rover position state vector error (3 elements for slip + 1 for contact angle) **/
+	static const int A_STATE_VECTOR_SIZE = 9; /** Attitude state vector error **/
+	static const int X_STATE_VECTOR_SIZE = ((E_STATE_VECTOR_SIZE*NUMBER_OF_WHEELS) + A_STATE_VECTOR_SIZE); /** State vector error **/
+	static const int E_MEASUREMENT_VECTOR_SIZE = sckf::NUMBER_OF_WHEELS*(2*NUMAXIS); /** Measurement vector for the pover position state error **/
+	static const int Z_MEASUREMENT_VECTOR_SIZE = (E_MEASUREMENT_VECTOR_SIZE + NUMAXIS); /** Whole rover measurement vector (6D for rover velocities + 4 of wheels encoders + 1 of passive joint) + IMU sensor **/
 
 	
     private:
@@ -94,7 +98,7 @@ namespace localization
 	Eigen::Matrix <double,Eigen::Dynamic,1> xk_k; /** State vector Xk|k at the lastest extereoceptive measurement recorded */
 	Eigen::Matrix <double,Eigen::Dynamic,1> xki_k; /** State vector Xk+i|k at the lastest proprioceptive measurement recorded (Robot's current state) */
 	Eigen::Quaternion <double> q4;  /** Current robot attitude quaternion (integration) */
-	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> oldomega4; /**< Quaternion integration matrix */
+	Eigen::Matrix <double,QUATERSIZE, QUATERSIZE> oldomega4; /** Quaternion integration matrix */
 	
 	/** System matrix **/
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> A; /** Attitude System matrix */
@@ -120,13 +124,19 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rv; /** Measurement noise convariance matrix for linear velocities */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement and system noise convariance matrix for gyros (gyros are used in both: predict and update) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Ra; /** Measurement noise convariance matrix for acc */
-	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Ren; /** Measurement noise convariance matrix for motor and joint encoders */
+	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Ren; /** Measurement noise convariance matrix for joint and motor encoders */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rm; /** Measurement noise convariance matrix for mag */
 	
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Rk; /** Noise convariance matrix for the measurement vector of the filter */
 	
 	/** Kalman Gain matrix **/
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> K; /** Kalman gain associted to the vector Xk+i|k */
+	
+	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
+	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
+	
+	/** For the contact angle (information of the contact angles, each row is a wheel) **/
+	Eigen::Matrix <double,NUMBER_OF_WHEELS, 1> acontact;
 	
 	/** For the attitude computation **/
 	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
@@ -171,6 +181,17 @@ namespace localization
 	Eigen::Quaternion <double> getAttitude();
 	
 	/**
+	* @brief Gets the gravity value being used by the filter
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return Gravity value
+	*
+	*/
+	 double getGravity();
+	
+	
+	/**
 	* @brief Gets the current orientation in Euler angles
 	* 
 	* @author Javier Hidalgo Carrio.
@@ -197,12 +218,26 @@ namespace localization
 	*
 	* @author Javier Hidalgo Carrio.
 	*
-	* @param[in] *initq pointer to quaternion with the initial orientation
+	* @param[in] initq quaternion with the initial orientation
 	*
 	* @return OK is everything all right. ERROR on other cases.
 	*
 	*/
 	int setAttitude (Eigen::Quaternion <double> &initq);
+	
+	/**
+	* @brief Set gravity value
+	* 
+	* Set the gravity constant value to be used by the filter
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @param[in] g gravity value.
+	*
+	* @return nothing
+	*
+	*/
+	void setGravity (double g);
 	
 	/**
 	* @brief This function Initialize the State vector
@@ -212,7 +247,7 @@ namespace localization
 	* (0-2) -> 3D slip vector of the contact current point
 	* (3)   -> point contact angle
 	* 
-	* This 4 elements by 4 wheels of the rover (This is variable by the NUMBEROFWHEELS static
+	* This 4 elements by 4 wheels of the rover (This is variable by the NUMBER_OF_WHEELS static
 	* const variable).
 	* 
 	* 9 elements for the attitude estimation
