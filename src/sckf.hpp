@@ -85,10 +85,11 @@ namespace localization
 	
 	/** CONSTANT VALUES TO THE CLASS**/
 	static const int NUMBER_OF_WHEELS = 4;
-	static const int E_STATE_VECTOR_SIZE = NUMAXIS + 1; /** Rover position state vector error (3 elements for slip + 1 for contact angle) **/
+	static const int E_STATE_VECTOR_SIZE = (NUMAXIS + 1); /** Rover position state vector error (3 elements for slip + 1 for contact angle) **/
 	static const int A_STATE_VECTOR_SIZE = 9; /** Attitude state vector error **/
 	static const int X_STATE_VECTOR_SIZE = ((E_STATE_VECTOR_SIZE*NUMBER_OF_WHEELS) + A_STATE_VECTOR_SIZE); /** State vector error **/
-	static const int E_MEASUREMENT_VECTOR_SIZE = sckf::NUMBER_OF_WHEELS*(2*NUMAXIS); /** Measurement vector for the pover position state error **/
+	static const int Y_MEASUREMENT_VECTOR_SIZE = ((NUMBER_OF_WHEELS+1)+(2*NUMAXIS)); /** Measurement vector for computation of the position (5 is 4 motor encoders + 1 passive joint) **/
+	static const int E_MEASUREMENT_VECTOR_SIZE = (sckf::NUMBER_OF_WHEELS*(2*NUMAXIS)); /** Measurement vector for the correction of the rover position state error **/
 	static const int Z_MEASUREMENT_VECTOR_SIZE = (E_MEASUREMENT_VECTOR_SIZE + NUMAXIS); /** Whole rover measurement vector (6D for rover velocities + 4 of wheels encoders + 1 of passive joint) + IMU sensor **/
 
 	
@@ -126,8 +127,8 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Ra; /** Measurement noise convariance matrix for acc */
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Ren; /** Measurement noise convariance matrix for joint and motor encoders */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rm; /** Measurement noise convariance matrix for mag */
-	
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Rk; /** Noise convariance matrix for the measurement vector of the filter */
+	Eigen::Matrix <double,Eigen::Dynamic,1> innovation; /** Internal variable of the filter innovation (zki - Hk*xki_k **/
 	
 	/** Kalman Gain matrix **/
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> K; /** Kalman gain associted to the vector Xk+i|k */
@@ -137,6 +138,9 @@ namespace localization
 	
 	/** For the contact angle (information of the contact angles, each row is a wheel) **/
 	Eigen::Matrix <double,NUMBER_OF_WHEELS, 1> acontact;
+	
+	/** Linear velocities computed from acc information **/
+	Eigen::Matrix <double, NUMAXIS, 1> linvelocity, angvelocity;
 	
 	/** For the attitude computation **/
 	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
@@ -210,6 +214,90 @@ namespace localization
 	*
 	*/
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> getCovariancex();
+	
+	/**
+	* @brief Gets Noise covariance matrix attitude part
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return Submatrix  of P 
+	*
+	*/
+	Eigen::Matrix <double,A_STATE_VECTOR_SIZE,A_STATE_VECTOR_SIZE> getCovarianceAttitude();
+	
+	/**
+	* @brief Gets Linear velocities
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return Subvector of ye
+	*
+	*/
+	Eigen::Matrix <double,NUMAXIS,1> getLinearVelocities();
+	
+	/**
+	* @brief Gets Angular velocities
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return Subvector of ye
+	*
+	*/
+	Eigen::Matrix <double,NUMAXIS,1> getAngularVelocities();
+	
+	/**
+	* @brief Gets 3x1 slip vector
+	* 
+	* @param[in] wheel_idx wheel index between 0 and NUMBER_OF_WHEELS-1
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the slip vector
+	*
+	*/
+	Eigen::Matrix <double,NUMAXIS,1> getSlipVector(int wheel_idx);
+	
+	/**
+	* @brief Gets contact angle vector
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the contact angles
+	*
+	*/
+	Eigen::Matrix <double,Eigen::Dynamic,1> getContactAngles();
+	
+	/**
+	* @brief Return the filter Kalman Gain
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the filter kalman gain
+	*
+	*/
+	Eigen::Matrix <double,Eigen::Dynamic, Eigen::Dynamic> getKalmanGain();
+	
+	/**
+	* @brief Return the Kalman Gain of the attityde part 
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the attitude part of kalman gain
+	*
+	*/
+	Eigen::Matrix <double,Eigen::Dynamic, Eigen::Dynamic> getAttitudeKalmanGain();
+	
+	/**
+	* @brief Return the filter innovation (zki - Hk*xki_k) 
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the innovation vector
+	*
+	*/
+	Eigen::Matrix <double,Eigen::Dynamic, 1> getInnovation();
+	
+	
 	
 	/**
 	* @brief This function Initialize Attitude
