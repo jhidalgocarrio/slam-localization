@@ -16,7 +16,7 @@
 #include <Eigen/SVD> /**< Singular Value Decomposition (SVD) of Eigen */
 #include "sckf.hpp"
 
-#define DEBUG_PRINTS 1
+// #define DEBUG_PRINTS 1
 
 using namespace localization;
 using namespace Eigen;
@@ -441,6 +441,7 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, double dt)
     std::cout<< "[Predict] xki|k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
     std::cout<< "[Predict] xki_k:\n"<<xki_k<<"\n";
     #endif
+    
     /** Propagate the vector through the system **/
     xki_k = dFki * xki_k;
     
@@ -495,6 +496,40 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, double dt)
 
 }
 
+/**
+* @brief Conversion Quaternion to DCM (Direct Cosine Matrix) (Alternative to Eigen)
+*/
+void Quaternion2DCM(Eigen::Quaternion< double >* q, Eigen::Matrix< double, NUMAXIS, NUMAXIS  >*C)
+{
+    double q0, q1, q2, q3;
+
+    if (C != NULL)
+    {
+    /** Take the parameters of the quaternion */
+    q0 = q->w();
+    q1 = q->x();
+    q2 = q->y();
+    q3 = q->z();
+    
+    /** Create the DCM matrix from the actual quaternion */
+    (*C)(0,0) = 2 * q0 * q0 + 2 * q1 * q1 - 1;
+    (*C)(0,1) = 2 * q1 * q2 + 2 * q0 * q3;
+    (*C)(0,2) = 2 * q1 * q3 - 2 * q0 * q2;
+    (*C)(1,0) = 2 * q1 * q2 - 2 * q0 * q3;
+    (*C)(1,1) = 2 * q0 * q0 + 2 * q2 * q2 - 1;
+    (*C)(1,2) = 2 * q2 * q3 + 2 * q0 * q1;
+    (*C)(2,0) = 2 * q1 * q3 + 2 * q0 * q2;
+    (*C)(2,1) = 2 * q2 * q3 - 2 * q0 * q1;
+    (*C)(2,2) = 2 * q0 * q0 + 2 * q3 * q3 - 1;	
+    }
+    
+    return;
+}
+
+
+
+
+
 void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Be,
 		  Eigen::Matrix< double, Eigen::Dynamic, 1  >& encoders, Eigen::Matrix< double, 3 , 1  >& acc,
 		  Eigen::Matrix< double, 3 , 1  >& gyro, Eigen::Matrix< double, 3 , 1  >& mag, double dt, bool magn_on_off)
@@ -530,10 +565,10 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
-    std::cout<<"Be is of size "<<Be.rows()<<"x"<<Be.cols()<<"\n";
-    std::cout<<"Be:\n"<<Be<<"\n";
-    std::cout<<"He is of size "<<He.rows()<<"x"<<He.cols()<<"\n";
-    std::cout<<"He:\n"<<He<<"\n";
+    std::cout<<"[Update] Be is of size "<<Be.rows()<<"x"<<Be.cols()<<"\n";
+    std::cout<<"[Update] Be:\n"<<Be<<"\n";
+    std::cout<<"[Update] He is of size "<<He.rows()<<"x"<<He.cols()<<"\n";
+    std::cout<<"[Update] He:\n"<<He<<"\n";
     #endif
     
     /** First measurement step (Pitch and Roll correction from Acc) **/
@@ -542,17 +577,28 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     xa_k = xki_k.block<sckf::A_STATE_VECTOR_SIZE, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS), 0);
     P1a = Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS), (sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS));
     
-    /** Calculate the gravity vector in the body frame **/
-    gtilde_body = q4 * gtilde;
-    gtilde2product << 0, -gtilde_body(2), gtilde_body(1),
-		gtilde_body(2), 0, -gtilde_body(0),
-		-gtilde_body(1), gtilde_body(0), 0;
-		
+//     this->getEuler();
+//     
+//     /** Calculate the gravity vector in the body frame **/
+//     gtilde_body = q4.toRotationMatrix()*gtilde;
+//     gtilde2product << 0, -gtilde_body(2), gtilde_body(1),
+// 		gtilde_body(2), 0, -gtilde_body(0),
+// 		-gtilde_body(1), gtilde_body(0), 0;
+// 		
+//     #ifdef DEBUG_PRINTS
+//     std::cout<<"[Update] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
+//     std::cout<<"[Update] g in body_frame:\n"<<gtilde_body<<"\n";
+//     #endif
+	
+    /** Create the orientation matrix from the quaternion **/
+    Quaternion2DCM (&q4, &Cq);
+    
+    gtilde_body = Cq * gtilde;
     #ifdef DEBUG_PRINTS
     std::cout<<"[Update] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
     std::cout<<"[Update] g in body_frame:\n"<<gtilde_body<<"\n";
     #endif
-	
+      
     /** Eliminate the Bias from gyros**/
     angvelo = gyro - bghat; 
 
@@ -701,6 +747,15 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     qe.z() = xki_k((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+2);
     q4 = q4 * qe;
     
+    #ifdef DEBUG_PRINTS
+    Eigen::Matrix <double,NUMAXIS,1> euler; /** In euler angles **/
+    euler[2] = qe.toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
+    euler[1] = qe.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
+    euler[0] = qe.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
+    std::cout<< "[Update] Error quaternion in euler\n";
+    std::cout<< "[Update] Roll: "<<euler[0]*R2D<<" Pitch: "<<euler[1]*R2D<<" Yaw: "<<euler[2]*R2D<<"\n";
+    #endif
+    
     /** Normalize quaternion **/
     q4.normalize();
 
@@ -814,9 +869,4 @@ int localization::CorrectMagneticDeclination(Eigen::Quaternion< double >* quat, 
     
     return OK;
 }
-
-
-
-
-
 
