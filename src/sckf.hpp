@@ -139,6 +139,9 @@ namespace localization
 	/** For the contact angle (information of the contact angles, each row is a wheel) **/
 	Eigen::Matrix <double,NUMBER_OF_WHEELS, 1> acontact;
 	
+	/** Vector of accelerations for the simpsonsIntegral method **/
+	Eigen::Matrix<double, 3, NUMAXIS> accSimps; /** col(2) -> t-2 col(1) -> t-1 col(0) -> t **/
+	
 	/** Linear velocities computed from acc information **/
 	Eigen::Matrix <double, NUMAXIS, 1> linvelocity, angvelocity;
 	
@@ -244,6 +247,16 @@ namespace localization
 	*
 	*/
 	Eigen::Matrix <double,NUMAXIS,1> getAngularVelocities();
+	
+	/**
+	* @brief Gets Linear Acceleration
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return Linear acceleration
+	*
+	*/
+	Eigen::Matrix <double,NUMAXIS,1> getLinearAcceleration();
 	
 	/**
 	* @brief Gets 3x1 slip vector
@@ -364,6 +377,20 @@ namespace localization
 	*
 	*/
 	int setOmega (Eigen::Matrix <double,NUMAXIS,1>  &u);
+	
+	/**
+	* @brief Simpson's rule for numerical integration
+	* 
+	* It computes Simpson's numerical integration method
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @param[in] *u pointer to vector with the angular velocity
+	*
+	* @return OK is everything all right. ERROR on other cases.
+	*
+	*/
+	inline double simpsonsIntegral (double fa, double fm, double fb, double delta_ab);
 	
 	/**
 	* @brief This function set the Accelerometers excentricity
