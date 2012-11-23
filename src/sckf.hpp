@@ -385,12 +385,30 @@ namespace localization
 	*
 	* @author Javier Hidalgo Carrio.
 	*
-	* @param[in] *u pointer to vector with the angular velocity
+	* @param[in] fa sample at time t-2
+	* @param[in] fm sample at time t-1
+	* @param[in] fb sample at time t
+	* @param[in] delta_ab time between samples b and a
 	*
 	* @return OK is everything all right. ERROR on other cases.
 	*
 	*/
 	inline double simpsonsIntegral (double fa, double fm, double fb, double delta_ab);
+	
+	/**
+	* @brief Set Yaw angle
+	* 
+	* Set the heading(yaw) angle from an external source
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @param[in] yaw yaw value in radians
+	*
+	* @return OK is everything all right. ERROR on other cases.
+	*
+	*/
+	void setHeading (double yaw);
+	
 	
 	/**
 	* @brief This function set the Accelerometers excentricity
@@ -487,7 +505,8 @@ namespace localization
 	*
 	*/
 	void update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Be,
-		    Eigen::Matrix <double,Eigen::Dynamic,1>  &encoders, Eigen::Matrix <double,NUMAXIS,1>  &acc, Eigen::Matrix <double,NUMAXIS,1>  &gyro,
+		    Eigen::Matrix <double,Eigen::Dynamic,1>  &encoders, Eigen::Matrix <double,NUMAXIS, 1> &vel_model,
+		    Eigen::Matrix <double,NUMAXIS,1>  &acc, Eigen::Matrix <double,NUMAXIS,1>  &gyro,
 		    Eigen::Matrix <double,NUMAXIS,1>  &mag, double dt, bool magn_on_off);
 	    
     };

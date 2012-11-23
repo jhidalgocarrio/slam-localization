@@ -210,6 +210,9 @@ void sckf::setStatex(Eigen::Matrix< double, Eigen::Dynamic, 1  > &x_0)
     this->xki_k = x_0;
 }
 
+/**
+* @brief This function set the Accelerometers excentricity
+*/
 void sckf::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz)
 {
     this->eccx = eccx;
@@ -226,11 +229,31 @@ void sckf::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matri
     #endif
 }
 
+/**
+* @brief This function set the Accelerometers excentricity
+*/
 double sckf::simpsonsIntegral(double fa, double fm, double fb, double delta_ab)
 {
-    return delta_ab/6.0 * (fa + 4*fm + fb);
+    return delta_ab/6.0 * (fa + (4.0*fm) + fb);
 }
 
+/**
+* @brief Set the Heading angle
+*/
+void sckf::setHeading(double yaw)
+{
+    Eigen::Matrix< double, NUMAXIS , 1> euler;
+    Eigen::Vector3d e = Eigen::Matrix3d(q4).eulerAngles(2,1,0);
+    
+    euler(0) = e[2]; 
+    euler(1) = e[1]; 
+    euler(2) = yaw; 
+    
+    q4 = Eigen::Quaternion <double> (Eigen::AngleAxisd(euler[2], Eigen::Vector3d::UnitZ())*
+	    Eigen::AngleAxisd(euler[1], Eigen::Vector3d::UnitY()) *
+	    Eigen::AngleAxisd(euler[0], Eigen::Vector3d::UnitX()));
+    
+}
 
 
  /**
@@ -355,7 +378,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     r2count = R2COUNT;
     
     /** Print filter information **/
-//     #ifdef DEBUG_PRINTS
+    #ifdef DEBUG_PRINTS
     std::cout<< "xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
     std::cout<< "xki_k:\n"<<xki_k<<"\n";
     std::cout<< "xk_k is of size "<<xk_k.rows()<<"x"<<xk_k.cols()<<"\n";
@@ -405,7 +428,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     std::cout<< "bghat:\n"<<bghat<<"\n";
     std::cout<< "bahat is of size "<<bahat.rows()<<"x"<<bahat.cols()<<"\n";
     std::cout<< "bahat:\n"<<bahat<<"\n";
-//     #endif
+    #endif
 
 }
 
@@ -546,8 +569,8 @@ void Quaternion2DCM(Eigen::Quaternion< double >* q, Eigen::Matrix< double, NUMAX
 
 
 void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Be,
-		  Eigen::Matrix< double, Eigen::Dynamic, 1  >& encoders, Eigen::Matrix< double, 3 , 1  >& acc,
-		  Eigen::Matrix< double, 3 , 1  >& gyro, Eigen::Matrix< double, 3 , 1  >& mag, double dt, bool magn_on_off)
+		  Eigen::Matrix< double, Eigen::Dynamic, 1  >& encoders, Eigen::Matrix <double,NUMAXIS, 1> &vel_model, Eigen::Matrix< double, NUMAXIS , 1  >& acc,
+		  Eigen::Matrix< double, NUMAXIS , 1  >& gyro, Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off)
 {
     
     register int j;
@@ -608,17 +631,23 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     /** Create the orientation matrix from the quaternion **/
     Quaternion2DCM (&q4, &Cq);
     
+    /** Calculate the gravity vector in the body frame **/
     gtilde_body = Cq * gtilde;
-//     #ifdef DEBUG_PRINTS
+    
+    gtilde2product << 0, -gtilde_body(2), gtilde_body(1),
+		    gtilde_body(2), 0, -gtilde_body(0),
+		    -gtilde_body(1), gtilde_body(0), 0;
+
+    #ifdef DEBUG_PRINTS
     std::cout<<"[Update] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
     std::cout<<"[Update] g in body_frame:\n"<<gtilde_body<<"\n";
-//     #endif
+    #endif
       
     /** Eliminate the Bias from gyros**/
     angvelo = gyro - bghat; 
 
     /** Compute the vector2product matrix with the angular velocity **/
-    /** in order to In order to remove the centripetal velocities **/
+    /** in order to remove the centripetal velocities **/
     gyros2product << 0, -angvelo(2), angvelo(1),
 		angvelo(2), 0, -angvelo(0),
 		-angvelo(1), angvelo(0), 0;
@@ -646,22 +675,23 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     accSimps.col(0) = z1a; //actual sample -> t
     
     /** Compute the velocities and store them in the global variables **/
-    linvelocity[0] = simpsonsIntegral(accSimps(0,2), accSimps(0,1), accSimps(0,0), 2*0.008) - (gyros2product.row(0) * eccx);
-    linvelocity[1] = simpsonsIntegral(accSimps(1,2), accSimps(1,1), accSimps(1,0), 2*0.008) - (gyros2product.row(1) * eccy);
-    linvelocity[2] = simpsonsIntegral(accSimps(2,2), accSimps(2,1), accSimps(2,0), 2*0.008) - (gyros2product.row(2) * eccz);
+    linvelocity[0] = simpsonsIntegral(accSimps(0,2), accSimps(0,1), accSimps(0,0), 2*dt) - (gyros2product.row(0) * eccx);
+    linvelocity[1] = simpsonsIntegral(accSimps(1,2), accSimps(1,1), accSimps(1,0), 2*dt) - (gyros2product.row(1) * eccy);
+    linvelocity[2] = simpsonsIntegral(accSimps(2,2), accSimps(2,1), accSimps(2,0), 2*dt) - (gyros2product.row(2) * eccz);
     angvelocity = angvelo;
     
     /** Form the measurement vector ye of the rover position error (Be*ye) **/
-    ye.block<NUMAXIS, 1> (0, 0) = linvelocity;
-//     ye(0,0) = (z1a[0] * dt) - (gyros2product.row(0) * eccx);
-//     ye(1,0) = (z1a[1] * dt) - (gyros2product.row(1) * eccy);
-//     ye(2,0) = (z1a[2] * dt) - (gyros2product.row(2) * eccz);
+    ye.block<NUMAXIS, 1> (0, 0) = vel_model + linvelocity;
+/*    ye(0,0) = (z1a[0] * dt) - (gyros2product.row(0) * eccx);
+    ye(1,0) = (z1a[1] * dt) - (gyros2product.row(1) * eccy);
+    ye(2,0) = (z1a[2] * dt) - (gyros2product.row(2) * eccz);*/
     ye.block<NUMAXIS, 1> (NUMAXIS, 0) = angvelo;
     ye.block<1 + sckf::NUMBER_OF_WHEELS, 1> ((2*NUMAXIS), 0) = encoders;
     
     
-    
-//     #ifdef DEBUG_PRINTS
+    #ifdef DEBUG_PRINTS
+    std::cout<<"[Update] linvelocity(simpson's rule:\n"<<linvelocity<<"\n";
+    std::cout<<"[Update] linvelocity(before):\n"<<ye.block<NUMAXIS, 1> (0, 0)<<"\n";
     std::cout<<"[Update] acc is of size "<<acc.rows()<<"x"<<acc.cols()<<"\n";
     std::cout<<"[Update] acc:\n"<<acc<<"\n";
     std::cout<<"[Update] bahat:\n"<<bahat<<"\n";
@@ -670,7 +700,7 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     std::cout<<"[Update] ye is of size "<<ye.rows()<<"x"<<ye.cols()<<"\n";
     std::cout<<"[Update] ye:\n"<<ye<<"\n";
     std::cout<<"[Update] ze:\n"<<Be*ye<<"\n";
-//     #endif
+    #endif
     
     /** Form the complete zk vector **/
     zki.block<sckf::E_MEASUREMENT_VECTOR_SIZE, 1> (0,0)= Be*ye;
