@@ -378,7 +378,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     r2count = R2COUNT;
     
     /** Print filter information **/
-    #ifdef DEBUG_PRINTS
+//     #ifdef DEBUG_PRINTS
     std::cout<< "xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
     std::cout<< "xki_k:\n"<<xki_k<<"\n";
     std::cout<< "xk_k is of size "<<xk_k.rows()<<"x"<<xk_k.cols()<<"\n";
@@ -428,7 +428,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     std::cout<< "bghat:\n"<<bghat<<"\n";
     std::cout<< "bahat is of size "<<bahat.rows()<<"x"<<bahat.cols()<<"\n";
     std::cout<< "bahat:\n"<<bahat<<"\n";
-    #endif
+//     #endif
 
 }
 
@@ -675,16 +675,13 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     accSimps.col(0) = z1a; //actual sample -> t
     
     /** Compute the velocities and store them in the global variables **/
-    linvelocity[0] = simpsonsIntegral(accSimps(0,2), accSimps(0,1), accSimps(0,0), 2*dt) - (gyros2product.row(0) * eccx);
-    linvelocity[1] = simpsonsIntegral(accSimps(1,2), accSimps(1,1), accSimps(1,0), 2*dt) - (gyros2product.row(1) * eccy);
-    linvelocity[2] = simpsonsIntegral(accSimps(2,2), accSimps(2,1), accSimps(2,0), 2*dt) - (gyros2product.row(2) * eccz);
+    linvelocity[0] = (z1a[0] * dt) - (gyros2product.row(0) * eccx);//simpsonsIntegral(accSimps(0,2), accSimps(0,1), accSimps(0,0), 2*dt) - (gyros2product.row(0) * eccx);
+    linvelocity[1] = (z1a[1] * dt) - (gyros2product.row(1) * eccy);//simpsonsIntegral(accSimps(1,2), accSimps(1,1), accSimps(1,0), 2*dt) - (gyros2product.row(1) * eccy);
+    linvelocity[2] = (z1a[2] * dt) - (gyros2product.row(2) * eccz);//simpsonsIntegral(accSimps(2,2), accSimps(2,1), accSimps(2,0), 2*dt) - (gyros2product.row(2) * eccz);
     angvelocity = angvelo;
     
     /** Form the measurement vector ye of the rover position error (Be*ye) **/
     ye.block<NUMAXIS, 1> (0, 0) = vel_model + linvelocity;
-/*    ye(0,0) = (z1a[0] * dt) - (gyros2product.row(0) * eccx);
-    ye(1,0) = (z1a[1] * dt) - (gyros2product.row(1) * eccy);
-    ye(2,0) = (z1a[2] * dt) - (gyros2product.row(2) * eccz);*/
     ye.block<NUMAXIS, 1> (NUMAXIS, 0) = angvelo;
     ye.block<1 + sckf::NUMBER_OF_WHEELS, 1> ((2*NUMAXIS), 0) = encoders;
     
@@ -726,7 +723,7 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
 	Uk = Uk + RHist.block <NUMAXIS, NUMAXIS> (0,NUMAXIS*j);
     }
     
-    Uk = Uk / (M1);
+    Uk = Uk/static_cast<double>(M1);
     
     fooR2 = H1a*P1a*H1a.transpose() + Ra;
     
@@ -746,6 +743,10 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     
     if ((lambda - mu).maxCoeff() > GAMMA)
     {
+	#ifdef DEBUG_PRINTS
+	std::cout<<"[Update] "<<(lambda - mu).maxCoeff()<<" Bigger than GAMMA\n";
+	#endif
+	
 	r2count = 0;
 	auxvector(0) = std::max(lambda(0)-mu(0),(double)0.00);
 	auxvector(1) = std::max(lambda(1)-mu(1),(double)0.00);
@@ -755,6 +756,10 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     }
     else
     {
+	#ifdef DEBUG_PRINTS
+	std::cout<<"[Update] r2count: "<<r2count<<"\n";
+	#endif
+	
 	r2count ++;
 	if (r2count < M2)
 	    Qstar = auxvector(0) * u.col(0) * u.col(0).transpose() + auxvector(1) * u.col(1) * u.col(1).transpose() + auxvector(2) * u.col(2) * u.col(2).transpose();
@@ -788,6 +793,8 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
     
     #ifdef DEBUG_PRINTS
+    std::cout<< "[Update] Qstar is of size "<<Qstar.rows()<<"x"<<Qstar.cols()<<"\n";
+    std::cout<< "[Update] Qstar:\n"<<Qstar<<"\n";
     std::cout<< "[Update] Rk is of size "<<Rk.rows()<<"x"<<Rk.cols()<<"\n";
     std::cout<< "[Update] Rk:\n"<<Rk<<"\n";
     std::cout<< "[Update] K is of size "<<K.rows()<<"x"<<K.cols()<<"\n";

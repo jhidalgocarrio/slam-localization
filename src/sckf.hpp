@@ -65,10 +65,10 @@ namespace localization
     #endif
     
     /** Variables for the attitude estimation inside the algorithm **/
-    #define M1 5 /**< Parameter for adaptive algorithm */
-    #define M2 3 /**< Parameter for adaptive algorithm */
-    #define GAMMA 0.1 /**< Parameter for adaptive algorithm */
-    #define R2COUNT 100 /**< Parameter for adaptive algorithm */
+    #define M1 2 /** Parameter for adaptive algorithm */
+    #define M2 8 /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
+    #define GAMMA 0.005 /** Parameter for adaptive algorithm (only entering when Qstart is greater than RHR'+Ra)*/
+    #define R2COUNT 100 /** Parameter for adaptive algorithm */
 
     #ifndef D2R
     #define D2R M_PI/180.00 /** Convert degree to radian **/
