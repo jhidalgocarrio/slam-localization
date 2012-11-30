@@ -6,6 +6,7 @@
 #define _SCKF_HPP_
 
 #include <iostream>
+#include <boost/circular_buffer.hpp> /** Boost library circula buffer **/
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
 
 
@@ -91,6 +92,10 @@ namespace localization
 	static const int Y_MEASUREMENT_VECTOR_SIZE = ((NUMBER_OF_WHEELS+1)+(2*NUMAXIS)); /** Measurement vector for computation of the position (5 is 4 motor encoders + 1 passive joint) **/
 	static const int E_MEASUREMENT_VECTOR_SIZE = (sckf::NUMBER_OF_WHEELS*(2*NUMAXIS)); /** Measurement vector for the correction of the rover position state error **/
 	static const int Z_MEASUREMENT_VECTOR_SIZE = (E_MEASUREMENT_VECTOR_SIZE + NUMAXIS); /** Whole rover measurement vector (6D for rover velocities + 4 of wheels encoders + 1 of passive joint) + IMU sensor **/
+	static const int INTEGRATION_XAXIS_WINDOW_SIZE = 20; /** Windows size of the delay integration **/
+	static const int INTEGRATION_YAXIS_WINDOW_SIZE = 20; /** Windows size of the delay integration **/
+	static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 5; /** Windows size of the delay integration **/
+	static const int ANGVELO_WINDOW_SIZE = INTEGRATION_XAXIS_WINDOW_SIZE; /** Windows size of the delay integration **/
 
 	
     private:
@@ -141,6 +146,12 @@ namespace localization
 	
 	/** Vector of accelerations for the simpsonsIntegral method **/
 	Eigen::Matrix<double, 3, NUMAXIS> accSimps; /** col(2) -> t-2 col(1) -> t-1 col(0) -> t **/
+	
+	/** Circular Vector of accelerations for integral method **/
+	boost::circular_buffer<double> cbAccX, cbAngveloX;
+	boost::circular_buffer<double> cbAccY, cbAngveloY;
+	boost::circular_buffer<double> cbAccZ, cbAngveloZ;
+	
 	
 	/** Linear velocities computed from acc information **/
 	Eigen::Matrix <double, NUMAXIS, 1> linvelocity, angvelocity;
@@ -508,7 +519,15 @@ namespace localization
 		    Eigen::Matrix <double,Eigen::Dynamic,1>  &encoders, Eigen::Matrix <double,NUMAXIS, 1> &vel_model,
 		    Eigen::Matrix <double,NUMAXIS,1>  &acc, Eigen::Matrix <double,NUMAXIS,1>  &gyro,
 		    Eigen::Matrix <double,NUMAXIS,1>  &mag, double dt, bool magn_on_off);
-	    
+	
+	/**
+	* @brief Perform the accelerometers integration
+	* 
+	* Integration of accelerometers for the window defined
+	* in INTEGRATION_WINDOWS_SIZE
+	*/
+	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
+	 
     };
     
     /**

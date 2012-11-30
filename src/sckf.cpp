@@ -377,6 +377,15 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Ei
     r1count = 0;
     r2count = R2COUNT;
     
+    /** Circular vector for the integration **/
+    cbAccX.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
+    cbAccY.set_capacity(INTEGRATION_YAXIS_WINDOW_SIZE);
+    cbAccZ.set_capacity(INTEGRATION_ZAXIS_WINDOW_SIZE);
+    
+    cbAngveloX.set_capacity(ANGVELO_WINDOW_SIZE);
+    cbAngveloY.set_capacity(ANGVELO_WINDOW_SIZE);
+    cbAngveloZ.set_capacity(ANGVELO_WINDOW_SIZE);
+    
     /** Print filter information **/
 //     #ifdef DEBUG_PRINTS
     std::cout<< "xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
@@ -566,6 +575,42 @@ void Quaternion2DCM(Eigen::Quaternion< double >* q, Eigen::Matrix< double, NUMAX
 }
 
 
+Eigen::Matrix< double, 3 , 1  > sckf::accIntegrationWindow(double dt)
+{
+    Eigen::Matrix <double, NUMAXIS, 1> localvelocity;
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> gyros2product; /** Vec 2 product  matrix for the gyroscopes (angular velocity) */
+    
+    localvelocity.setZero();
+        
+    for (unsigned int i=0; i<cbAccX.size(); i++)
+    {
+	gyros2product << 0, -cbAngveloZ[i], cbAngveloY[i],
+		cbAngveloZ[i], 0, -cbAngveloX[i],
+		-cbAngveloY[i], cbAngveloX[i], 0;
+		
+	localvelocity[0] += (cbAccX[i] * dt) - (gyros2product.row(0) * eccx);
+    }
+    
+    for (unsigned int i=0; i<cbAccY.size(); i++)
+    {
+	gyros2product << 0, -cbAngveloZ[i], cbAngveloY[i],
+		cbAngveloZ[i], 0, -cbAngveloX[i],
+		-cbAngveloY[i], cbAngveloX[i], 0;
+		
+	localvelocity[1] += (cbAccY[i] * dt) - (gyros2product.row(1) * eccy);
+    }
+    
+    for (unsigned int i=0; i<cbAccZ.size(); i++)
+    {
+	gyros2product << 0, -cbAngveloZ[i], cbAngveloY[i],
+		cbAngveloZ[i], 0, -cbAngveloX[i],
+		-cbAngveloY[i], cbAngveloX[i], 0;
+		
+	localvelocity[2] += (cbAccZ[i] * dt) - (gyros2product.row(2) * eccz);
+    }
+    
+    return localvelocity;
+}
 
 
 
@@ -647,6 +692,11 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     /** Eliminate the Bias from gyros**/
     angvelo = gyro - bghat; 
     angvelocity = angvelo;
+    
+    /** Push it in the blobal circular vector buffer **/
+    cbAngveloX.push_back(angvelo[0]);
+    cbAngveloY.push_back(angvelo[1]);
+    cbAngveloZ.push_back(angvelo[2]);
 
     /** Compute the vector2product matrix with the angular velocity **/
     /** in order to remove the centripetal velocities **/
@@ -671,15 +721,22 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     /** Form the measurement vector z1a for the attitude (the real acceleration value) **/
     z1a = acc - bahat - gtilde_body;
     
+    /** Push the acceleration value in the circular vector array **/
+    cbAccX.push_back(z1a(0));
+    cbAccY.push_back(z1a(1));
+    cbAccZ.push_back(z1a(2));
+    
     /** Store the z1a value in the global variable for the Simpson's rule integration **/
     accSimps.col(2) = accSimps.col(1); //t-1 -> t-2
     accSimps.col(1) = accSimps.col(0); //t -> t-1
     accSimps.col(0) = z1a; //actual sample -> t
     
     /** Compute the velocities and store them in the global variables **/
-    linvelocity[0] = (z1a[0] * dt) - (gyros2product.row(0) * eccx);//simpsonsIntegral(accSimps(0,2), accSimps(0,1), accSimps(0,0), 2*dt) - (gyros2product.row(0) * eccx);
-    linvelocity[1] = (z1a[1] * dt) - (gyros2product.row(1) * eccy);//simpsonsIntegral(accSimps(1,2), accSimps(1,1), accSimps(1,0), 2*dt) - (gyros2product.row(1) * eccy);
-    linvelocity[2] = (z1a[2] * dt) - (gyros2product.row(2) * eccz);//simpsonsIntegral(accSimps(2,2), accSimps(2,1), accSimps(2,0), 2*dt) - (gyros2product.row(2) * eccz);
+    linvelocity = accIntegrationWindow(dt);
+    
+//     linvelocity[0] = (z1a[0] * dt) - (gyros2product.row(0) * eccx);//simpsonsIntegral(accSimps(0,2), accSimps(0,1), accSimps(0,0), 2*dt) - (gyros2product.row(0) * eccx);
+//     linvelocity[1] = (z1a[1] * dt) - (gyros2product.row(1) * eccy);//simpsonsIntegral(accSimps(1,2), accSimps(1,1), accSimps(1,0), 2*dt) - (gyros2product.row(1) * eccy);
+//     linvelocity[2] = (z1a[2] * dt) - (gyros2product.row(2) * eccz);//simpsonsIntegral(accSimps(2,2), accSimps(2,1), accSimps(2,0), 2*dt) - (gyros2product.row(2) * eccz);
     
     
     /** Form the measurement vector ye of the rover position error (Be*ye) **/
