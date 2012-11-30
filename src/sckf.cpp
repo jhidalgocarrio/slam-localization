@@ -449,6 +449,7 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, double dt)
 
     /** Compute the vector2product matrix with the angular velocity **/
     angvelo = u - bghat; /** Eliminate the Bias **/
+    angvelocity = angvelo;
     
     #ifdef DEBUG_PRINTS
     std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
@@ -645,6 +646,7 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
       
     /** Eliminate the Bias from gyros**/
     angvelo = gyro - bghat; 
+    angvelocity = angvelo;
 
     /** Compute the vector2product matrix with the angular velocity **/
     /** in order to remove the centripetal velocities **/
@@ -678,7 +680,7 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     linvelocity[0] = (z1a[0] * dt) - (gyros2product.row(0) * eccx);//simpsonsIntegral(accSimps(0,2), accSimps(0,1), accSimps(0,0), 2*dt) - (gyros2product.row(0) * eccx);
     linvelocity[1] = (z1a[1] * dt) - (gyros2product.row(1) * eccy);//simpsonsIntegral(accSimps(1,2), accSimps(1,1), accSimps(1,0), 2*dt) - (gyros2product.row(1) * eccy);
     linvelocity[2] = (z1a[2] * dt) - (gyros2product.row(2) * eccz);//simpsonsIntegral(accSimps(2,2), accSimps(2,1), accSimps(2,0), 2*dt) - (gyros2product.row(2) * eccz);
-    angvelocity = angvelo;
+    
     
     /** Form the measurement vector ye of the rover position error (Be*ye) **/
     ye.block<NUMAXIS, 1> (0, 0) = vel_model + linvelocity;
