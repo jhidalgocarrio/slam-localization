@@ -85,13 +85,21 @@ namespace localization
     public:
 	
 	/** CONSTANT VALUES TO THE CLASS**/
-	static const int NUMBER_OF_WHEELS = 4;
-	static const int E_STATE_VECTOR_SIZE = (NUMAXIS + 1); /** Rover position state vector error (3 elements for slip + 1 for contact angle) **/
-	static const int A_STATE_VECTOR_SIZE = 9; /** Attitude state vector error **/
-	static const int X_STATE_VECTOR_SIZE = ((E_STATE_VECTOR_SIZE*NUMBER_OF_WHEELS) + A_STATE_VECTOR_SIZE); /** State vector error **/
-	static const int Y_MEASUREMENT_VECTOR_SIZE = ((NUMBER_OF_WHEELS+1)+(2*NUMAXIS)); /** Measurement vector for computation of the position (5 is 4 motor encoders + 1 passive joint) **/
-	static const int E_MEASUREMENT_VECTOR_SIZE = (sckf::NUMBER_OF_WHEELS*(2*NUMAXIS)); /** Measurement vector for the correction of the rover position state error **/
-	static const int Z_MEASUREMENT_VECTOR_SIZE = (E_MEASUREMENT_VECTOR_SIZE + NUMAXIS); /** Whole rover measurement vector (6D for rover velocities + 4 of wheels encoders + 1 of passive joint) + IMU sensor **/
+	
+	/** Constants for the process model **/
+	static const int NUMBER_OF_WHEELS = 4; /** Rover number of wheels **/
+	static const int E_STATE_VECTOR_SIZE = (NUMAXIS); /** Rover position error state vector (3 elements for slip) **/
+	static const int V_STATE_VECTOR_SIZE = NUMAXIS; /** Rover velocity error state vector (3 elements for x, y and z) **/
+	static const int A_STATE_VECTOR_SIZE = 9; /** Attitude state vector error (3 for attitude error, 3 for gyro bias and 3 for acc bias) **/
+	static const int X_STATE_VECTOR_SIZE = ((E_STATE_VECTOR_SIZE*NUMBER_OF_WHEELS) + V_STATE_VECTOR_SIZE + A_STATE_VECTOR_SIZE); /** State vector error **/
+	
+	/** Constants for the measurement model **/
+	static const int E_MEASUREMENT_VECTOR_SIZE = (sckf::NUMBER_OF_WHEELS*(2*NUMAXIS)); /** Measurement vector for the correction of the rover position state error (24 x 1) **/
+	static const int Z_MEASUREMENT_VECTOR_SIZE = (E_MEASUREMENT_VECTOR_SIZE + NUMAXIS + NUMAXIS); /** Whole rover measurement vector (24 x 1) + 3 x 1 of velocitiy +  3 x 1 of attitude **/
+	
+	static const int Y_MEASUREMENT_VECTOR_SIZE = ((2*NUMAXIS)+NUMBER_OF_WHEELS+1+NUMBER_OF_WHEELS); /** Measurement vector for computation of the position (6 angular and linear velocity + 4 motor encoders + 1 passive joint + 4 contact angle) **/
+	
+	/** Integration of the delayed windows **/
 	static const int INTEGRATION_XAXIS_WINDOW_SIZE = 20; /** Windows size of the delay integration **/
 	static const int INTEGRATION_YAXIS_WINDOW_SIZE = 20; /** Windows size of the delay integration **/
 	static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 5; /** Windows size of the delay integration **/
@@ -100,7 +108,7 @@ namespace localization
 	
     private:
 	
-	/** FILTER VARIABLES (UPPER CASE MATRICES LOWER CASE VECTORS) **/
+	/** FILTER VARIABLES (UPPER CASE MATRICES, LOWER CASE VECTORS) **/
 	Eigen::Matrix <double,Eigen::Dynamic,1> xk_k; /** State vector Xk|k at the lastest extereoceptive measurement recorded */
 	Eigen::Matrix <double,Eigen::Dynamic,1> xki_k; /** State vector Xk+i|k at the lastest proprioceptive measurement recorded (Robot's current state) */
 	Eigen::Quaternion <double> q4;  /** Current robot attitude quaternion (integration) */
@@ -131,27 +139,28 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement and system noise convariance matrix for gyros (gyros are used in both: predict and update) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Ra; /** Measurement noise convariance matrix for acc */
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Ren; /** Measurement noise convariance matrix for joint and motor encoders */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rat; /** Measurement noise convariance matrix for the attotude (the estimation of the garvity vector) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rm; /** Measurement noise convariance matrix for mag */
+	Eigen::Matrix <double,sckf::NUMBER_OF_WHEELS,sckf::NUMBER_OF_WHEELS> Rcont; /** Measurement noise convariance matrix for contact angle information */
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Rk; /** Noise convariance matrix for the measurement vector of the filter */
 	Eigen::Matrix <double,Eigen::Dynamic,1> innovation; /** Internal variable of the filter innovation (zki - Hk*xki_k **/
 	
 	/** Kalman Gain matrix **/
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> K; /** Kalman gain associted to the vector Xk+i|k */
 	
-	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
-	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
+	/** Vector of accelerations for the simpsonsIntegral method **/
+	Eigen::Matrix<double, 3, NUMAXIS> accSimps; /** col(2) -> t-2 col(1) -> t-1 col(0) -> t **/
 	
 	/** For the contact angle (information of the contact angles, each row is a wheel) **/
 	Eigen::Matrix <double,NUMBER_OF_WHEELS, 1> acontact;
-	
-	/** Vector of accelerations for the simpsonsIntegral method **/
-	Eigen::Matrix<double, 3, NUMAXIS> accSimps; /** col(2) -> t-2 col(1) -> t-1 col(0) -> t **/
 	
 	/** Circular Vector of accelerations for integral method **/
 	boost::circular_buffer<double> cbAccX, cbAngveloX;
 	boost::circular_buffer<double> cbAccY, cbAngveloY;
 	boost::circular_buffer<double> cbAccZ, cbAngveloZ;
 	
+	/** Array of past rover velocity model **/
+	boost::circular_buffer<double> cbVelModelX, cbVelModelY, cbVelModelZ;
 	
 	/** Linear velocities computed from acc information **/
 	Eigen::Matrix <double, NUMAXIS, 1> linvelocity, angvelocity;
@@ -161,6 +170,10 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,1> mtilde; /** Magnetic dip angle in world frame */
 	Eigen::Matrix <double,NUMAXIS,1> bghat; /** Estimated bias for gyroscope */
 	Eigen::Matrix <double,NUMAXIS,1> bahat; /** Estimated bias for accelerometer */
+	Eigen::Matrix <double,NUMAXIS,1> velerror; /** Estimated linear velocity error */
+	
+	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
+	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
 	
 	unsigned int r1count; /** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
 	double r2count; /** Variable used in the adaptive algorithm, to compute the final Qstart cov. matrix*/
@@ -289,7 +302,7 @@ namespace localization
 	* @return the contact angles
 	*
 	*/
-	Eigen::Matrix <double,Eigen::Dynamic,1> getContactAngles();
+	Eigen::Matrix <double,Eigen::Dynamic,1> getContactAnglesVelocity();
 	
 	/**
 	* @brief Return the filter Kalman Gain
@@ -321,7 +334,15 @@ namespace localization
 	*/
 	Eigen::Matrix <double,Eigen::Dynamic, 1> getInnovation();
 	
-	
+	/**
+	* @brief Get the velocity from the odometry model
+	* 
+	* Rover velocity from pure odometry model
+	* 
+	* @return current rover velocity from odometry
+	* 
+	*/
+	Eigen::Matrix<double, NUMAXIS, 1 > getCurrentVeloModel();
 	
 	/**
 	* @brief This function Initialize Attitude
@@ -439,6 +460,26 @@ namespace localization
 	void setEccentricity (Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz);
 	
 	/**
+	* @brief Set the current contact angles
+	* 
+	* Set the contact angle for the current wheel/foot point in contact
+	* 
+	* @param[in] contact_angles the vector of contact angles
+	* 
+	*/
+	void setContactAnglesVelocity(Eigen::Matrix<double, sckf::NUMBER_OF_WHEELS, 1> contact_angles);
+	
+	/**
+	* @brief Set the current velocity
+	* 
+	* It stores the current rover velocity from the odometry model
+	* 
+	* @param[in] velocity  current rover velocity
+	* 
+	*/
+	void setCurrentVeloModel(Eigen::Matrix<double, NUMAXIS, 1> velocity);
+	
+	/**
 	* @brief This function Initilize the vectors and matrix of the Filter
 	* 
 	* This method receives the measurement noise matrix of the sensors
@@ -447,28 +488,31 @@ namespace localization
 	* @author Javier Hidalgo Carrio.
 	*
 	* @param[in] P_0 Initial state covariance matrix
-	* @param[in] Qec process noise matrix of slip vector and contact angles.
-	* @param[in] Qbg process noise matrix of the gyroscopes bias
-	* @param[in] Qba process noise matrix of the accelerometers bias 
-	* 
 	* @param[in] Rg process noise matrix of Gyroscopes.
+	* @param[in] Qbg process noise matrix of the gyroscopes bias (bias instability)
+	* @param[in] Qba process noise matrix of the accelerometers bias (bias instability)
+	* 
 	*
-	* @param[in] Rz measurement noise matrix of measurement vector z.
+	* @param[in] Ren measurement noise matrix of the encoders
+	* @param[in] Rcontact measurement noise matrix of the contact angle information
 	* @param[in] Ra measurement noise matrix of Accelerometers.
 	* @param[in] Rm measurement noise matrix of Magnetometers.
 	*
-	* @param[in] ecc Inertial sensor eccentricity location (x, y and z).
 	* @param[in] g local gravitational value.
 	* @param[in] alpha Dip angle
 	*
 	* @return void
 	*
 	*/
-	void Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0, Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Qec,
-		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qbg, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba,
-		Eigen::Matrix< double, NUMAXIS, NUMAXIS >& Rv, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
+	void Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qbg,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba,
 		Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Ren,
-		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rm,
+		Eigen::Matrix <double,sckf::NUMBER_OF_WHEELS,sckf::NUMBER_OF_WHEELS> &Rcontact,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rat,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rm,
 		double g, double alpha);
 	
 	/**
@@ -481,12 +525,13 @@ namespace localization
 	* @author Javier Hidalgo Carrio.
 	*
 	* @param[in] u vector with the angular velocity
+	* @param[in] v vector with the linear acceleration
 	* @param[in] dt delta time between samples
 	*
 	* @return void
 	*
 	*/
-	void predict(Eigen::Matrix <double,NUMAXIS,1>  &u, double dt);
+	void predict(Eigen::Matrix <double,NUMAXIS,1>  &u, Eigen::Matrix <double,NUMAXIS,1>  &v, double dt);
 	
 	/**
 	* @brief Performs the measurement and correction steps of the filter.
@@ -516,8 +561,10 @@ namespace localization
 	*
 	*/
 	void update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Be,
-		    Eigen::Matrix <double,Eigen::Dynamic,1>  &encoders, Eigen::Matrix <double,NUMAXIS, 1> &vel_model,
-		    Eigen::Matrix <double,NUMAXIS,1>  &acc, Eigen::Matrix <double,NUMAXIS,1>  &gyro,
+		    Eigen::Matrix <double,Eigen::Dynamic,1>  &encoders, Eigen::Matrix <double,sckf::NUMBER_OF_WHEELS, 1> &contact_angles,
+		    Eigen::Matrix <double,NUMAXIS, 1> &vel_model,
+		    Eigen::Matrix <double,NUMAXIS,1>  &acc,
+		    Eigen::Matrix <double,NUMAXIS,1>  &gyro,
 		    Eigen::Matrix <double,NUMAXIS,1>  &mag, double dt, bool magn_on_off);
 	
 	/**
