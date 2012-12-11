@@ -1,8 +1,7 @@
 /**\file sckf.cpp
  *
  * This class has the primitive methods for an Stochastic Cloning Indirect Kalman Filter implementation
- * the stet vector are formed by the errors. Therefore the name of indirect kalman filter
- * The measurement 
+ * the state vector are formed by the errors. Therefore the name of indirect kalman filter 
  * 
  * 
  * @author Javier Hidalgo Carrio | DFKI RIC Bremen | javier.hidalgo_carrio@dfki.de
@@ -85,7 +84,7 @@ Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getCovariancex()
 */
 Eigen::Matrix< double, sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE > sckf::getCovarianceAttitude()
 {
-    return Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS), (sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS));
+    return Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE, NUMAXIS+sckf::E_STATE_VECTOR_SIZE);
 }
 
 /**
@@ -146,7 +145,7 @@ Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getKalmanGain()
 */
 Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getAttitudeKalmanGain()
 {
-    return this->K.block<sckf::A_STATE_VECTOR_SIZE, NUMAXIS> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS), sckf::E_MEASUREMENT_VECTOR_SIZE);
+    return this->K.block<sckf::A_STATE_VECTOR_SIZE, NUMAXIS> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE, sckf::P_OBSERVATION_VECTOR_SIZE+sckf::E_OBSERVATION_VECTOR_SIZE);
 }
 
 /**
@@ -347,17 +346,10 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     Pk_k.resize(sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE);
     Pki_k.resize(sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE);
     
+    K.resize(sckf::X_STATE_VECTOR_SIZE, sckf::P_OBSERVATION_VECTOR_SIZE + sckf::E_OBSERVATION_VECTOR_SIZE + NUMAXIS);
+    
     H1a.resize(NUMAXIS, sckf::A_STATE_VECTOR_SIZE);
     H2a.resize(NUMAXIS, sckf::A_STATE_VECTOR_SIZE);
-    Hk.resize(sckf::Z_MEASUREMENT_VECTOR_SIZE, sckf::X_STATE_VECTOR_SIZE);
-    
-    zki.resize(Z_MEASUREMENT_VECTOR_SIZE, 1);
-    
-    Rk.resize(sckf::Z_MEASUREMENT_VECTOR_SIZE, sckf::Z_MEASUREMENT_VECTOR_SIZE);
-    
-    innovation.resize(sckf::Z_MEASUREMENT_VECTOR_SIZE, 1);
-    
-    K.resize(sckf::X_STATE_VECTOR_SIZE, sckf::Z_MEASUREMENT_VECTOR_SIZE);
     
     /** Resizing dynamic arguments to the correct dimension to avoid matrices errors **/
     P_0.resize(sckf::X_STATE_VECTOR_SIZE, sckf::X_STATE_VECTOR_SIZE);
@@ -371,7 +363,6 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     mtilde(1) = 0;
     mtilde(2) = -sin(alpha);
 
-    
     /** Kalman filter state, system matrix, error covariance and process noise covariance **/
     xki_k = Matrix <double,sckf::X_STATE_VECTOR_SIZE,1>::Zero();
     xk_k = xki_k;
@@ -383,27 +374,27 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     A = Matrix <double,sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE>::Zero();      
     A(0,3) = -0.5;A(1,4) = -0.5;A(2,5) = -0.5;
     
+    /** Process noise **/
     Qk = Matrix <double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE>::Zero();
-    Qk.block <NUMAXIS, NUMAXIS> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE,(sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE) = 0.25 * Rg;
-    Qk.block <NUMAXIS, NUMAXIS> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE+NUMAXIS,(sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE+NUMAXIS) = Qbg;
-    Qk.block <NUMAXIS, NUMAXIS> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE+(2*NUMAXIS),(sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE+(2*NUMAXIS)) = Qba;
+//     Qk.block <NUMAXIS+sckf::E_STATE_VECTOR_SIZE, NUMAXIS+sckf::E_STATE_VECTOR_SIZE> (0,0) = 0.01 * Matrix <double,NUMAXIS+sckf::E_STATE_VECTOR_SIZE,NUMAXIS+sckf::E_STATE_VECTOR_SIZE>::Identity();
+    Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE,NUMAXIS+sckf::E_STATE_VECTOR_SIZE) = 0.25 * Rg;
+    Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE+NUMAXIS,NUMAXIS+sckf::E_STATE_VECTOR_SIZE+NUMAXIS) = Qbg;
+    Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE+(2*NUMAXIS),NUMAXIS+sckf::E_STATE_VECTOR_SIZE+(2*NUMAXIS)) = Qba;
 
     /** Assign the initial values **/
     Pki_k = P_0;
     Pk_k = Pki_k;
     
-    /** Asign the initial value for the measurement matrix **/
-    Hk = Matrix <double,sckf::Z_MEASUREMENT_VECTOR_SIZE, sckf::X_STATE_VECTOR_SIZE>::Zero();
+    /** Assign the initial value for the measurement matrix of the attitude **/
     H1a = Matrix <double,NUMAXIS,sckf::A_STATE_VECTOR_SIZE>::Zero();
     H2a = Matrix <double,NUMAXIS,sckf::A_STATE_VECTOR_SIZE>::Zero();
     H1a(0,6) = 1; H1a(1,7) = 1; H1a(2,8) = 1;
-    
-    /** Initial measurement noise **/
-    Rk = Matrix <double,sckf::Z_MEASUREMENT_VECTOR_SIZE,sckf::Z_MEASUREMENT_VECTOR_SIZE>::Zero();
+
+    /** Set the history of noise for the attitude **/
     RHist = Eigen::Matrix <double,NUMAXIS,NUMAXIS*M1>::Zero();
     
     /** Fill matrix Rv, Rg, Re, Ra and Rm **/
-    this->Rv = Eigen::Matrix <double,NUMAXIS,NUMAXIS>::Zero();
+    this->Rv = Eigen::Matrix <double,NUMAXIS,NUMAXIS>::Zero(); /** Init value **/
     this->Rg = Rg;
     this->Ren = Ren;
     this->Rcont = Rcontact;
@@ -414,10 +405,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     /** Initial bias **/
     bghat = Matrix <double,NUMAXIS,1>::Zero();
     bahat = Matrix <double,NUMAXIS,1>::Zero();
-    
-    /** Initial velocity error **/
-    velerror = Matrix <double,NUMAXIS,1>::Zero();
-    
+        
     /** Default omega matrix **/
     oldomega4 << 0 , 0 , 0 , 0,
 	0 , 0 , 0 , 0,
@@ -441,7 +429,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     /** Initial slip matrix **/
     slipMatrix = Eigen::Matrix <double, NUMAXIS, NUMBER_OF_WHEELS>::Zero();
     
-    /** Velocities form the filter (acce and bias substracted correctly) **/
+    /** Velocities for the filter (acce and bias substracted correctly) **/
     linvelocity = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
     angvelocity = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
     
@@ -479,14 +467,10 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     std::cout<< "Pk|k:\n"<<Pk_k<<"\n";
     std::cout<< "Qk|k is of size "<<Qk.rows()<<"x"<<Qk.cols()<<"\n";
     std::cout<< "Qk|k:\n"<<Qk<<"\n";
-    std::cout<< "Rk is of size "<<Rk.rows()<<"x"<<Rk.cols()<<"\n";
-    std::cout<< "Rk:\n"<<Rk<<"\n";
     std::cout<< "H1a is of size "<<H1a.rows()<<"x"<<H1a.cols()<<"\n";
     std::cout<< "H1a:\n"<<H1a<<"\n";
     std::cout<< "H2a is of size "<<H2a.rows()<<"x"<<H2a.cols()<<"\n";
     std::cout<< "H2a:\n"<<H2a<<"\n";
-    std::cout<< "Hk is of size "<<Hk.rows()<<"x"<<Hk.cols()<<"\n";
-    std::cout<< "Hk:\n"<<Hk<<"\n";
     std::cout<< "zki is of size "<<zki.rows()<<"x"<<zki.cols()<<"\n";
     std::cout<< "zki:\n"<<zki<<"\n";
     std::cout<< "RHist is of size "<<RHist.rows()<<"x"<<RHist.cols()<<"\n";
@@ -503,17 +487,10 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     std::cout<< "Rcont:\n"<<Rcont<<"\n";
     std::cout<< "Rm is of size "<<Rm.rows()<<"x"<<Rm.cols()<<"\n";
     std::cout<< "Rm:\n"<<Rm<<"\n";
-    std::cout<< "Rk is of size "<<Rk.rows()<<"x"<<Rk.cols()<<"\n";
-    std::cout<< "Rk:\n"<<Rk<<"\n";
-    std::cout<< "K is of size "<<K.rows()<<"x"<<K.cols()<<"\n";
-    std::cout<< "K:\n"<<K<<"\n";
-    std::cout<<"\n";
     std::cout<< "mtilde is of size "<<mtilde.rows()<<"x"<<mtilde.cols()<<"\n";
     std::cout<< "mtilde:\n"<<mtilde<<"\n";
     std::cout<< "gtilde is of size "<<gtilde.rows()<<"x"<<gtilde.cols()<<"\n";
     std::cout<< "gtilde:\n"<<gtilde<<"\n";
-    std::cout<< "velerror is of size "<<velerror.rows()<<"x"<<velerror.cols()<<"\n";
-    std::cout<< "velerror:\n"<<velerror<<"\n";
     std::cout<< "bghat is of size "<<bghat.rows()<<"x"<<bghat.cols()<<"\n";
     std::cout<< "bghat:\n"<<bghat<<"\n";
     std::cout<< "bahat is of size "<<bahat.rows()<<"x"<<bahat.cols()<<"\n";
@@ -531,30 +508,26 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
 {
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> velo2product; /** Vec 2 product  matrix */
-    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> acc2product; /** Vec 2 product  matrix */
+    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
     Eigen::Matrix <double,NUMAXIS,1> linacc; /** Linear acceleration */
     Eigen::Matrix <double,NUMAXIS,1> gtilde_body; /** Gravitation in the body frame */
     Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4; /** Quaternion integration matrix */
     Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
     Eigen::Matrix <double,NUMAXIS, NUMAXIS> Fs; /** System matrix of a slip vector */
-    Eigen::Matrix <double,NUMAXIS, NUMAXIS> Fv; /** System matrix of the velocity error */
+    Eigen::Matrix <double,NUMAXIS, NUMAXIS> Fp; /** System matrix of the pose error */
     Eigen::Matrix <double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE> dFki; /** Discrete System matrix */
     Eigen::Matrix <double,X_STATE_VECTOR_SIZE,X_STATE_VECTOR_SIZE> Qdk; /** Discrete Qk matrix */
 
     /** Compute the cross product matrix with the angular velocity **/
     angvelo = u - bghat; /** Eliminate the Bias **/
     angvelocity = angvelo; /** Save it in the global variable **/
-    
-    #ifdef DEBUG_PRINTS
-    std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
-    #endif
 
-    /** In cross prodcut form **/
+    /** In cross product form **/
     velo2product << 0, -angvelo(2), angvelo(1),
 		angvelo(2), 0, -angvelo(0),
 		-angvelo(1), angvelo(0), 0;
-		
+
     /** Create the orientation matrix from the quaternion **/
     Quaternion2DCM (&q4, &Cq);
     
@@ -565,12 +538,13 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     linacc = v - bahat - gtilde_body;; /** Eliminate the Bias and the local gravity vector **/
     
     #ifdef DEBUG_PRINTS
+    std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
     std::cout<<"[Predict] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
     std::cout<<"[Predict] g in body_frame:\n"<<gtilde_body<<"\n";
     std::cout<<"[Predict] linacc:\n"<<linacc<<"\n";
     #endif
 
-    /** In cross prodcut form **/
+    /** In cross product form **/
     acc2product << 0, -linacc(2), linacc(1),
 		linacc(2), 0, -linacc(0),
 		-linacc(1), linacc(0), 0;
@@ -578,27 +552,21 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     /** Compute the dA Matrix of the attitude part **/
     A.block<NUMAXIS, NUMAXIS> (0,0) = -velo2product;
     
-    /** Form a single wheel position error (slip vector) **/
-    Fs = Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Zero();
-    
-    /** Form the velocity error matrix **/
-    Fv = -acc2product;
+    /** Form the position and slip process matrix **/
+    Fs = Fp = Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Zero();
    
     /** Form the complete system model matrix **/
+    Fki.block<NUMAXIS, NUMAXIS> (0,0) = Fp;
+    
+    /** Slip vector part **/
     for (int i = 0; i < NUMBER_OF_WHEELS; i++)
-	Fki.block<NUMAXIS, NUMAXIS> (i*NUMAXIS,i*NUMAXIS) = Fs;
-    
-    /** Form the velocity part **/
-    Fki.block<NUMAXIS, NUMAXIS>(sckf::NUMBER_OF_WHEELS*sckf::E_STATE_VECTOR_SIZE, (sckf::NUMBER_OF_WHEELS*sckf::E_STATE_VECTOR_SIZE)+sckf::V_STATE_VECTOR_SIZE) = Fv;
-    Fki.block<NUMAXIS, NUMAXIS>(sckf::NUMBER_OF_WHEELS*sckf::E_STATE_VECTOR_SIZE, (sckf::NUMBER_OF_WHEELS*sckf::E_STATE_VECTOR_SIZE)+sckf::V_STATE_VECTOR_SIZE+(2*NUMAXIS)) = -Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity();
-    
+	Fki.block<NUMAXIS, NUMAXIS> ((i+1)*NUMAXIS,(i+1)*NUMAXIS) = Fs;
+	
     /** Attitude part **/
-    Fki.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE>((sckf::NUMBER_OF_WHEELS*sckf::E_STATE_VECTOR_SIZE)+sckf::V_STATE_VECTOR_SIZE, (sckf::NUMBER_OF_WHEELS*sckf::E_STATE_VECTOR_SIZE)+sckf::V_STATE_VECTOR_SIZE) = A;
+    Fki.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE>(NUMAXIS+sckf::E_STATE_VECTOR_SIZE, NUMAXIS+sckf::E_STATE_VECTOR_SIZE) = A;
 
     /** Discretization of the linear system **/
     dFki = Eigen::Matrix<double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE>::Identity() + Fki * dt + Fki * Fki * pow(dt,2)/2.0;
-    
-    dFki(13,16) = 0.00; dFki(14,17) = 0.00; dFki(15,18) = 0.00;
     
     #ifdef DEBUG_PRINTS
     std::cout<< "[Predict] xki|k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
@@ -616,21 +584,15 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     std::cout<< "[Predict] dFki:\n"<<dFki<<"\n";
     #endif
     
-    /** The velocity part of the system noise matrix depends on the current attitude (is dynamic) **/
-    Qk.block <NUMAXIS, NUMAXIS> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS),(sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)) = Ra;
-    
     /** Form the system noise matrix for the attitude **/
     Qdk = Qk*dt + 0.5*dt*dt*Fki*Qk + 0.5*dt*dt*Qk*Fki.transpose();
     Qdk = 0.5*(Qdk + Qdk.transpose());
     
-    #ifdef DEBUG_PRINTS
-    std::cout<< "[Predict] Qdk is of size "<<Qdk.rows()<<"x"<<Qdk.cols()<<"\n";
-    std::cout<< "[Predict] Qdk:\n"<<Qdk<<"\n";
-    #endif
-    
     Pki_k = dFki*Pki_k*dFki.transpose() + Qdk;
     
     #ifdef DEBUG_PRINTS
+    std::cout<< "[Predict] Qdk is of size "<<Qdk.rows()<<"x"<<Qdk.cols()<<"\n";
+    std::cout<< "[Predict] Qdk:\n"<<Qdk<<"\n";
     std::cout<< "[Predict] Pki_k:\n"<<Pki_k<<"\n";
     #endif
         
@@ -708,7 +670,8 @@ Eigen::Matrix< double, 3 , 1  > sckf::accIntegrationWindow(double dt)
 
 
 
-void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Be,
+void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &Hme,
+		  Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Hp, Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Hmp,
 		  Eigen::Matrix< double, Eigen::Dynamic, 1  >& encoders,
 		  Eigen::Matrix <double,sckf::NUMBER_OF_WHEELS, 1> &contact_angles,
 		  Eigen::Matrix <double,NUMAXIS, 1> &vel_model,
@@ -717,11 +680,31 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
 		  Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off)
 {
     
+    /** Measurement step for the attitude error **/
+    this->updateAttitudeError(acc, mag, dt, magn_on_off);
+    
+    /** Measurement step for the slip vector **/
+    this->updateSlipVector(He, Hme, acc, gyro, encoders, contact_angles, dt);
+    
+    /** Measurement step for the position error **/
+    this->updatePositionError(Hp, Hmp, dt);
+    
+    /** Reset to zero for next propagation **/
+    this->resetStateVector();
+    
+    return;
+
+}
+
+/**
+* @brief Performs the measurement and correction steps of the attitude part of the filter.
+*/
+void sckf::updateAttitudeError(Eigen::Matrix< double, NUMAXIS , 1  >& acc, Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off)
+{
+
     register int j;
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> gtilde2product; /** Vec 2 product  matrix for the gravity vector in body frame*/
-    Eigen::Matrix <double,NUMAXIS,NUMAXIS> gyros2product; /** Vec 2 product  matrix for the gyroscopes (angular velocity) */
-    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> fooR2; /**  Measurement noise matrix from accelerometers matrix Ra*/
     Eigen::Matrix <double,A_STATE_VECTOR_SIZE,1> xa_k; /** Attitude part of the state vector xk+i|k */
     Eigen::Matrix <double,A_STATE_VECTOR_SIZE,A_STATE_VECTOR_SIZE> P1a; /** Error convariance matrix for measurement 1 of the attitude */
@@ -739,25 +722,14 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     Eigen::Matrix <double,NUMAXIS,1> s; /** Unitary matrix V for the SVD decomposition */
     Eigen::Matrix <double,NUMAXIS,1> lambda; /** Lambda vector for the adaptive algorithm */
     Eigen::Matrix <double,NUMAXIS,1> mu; /** mu vector for the adaptive algorithm */
+    Eigen::Matrix <double,NUMAXIS,1> auxvector; /** Auxiliar vector variable */
     Eigen::Matrix <double,NUMAXIS,1> z1a; /** Measurement vector 1 Acc */
     Eigen::Matrix <double,NUMAXIS,1> z2a; /** Measurement vector 2 Mag */
-    Eigen::Matrix <double,Y_MEASUREMENT_VECTOR_SIZE,1> ye; /** Measurement vectors for the rover position error ze = Be*ye */
-    Eigen::Matrix <double,NUMAXIS,1> auxvector; /** Auxiliar vector variable */
     
-    
-    /** Print filter information **/
-    #ifdef DEBUG_PRINTS
-    std::cout<<"[Update] Be is of size "<<Be.rows()<<"x"<<Be.cols()<<"\n";
-    std::cout<<"[Update] Be:\n"<<Be<<"\n";
-    std::cout<<"[Update] He is of size "<<He.rows()<<"x"<<He.cols()<<"\n";
-    std::cout<<"[Update] He:\n"<<He<<"\n";
-    #endif
-    
-    /** First measurement step (Pitch and Roll correction from Acc) **/
     
     /** Copy the attitude part of the state vector and covariance matrix **/
-    xa_k = xki_k.block<sckf::A_STATE_VECTOR_SIZE, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE, 0);
-    P1a = Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE, (sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE);
+    xa_k = xki_k.block<sckf::A_STATE_VECTOR_SIZE, 1> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE, 0);
+    P1a = Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE, NUMAXIS+sckf::E_STATE_VECTOR_SIZE);
     
     #ifdef DEBUG_PRINTS
     std::cout<<"[Update] xa_k is of size "<<xa_k.rows()<<"x"<<xa_k.cols()<<"\n";
@@ -777,94 +749,16 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
 		    -gtilde_body(1), gtilde_body(0), 0;
 
     #ifdef DEBUG_PRINTS
-    std::cout<<"[Update] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
+    std::cout<<"[Update] gtilde_body is of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
     std::cout<<"[Update] g in body_frame:\n"<<gtilde_body<<"\n";
     #endif
-      
-    /** Eliminate the Bias from gyros**/
-    angvelo = gyro - bghat; 
-    angvelocity = angvelo;
-    
-    /** Push it in the blobal circular vector buffer **/
-    cbAngveloX.push_back(angvelo[0]);
-    cbAngveloY.push_back(angvelo[1]);
-    cbAngveloZ.push_back(angvelo[2]);
 
-    /** Compute the cross product matrix with the angular velocity **/
-    /** in order to remove the centripetal velocities **/
-    gyros2product << 0, -angvelo(2), angvelo(1),
-		angvelo(2), 0, -angvelo(0),
-		-angvelo(1), angvelo(0), 0;
-		
     /** Form the matrix for the measurement 1 of the attitude (acc correction) **/
     H1a.block<NUMAXIS, NUMAXIS> (0,0) = 2*gtilde2product;
-    
-    /** Form the observation matrix Hk **/
-    Hk.block<sckf::E_MEASUREMENT_VECTOR_SIZE, (sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)> (0,0) = He;
-    Hk.block<NUMAXIS, NUMAXIS> (sckf::E_MEASUREMENT_VECTOR_SIZE, (sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)) = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity();
-    Hk.block<NUMAXIS, sckf::A_STATE_VECTOR_SIZE> (sckf::E_MEASUREMENT_VECTOR_SIZE+NUMAXIS,(sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+NUMAXIS) = H1a;
-    
-    #ifdef DEBUG_PRINTS
-    std::cout<<"[Update] Hk is of size "<<Hk.rows()<<"x"<<Hk.cols()<<"\n";
-    std::cout<<"[Update] Hk:\n"<<Hk<<"\n";
-    #endif
     
     /** Form the measurement vector z1a for the attitude (the real acceleration value) **/
     z1a = acc - bahat - gtilde_body;
     
-    /** Push the acceleration value in the circular vector array **/
-    cbAccX.push_back(z1a(0));
-    cbAccY.push_back(z1a(1));
-    cbAccZ.push_back(z1a(2));
-    
-    /** Store the z1a value in the global variable for the Simpson's rule integration **/
-    accSimps.col(2) = accSimps.col(1); //t-1 -> t-2
-    accSimps.col(1) = accSimps.col(0); //t -> t-1
-    accSimps.col(0) = z1a; //actual sample -> t
-    
-    /** Compute the velocities and store them in the global variables **/
-    linvelocity = accIntegrationWindow(dt);
-    
-    /** Form the measurement vector ye of the rover position error (Be*ye) **/
-    ye.block<NUMAXIS, 1> (0, 0) = linvelocity; /** Rover body linear velocity **/
-    ye.block<NUMAXIS, 1> (NUMAXIS, 0) = angvelo; /** Rover body angular velocity **/
-    ye.block<sckf::NUMBER_OF_WHEELS + 1, 1> ((2*NUMAXIS), 0) = encoders; /** Joint velocities **/
-    ye.block<sckf::NUMBER_OF_WHEELS, 1> ((2*NUMAXIS)+sckf::NUMBER_OF_WHEELS + 1, 0) = contact_angles; /** Contact angle velocities **/
-    
-    /** Store the contact angles **/
-    this->setContactAnglesVelocity(contact_angles);
-    
-    /** The error in velocity(std) grows as squared root of time (time = integration buffer * dt) **/
-    Eigen::Matrix<double,NUMAXIS,1> intwindow;
-    intwindow << cbAccX.size()*dt, cbAccY.size()*dt, cbAccZ.size()*dt;
-    
-    /** Velocity covariance matrix with is std_vel = std_acc * sqrt(integration_step) **/
-    this->Rv = Ra * intwindow.array().square().matrix().asDiagonal();
-    
-    
-    #ifdef DEBUG_PRINTS
-    std::cout<<"[Update] linvelocity:\n"<<linvelocity<<"\n";
-    std::cout<<"[Update] acc is of size "<<acc.rows()<<"x"<<acc.cols()<<"\n";
-    std::cout<<"[Update] acc:\n"<<acc<<"\n";
-    std::cout<<"[Update] bahat:\n"<<bahat<<"\n";
-    std::cout<<"[Update] dt:\n"<<dt<<"\n";
-    std::cout<<"[Update] gyros2product.row(0) * eccx:\n"<<gyros2product.row(0) * eccx<<"\n";
-    std::cout<<"[Update] ye is of size "<<ye.rows()<<"x"<<ye.cols()<<"\n";
-    std::cout<<"[Update] ye:\n"<<ye<<"\n";
-    std::cout<<"[Update] ze:\n"<<Be*ye<<"\n";
-    std::cout<<"[Update] intwindow:\n"<<intwindow<<"\n";
-    #endif
-    
-    /** Form the complete zk vector **/
-    zki.block<sckf::E_MEASUREMENT_VECTOR_SIZE, 1> (0,0)= (Be*ye)*dt; /** Slip vector measurement (displacement) **/
-    zki.block<NUMAXIS, 1> (sckf::E_MEASUREMENT_VECTOR_SIZE, 0)= vel_model - linvelocity; /** Vel. error is computed lin. velo - current (tki) velocity model**/
-    zki.block<NUMAXIS, 1> (sckf::E_MEASUREMENT_VECTOR_SIZE+NUMAXIS, 0)= z1a; /** Acceleration **/
-    
-    #ifdef DEBUG_PRINTS
-    std::cout<<"[Update] zki is of size "<<zki.rows()<<"x"<<zki.cols()<<"\n";
-    std::cout<<"[Update] zki:\n"<<zki<<"\n";
-    #endif
-   
     /** The adaptive algorithm for the attitude, the Uk matrix and SVD part **/
     R1a = (z1a - H1a*xa_k) * (z1a - H1a*xa_k).transpose();
     RHist.block <NUMAXIS, NUMAXIS> (0, (r1count*(M1-1))%M1) = R1a;
@@ -923,70 +817,60 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
 	    Qstar = Matrix<double, NUMAXIS, NUMAXIS>::Zero();
     }
     
-    /** Form the Rk matrix **/
-     for (int i = 0; i<NUMBER_OF_WHEELS; i++)
-    {
-	Rk.block<NUMAXIS, NUMAXIS>(i*(2*NUMAXIS),i*(2*NUMAXIS)) = Rv*dt; /** For the linear velocity **/
-	Rk.block<NUMAXIS, NUMAXIS>(NUMAXIS+(i*(2*NUMAXIS)), NUMAXIS+(i*(2*NUMAXIS))) = Rg*dt; /** For the angular velocity **/
-    }
-    Rk.block<NUMAXIS, NUMAXIS>(sckf::E_MEASUREMENT_VECTOR_SIZE,sckf::E_MEASUREMENT_VECTOR_SIZE) = this->Rv; /** For the velocity error **/
-    Rk.block<NUMAXIS, NUMAXIS>(sckf::E_MEASUREMENT_VECTOR_SIZE+NUMAXIS,sckf::E_MEASUREMENT_VECTOR_SIZE+NUMAXIS) = Ra + Rat + Qstar; /** For the attitude error correction **/
+    /** Define the static part of the measurement noise **/
+    R1a = Ra + Rat + Qstar; //Qstart is the external acceleration covariance
     
     /** Compute the Kalman Gain Matrix **/
-    K = Pki_k * Hk.transpose() * (Hk * Pki_k * Hk.transpose() + Rk).inverse();
-    
-    /** Innovation in the measurement **/
-    innovation = (zki - Hk*xki_k);
-    
-    #ifdef DEBUG_PRINTS
-//     std::cout<<"[Update] (Hk * Pki_k * Hk.transpose() + Rk):\n"<<(Hk * Pki_k * Hk.transpose() + Rk)<<"\n";
-//     std::cout<<"[Update] (Hk * Pki_k * Hk.transpose() + Rk).inverse():\n"<<(Hk * Pki_k * Hk.transpose() + Rk).inverse()<<"\n";
-    std::cout<<"[Update] Hk*xki_k:\n"<<(Hk*xki_k)<<"\n";
-    if ((Hk*xki_k) != Eigen::Matrix<double, sckf::Z_MEASUREMENT_VECTOR_SIZE, 1>::Zero())
-	std::cout<<"CACA DE LA VACA\n";
-    std::cout<<"[Update] innovation is of size " <<innovation.rows()<<"x"<< innovation.cols()<<"\n";
-    std::cout<<"[Update] innovation:\n"<<innovation<<"\n";
-    #endif
-    
+    K1a = P1a * H1a.transpose() * (H1a * P1a * H1a.transpose() + R1a).inverse();
+      
     /** Update the state vector and the covariance matrix **/
-    xki_k = xki_k + K * (zki - Hk*xki_k);
-        
-    Pki_k = (Matrix<double,X_STATE_VECTOR_SIZE,X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,X_STATE_VECTOR_SIZE,X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
-    
-    /** Insure that the matrix is symetric (avoid numerical errors) **/
-    Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
+    xa_k = xa_k + K1a * (z1a - H1a * xa_k);
+    P1a = (Matrix<double,sckf::A_STATE_VECTOR_SIZE,sckf::A_STATE_VECTOR_SIZE>::Identity()-K1a*H1a)*P1a*(Matrix<double,sckf::A_STATE_VECTOR_SIZE,sckf::A_STATE_VECTOR_SIZE>::Identity()-K1a*H1a).transpose() + K1a*R1a*K1a.transpose();
+    P1a = 0.5 * (P1a + P1a.transpose());
     
     #ifdef DEBUG_PRINTS
     std::cout<< "[Update] Qstar is of size "<<Qstar.rows()<<"x"<<Qstar.cols()<<"\n";
     std::cout<< "[Update] Qstar:\n"<<Qstar<<"\n";
-    std::cout<< "[Update] Rk is of size "<<Rk.rows()<<"x"<<Rk.cols()<<"\n";
-    std::cout<< "[Update] Rk:\n"<<Rk<<"\n";
-    std::cout<< "[Update] K is of size "<<K.rows()<<"x"<<K.cols()<<"\n";
-    std::cout<< "[Update] K:\n"<<K<<"\n";
-    std::cout<< "[Update] xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
-    std::cout<< "[Update] xki_k:\n"<<xki_k<<"\n";
-    std::cout<< "[Update] Pki_k is of size "<<Pki_k.rows()<<"x"<<Pki_k.cols()<<"\n";
-    std::cout<< "[Update] Pki_k:\n"<<Pki_k<<"\n";
+    std::cout<< "[Update] R1a is of size "<<R1a.rows()<<"x"<<R1a.cols()<<"\n";
+    std::cout<< "[Update] R1a:\n"<<R1a<<"\n";
+    std::cout<< "[Update] K1a is of size "<<K1a.rows()<<"x"<<K1a.cols()<<"\n";
+    std::cout<< "[Update] K1a:\n"<<K1a<<"\n";
+    std::cout<< "[Update] xa_k is of size "<<xa_k.rows()<<"x"<<xa_k.cols()<<"\n";
+    std::cout<< "[Update] xa_k:\n"<<xa_k<<"\n";
+    std::cout<< "[Update] P1a is of size "<<P1a.rows()<<"x"<<P1a.cols()<<"\n";
+    std::cout<< "[Update] P1a:\n"<<P1a<<"\n";
     #endif
-         
+    
     /** Update the quaternion with the Indirect approach **/
     qe.w() = 1;
-    qe.x() = xki_k((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE);
-    qe.y() = xki_k((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE+1);
-    qe.z() = xki_k((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE+2);
-    Eigen::Matrix <double,NUMAXIS,1> error_euler; /** In euler angles **/
-    error_euler[2] = qe.toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
+    qe.x() = xa_k(0);
+    qe.y() = xa_k(1);
+    qe.z() = xa_k(2);
+    
+    Eigen::Matrix <double,NUMAXIS,1> error_euler; /** The error in euler angles **/
+    error_euler[2] = 0.00; //Dont update the yaw
     error_euler[1] = qe.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
     error_euler[0] = qe.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
-    error_euler[2] = 0.00;
     
     qe = Eigen::Quaternion <double> (Eigen::AngleAxisd(error_euler[0], Eigen::Vector3d::UnitX())*
 			Eigen::AngleAxisd(error_euler[1], Eigen::Vector3d::UnitY()) *
 			Eigen::AngleAxisd(error_euler[2], Eigen::Vector3d::UnitZ()));
+    
+    /** Correct the attitude using the error quaternion **/
     q4 = q4 * qe;
     
     /** Normalize quaternion **/
     q4.normalize();
+    
+    /** Copy to the global variable **/
+    xki_k.block<sckf::A_STATE_VECTOR_SIZE, 1>(NUMAXIS+sckf::E_STATE_VECTOR_SIZE, 0) = xa_k;
+    Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE, NUMAXIS+sckf::E_STATE_VECTOR_SIZE) = P1a;
+    K.block<sckf::A_STATE_VECTOR_SIZE, NUMAXIS> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE, sckf::P_OBSERVATION_VECTOR_SIZE + sckf::E_OBSERVATION_VECTOR_SIZE) = K1a;
+    
+    
+    /** Update the bias with the bias error **/
+    bghat = bghat + xki_k.block<NUMAXIS, 1> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE + NUMAXIS,0);
+    bahat = bahat + xki_k.block<NUMAXIS, 1> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE + (2*NUMAXIS),0);
     
     #ifdef DEBUG_PRINTS
     Eigen::Matrix <double,NUMAXIS,1> euler; /** In euler angles **/
@@ -995,39 +879,6 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     euler[0] = qe.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
     std::cout<< "[Update] Error quaternion in euler\n";
     std::cout<< "[Update] Roll: "<<euler[0]*R2D<<" Pitch: "<<euler[1]*R2D<<" Yaw: "<<euler[2]*R2D<<"\n";
-    #endif
-    
-    /** Reset the quaternion part of the state vector (the error quaternion) **/
-    xki_k.block<NUMAXIS,1>((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS)+sckf::V_STATE_VECTOR_SIZE,0) = Matrix<double, NUMAXIS, 1>::Zero();
-    
-    /**---------------------------- **/
-    /** Reset the rest of the state **/
-    /**---------------------------- **/
-    
-    /** Reset the slip vector **/
-    for (int i = 0; i<sckf::NUMBER_OF_WHEELS; i++)
-    {
-	slipMatrix.col(i) = xki_k.block<NUMAXIS, 1> (i*NUMAXIS,0)/dt;
-	xki_k.block<NUMAXIS, 1> (i*NUMAXIS,0) = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
-    }
-    
-    /** Copy the velocity error **/
-    velerror = velerror + xki_k.block<NUMAXIS, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS),0);
-    xki_k.block<sckf::V_STATE_VECTOR_SIZE, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS),0)  = Matrix <double, sckf::V_STATE_VECTOR_SIZE, 1>::Zero();
-    
-    /** Reset the gyroscospes bias **/
-    bghat = bghat + xki_k.block<NUMAXIS, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS) + sckf::V_STATE_VECTOR_SIZE + NUMAXIS,0);
-    xki_k.block<NUMAXIS, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS) + sckf::V_STATE_VECTOR_SIZE + NUMAXIS,0) = Matrix <double, NUMAXIS, 1>::Zero();
-    
-    /** Reset the accelerometers bias **/
-    bahat = bahat + xki_k.block<NUMAXIS, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS) + sckf::V_STATE_VECTOR_SIZE + (2*NUMAXIS),0);
-    xki_k.block<NUMAXIS, 1> ((sckf::E_STATE_VECTOR_SIZE*sckf::NUMBER_OF_WHEELS) + sckf::V_STATE_VECTOR_SIZE + (2*NUMAXIS),0) = Matrix <double, NUMAXIS, 1>::Zero();
-    
-    #ifdef DEBUG_PRINTS
-    std::cout<< "[Update After Reset] xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
-    std::cout<< "[Update After Reset] xki_k:\n"<<xki_k<<"\n";
-    std::cout<< "[Update] velerror is of size "<<velerror.rows()<<"x"<<velerror.cols()<<"\n";
-    std::cout<< "[Update] velerror:\n"<<velerror<<"\n";
     std::cout<< "[Update] bghat is of size "<<bghat.rows()<<"x"<<bghat.cols()<<"\n";
     std::cout<< "[Update] bghat:\n"<<bghat<<"\n";
     std::cout<< "[Update] bahat is of size "<<bahat.rows()<<"x"<<bahat.cols()<<"\n";
@@ -1035,7 +886,314 @@ void sckf::update(Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> &He, Eige
     #endif
     
     return;
+}
 
+/**
+* @brief Performs the measurement and correction steps of the slip vector of the filter.
+*/
+void sckf::updateSlipVector(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& He,
+			    Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Hme,
+			    Eigen::Matrix< double, NUMAXIS , 1  >& acc,
+			    Eigen::Matrix< double, NUMAXIS , 1  >& gyro,
+			    Eigen::Matrix< double, Eigen::Dynamic, 1  >& encoders,
+			    Eigen::Matrix< double, sckf::NUMBER_OF_WHEELS, 1  >& contact_angles, double dt)
+{
+    Eigen::Matrix <double,E_STATE_VECTOR_SIZE,1> xe_k; /** Slip vectot part of the state vector xk+i|k */
+    Eigen::Matrix <double,E_STATE_VECTOR_SIZE,E_STATE_VECTOR_SIZE> Pe; /** Error convariance matrix for slip vector */
+    Eigen::Matrix <double,E_STATE_VECTOR_SIZE, E_OBSERVATION_VECTOR_SIZE> Ke; /** Kalman Gain matrix for slip vector */
+    Eigen::Matrix <double,E_OBSERVATION_VECTOR_SIZE, E_OBSERVATION_VECTOR_SIZE> Re_k; /** Error of the slip measurement Re_k = Jh*Rme_k*Jh' */
+    Eigen::Matrix <double,E_MEASUREMENT_VECTOR_SIZE, E_MEASUREMENT_VECTOR_SIZE> Rme_k; /** Error of the measurement vector */
+    Eigen::Matrix <double,E_MEASUREMENT_VECTOR_SIZE,1> me; /** Measurement vectors for the rover slip vector*/
+    Eigen::Matrix <double,E_OBSERVATION_VECTOR_SIZE,1> ze; /** Observation of the measurement vector for the slip vector ze = Hme * me*/
+    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> gyros2product; /** Vec 2 product  matrix for the gyroscopes (angular velocity) */
+    Eigen::Matrix <double,NUMAXIS,1> gtilde_body; /** Gravitation in the body frame */
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> gtilde2product; /** Vec 2 product  matrix for the gravity vector in body frame*/
+    Eigen::Matrix <double,NUMAXIS,1> z1a; /** Measurement vector 1 Acc */
+    
+    
+    /** Copy the attitude part of the state vector and covariance matrix **/
+    xe_k = xki_k.block<sckf::E_STATE_VECTOR_SIZE, 1> (NUMAXIS, 0);
+    Pe = Pki_k.block<sckf::E_STATE_VECTOR_SIZE, sckf::E_STATE_VECTOR_SIZE> (NUMAXIS, NUMAXIS);
+    
+    /** TODO improve it using the corrected quaternion  **/
+    /** Eliminate the Bias from gyros **/
+    angvelo = gyro - bghat; 
+    angvelocity = angvelo;
+    
+    /** *********************************************** **/
+    
+    /** Push it in the blobal circular vector buffer **/
+    cbAngveloX.push_back(angvelo[0]);
+    cbAngveloY.push_back(angvelo[1]);
+    cbAngveloZ.push_back(angvelo[2]);
+    
+    /** Compute the cross product matrix with the angular velocity **/
+    /** in order to remove the centripetal velocities **/
+    gyros2product << 0, -angvelo(2), angvelo(1),
+		angvelo(2), 0, -angvelo(0),
+		-angvelo(1), angvelo(0), 0;
+		
+    /** Create the orientation matrix from the quaternion **/
+    Quaternion2DCM (&q4, &Cq);
+    
+    /** Calculate the gravity vector in the body frame **/
+    gtilde_body = Cq * gtilde;
+    
+    gtilde2product << 0, -gtilde_body(2), gtilde_body(1),
+		    gtilde_body(2), 0, -gtilde_body(0),
+		    -gtilde_body(1), gtilde_body(0), 0;
+		    
+    /** Form the measurement vector z1a for the attitude (the real acceleration value) **/
+    z1a = acc - bahat - gtilde_body;
+
+    /** Print filter information **/
+    #ifdef DEBUG_PRINTS
+    std::cout<<"[Update] xe_k is of size "<<xe_k.rows()<<"x"<<xe_k.cols()<<"\n";
+    std::cout<<"[Update] xe_k:\n"<<xe_k<<"\n";
+    std::cout<<"[Update] Hme is of size "<<Hme.rows()<<"x"<<Hme.cols()<<"\n";
+    std::cout<<"[Update] Hme:\n"<<Hme<<"\n";
+    std::cout<<"[Update] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
+    std::cout<<"[Update] g in body_frame:\n"<<gtilde_body<<"\n";
+    std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
+    #endif
+
+    /** Push the acceleration value in the circular vector array **/
+    cbAccX.push_back(z1a(0));
+    cbAccY.push_back(z1a(1));
+    cbAccZ.push_back(z1a(2));
+    
+    /** Store the z1a value in the global variable for the Simpson's rule integration **/
+    accSimps.col(2) = accSimps.col(1); //t-1 -> t-2
+    accSimps.col(1) = accSimps.col(0); //t -> t-1
+    accSimps.col(0) = z1a; //actual sample -> t
+    
+    /** Compute the velocities and store them in the global variables **/
+    linvelocity = accIntegrationWindow(dt);
+    
+    /** Form the measurement vector me of the rover position error **/
+    me << linvelocity, angvelo, encoders, contact_angles;
+//     me.block<NUMAXIS, 1> (0, 0) = linvelocity; /** Rover body linear velocity **/
+//     me.block<NUMAXIS, 1> (NUMAXIS, 0) = angvelo; /** Rover body angular velocity **/
+//     me.block<sckf::NUMBER_OF_WHEELS + 1, 1> ((2*NUMAXIS), 0) = encoders; /** Joint velocities **/
+//     me.block<sckf::NUMBER_OF_WHEELS, 1> ((2*NUMAXIS)+sckf::NUMBER_OF_WHEELS + 1, 0) = contact_angles; /** Contact angle velocities **/
+    
+    /** Store the contact angles **/
+    this->setContactAnglesVelocity(contact_angles);
+    
+    /** The error in velocity(std) grows as squared root of time (time = integration buffer * dt) **/
+    Eigen::Matrix<double,NUMAXIS,1> intwindow;
+    intwindow << cbAccX.size()*dt, cbAccY.size()*dt, cbAccZ.size()*dt;
+    
+    /** Velocity covariance matrix with is std_vel = std_acc * sqrt(integration_step) **/
+    this->Rv = Ra * intwindow.array().square().matrix().asDiagonal();
+    
+    /** Perform the measurement **/
+    ze = Hme * me;
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<<"[Update] linvelocity:\n"<<linvelocity<<"\n";
+    std::cout<<"[Update] acc is of size "<<acc.rows()<<"x"<<acc.cols()<<"\n";
+    std::cout<<"[Update] acc:\n"<<acc<<"\n";
+    std::cout<<"[Update] dt:\n"<<dt<<"\n";
+    std::cout<<"[Update] gyros2product.row(0) * eccx:\n"<<gyros2product.row(0) * eccx<<"\n";
+    std::cout<<"[Update] me is of size "<<me.rows()<<"x"<<me.cols()<<"\n";
+    std::cout<<"[Update] me:\n"<<me<<"\n";
+    std::cout<<"[Update] ze = Hme * me:\n"<<ze<<"\n";
+    std::cout<<"[Update] intwindow:\n"<<intwindow<<"\n";
+    #endif
+    
+    /** Noise of the measurement vector **/
+    Rme_k.setZero();
+    Rme_k.block<NUMAXIS, NUMAXIS>(0,0) = Rv;
+    Rme_k.block<NUMAXIS, NUMAXIS>(NUMAXIS,NUMAXIS) = Rg;
+    Rme_k.block<1+sckf::NUMBER_OF_WHEELS, 1+sckf::NUMBER_OF_WHEELS>(2*NUMAXIS,2*NUMAXIS) = Ren;
+    Rme_k.block<sckf::NUMBER_OF_WHEELS, sckf::NUMBER_OF_WHEELS>((2*NUMAXIS)+1+sckf::NUMBER_OF_WHEELS,(2*NUMAXIS)+1+sckf::NUMBER_OF_WHEELS) = Rcont;
+    
+    /** Define the measurement noise **/
+    Re_k = Hme * Rme_k * Hme.transpose();
+    
+    /** Compute the Kalman Gain Matrix **/
+    Ke = Pe * He.transpose() * (He * Pe * He.transpose() /*+ Re_k*/).inverse();
+    
+    std::cout<<"[Update] Pe is of size "<<Pe.rows()<<"x"<<Pe.cols()<<"\n";
+    std::cout<<"[Update] Pe:\n"<<Pe<<"\n";
+    std::cout<<"[Update] He is of size "<<He.rows()<<"x"<<He.cols()<<"\n";
+    std::cout<<"[Update] He:\n"<<He<<"\n";
+    std::cout<< "[Update] He * Pe \n"<<He * Pe<<"\n";
+    std::cout<< "[Update] He.transpose()\n"<<He.transpose()<<"\n";
+    std::cout<< "[Update] He * Pe * He.transpose()\n"<<He * Pe * He.transpose()<<"\n";
+    std::cout<< "[Update] (He * Pe * He.transpose()).inverse()\n"<<(He * Pe * He.transpose()).inverse()<<"\n";
+    std::cout<< "[Update] (He * He.transpose()).inverse()\n"<<(He * He.transpose()).inverse()<<"\n";
+    std::cout<< "[Update] (He.transpose()*He).inverse()\n"<<(He.transpose()*He).inverse()<<"\n";
+    
+    /** Update the state vector and the covariance matrix **/
+    xe_k = xe_k + Ke * (ze - He * xe_k);
+    Pe = (Matrix<double,sckf::E_STATE_VECTOR_SIZE,sckf::E_STATE_VECTOR_SIZE>::Identity()-Ke*He)*Pe*(Matrix<double,sckf::E_STATE_VECTOR_SIZE,sckf::E_STATE_VECTOR_SIZE>::Identity()-Ke*He).transpose() + Ke*Re_k*Ke.transpose();
+    Pe = 0.5 * (Pe + Pe.transpose());
+    
+    /** Copy to the global vector **/
+    xki_k.block<sckf::E_STATE_VECTOR_SIZE, 1> (NUMAXIS, 0) = xe_k;
+    Pki_k.block<sckf::E_STATE_VECTOR_SIZE, sckf::E_STATE_VECTOR_SIZE> (NUMAXIS, NUMAXIS) = Pe;
+    K.block<sckf::E_STATE_VECTOR_SIZE, sckf::E_OBSERVATION_VECTOR_SIZE> (NUMAXIS, sckf::P_OBSERVATION_VECTOR_SIZE) = Ke;
+    
+    #ifdef DEBUG_PRINTS
+    
+    std::cout<< "[Update] Rme_k is of size "<<Rme_k.rows()<<"x"<<Rme_k.cols()<<"\n";
+    std::cout<< "[Update] Rme_k:\n"<<Rme_k<<"\n";
+    std::cout<< "[Update] Re_k is of size "<<Re_k.rows()<<"x"<<Re_k.cols()<<"\n";
+    std::cout<< "[Update] Re_k:\n"<<Re_k<<"\n";
+    std::cout<< "[Update] Ke is of size "<<Ke.rows()<<"x"<<Ke.cols()<<"\n";
+    std::cout<< "[Update] Ke:\n"<<Ke<<"\n";
+    std::cout<< "[Update] xe_k is of size "<<xe_k.rows()<<"x"<<xe_k.cols()<<"\n";
+    std::cout<< "[Update] xe_k:\n"<<xe_k<<"\n";
+    std::cout<< "[Update] Pe is of size "<<Pe.rows()<<"x"<<Pe.cols()<<"\n";
+    std::cout<< "[Update] Pe:\n"<<Pe<<"\n";
+    #endif
+    
+    
+    return;
+}
+
+void sckf::updatePositionError(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Hp,
+			       Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Hmp,
+			       double dt)
+{
+    
+    Eigen::Matrix <double,NUMAXIS,1> xp_k; /** Position error vector part of the state vector xk+i|k */
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> Pp; /** Error convariance matrix for position error vector */
+    Eigen::Matrix <double,NUMAXIS, P_OBSERVATION_VECTOR_SIZE> Kp; /** Kalman Gain matrix for position error vector */
+    Eigen::Matrix <double,P_OBSERVATION_VECTOR_SIZE, P_OBSERVATION_VECTOR_SIZE> Rp_k; /** Error of the position measurement Rp_k = Jh*Rmp_k*Jh' */
+    Eigen::Matrix <double,P_MEASUREMENT_VECTOR_SIZE, P_MEASUREMENT_VECTOR_SIZE> Rmp_k; /** Error of the measurement vector */
+    Eigen::Matrix <double,P_MEASUREMENT_VECTOR_SIZE,1> mp; /** Measurement vectors for the rover position error*/
+    Eigen::Matrix <double,P_OBSERVATION_VECTOR_SIZE,1> zp; /** Observation of the measurement vector for the position error zp = Hmp * mp*/
+    Eigen::Matrix <double,NUMAXIS,1> error_quat; /** Error quaternion */
+    Eigen::Matrix <double,E_STATE_VECTOR_SIZE,1> slip_vector; /** Slip vectors **/
+    
+    
+    /** Copy the attitude part of the state vector and covariance matrix **/
+    xp_k = xki_k.block<NUMAXIS, 1> (0, 0);
+    Pp = Pki_k.block<NUMAXIS, NUMAXIS> (0,0);
+    
+    /** Print filter information **/
+    #ifdef DEBUG_PRINTS
+    std::cout<<"[Update] Hp is of size "<<Hp.rows()<<"x"<<Hp.cols()<<"\n";
+    std::cout<<"[Update] Hp:\n"<<Hp<<"\n";
+    std::cout<<"[Update] Hmp is of size "<<Hmp.rows()<<"x"<<Hmp.cols()<<"\n";
+    std::cout<<"[Update] Hmp:\n"<<Hmp<<"\n";
+    #endif
+    
+    /** Get the information for the measurement **/
+    slip_vector = xki_k.block<sckf::E_STATE_VECTOR_SIZE, 1>(NUMAXIS, 0);
+    error_quat = xki_k.block<NUMAXIS, 1>(NUMAXIS+sckf::E_STATE_VECTOR_SIZE, 0);
+    
+    Eigen::Matrix <double,NUMAXIS,1> error_euler; /** The error in euler angles **/
+    Eigen::Quaternion<double> qe; /** The error in quaternion form **/
+    
+    qe.w() = 1;
+    qe.x() = error_quat(0);
+    qe.y() = error_quat(1);
+    qe.z() = error_quat(2);
+    
+    error_euler[2] = 0.00; //No error in the yaw
+    error_euler[1] = qe.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
+    error_euler[0] = qe.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
+    
+    
+    /** Form the measurement vector mp of the rover position error**/
+    mp << error_euler, slip_vector;
+            
+    /** Perform the measurement **/
+    zp = Hmp * mp;
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<<"[Update] error_quat is of size "<<error_quat.rows()<<"x"<<error_quat.cols()<<"\n";
+    std::cout<<"[Update] error_quat:\n"<<error_quat<<"\n";
+    std::cout<<"[Update] slip_vector is of size "<<slip_vector.rows()<<"x"<<slip_vector.cols()<<"\n";
+    std::cout<<"[Update] slip_vector:\n"<<slip_vector<<"\n";
+    std::cout<<"[Update] mp is of size "<<mp.rows()<<"x"<<mp.cols()<<"\n";
+    std::cout<<"[Update] mp:\n"<<mp<<"\n";
+    std::cout<<"[Update] zp:\n"<<zp<<"\n";
+    #endif
+    
+    
+    /** Noise of the measurement vector **/
+    Rmp_k.setZero();
+    Rmp_k.block<NUMAXIS, NUMAXIS>(0,0) = Pki_k.block<NUMAXIS, NUMAXIS>(NUMAXIS+sckf::E_STATE_VECTOR_SIZE, NUMAXIS+sckf::E_STATE_VECTOR_SIZE);
+    Rmp_k.block<E_STATE_VECTOR_SIZE, E_STATE_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = Pki_k.block<sckf::E_STATE_VECTOR_SIZE, sckf::E_STATE_VECTOR_SIZE>(NUMAXIS, NUMAXIS);
+    
+    /** Define the measurement noise **/
+    Rp_k = Hmp * Rmp_k * Hmp.transpose();
+    
+    /** Compute the Kalman Gain Matrix **/
+    Kp = Pp * Hp.transpose() * (Hp * Pp * Hp.transpose() + Rp_k).inverse();
+      
+    /** Update the state vector and the covariance matrix **/
+    xp_k = xp_k + Kp * (zp - Hp * xp_k);
+    Pp = (Matrix<double,NUMAXIS,NUMAXIS>::Identity()-Kp*Hp)*Pp*(Matrix<double,NUMAXIS,NUMAXIS>::Identity()-Kp*Hp).transpose() + Kp*Rp_k*Kp.transpose();
+    Pp = 0.5 * (Pp + Pp.transpose());
+    
+    /** Copy to the global vector **/
+    xki_k.block<NUMAXIS, 1> (0, 0) = xp_k;
+    Pki_k.block<NUMAXIS, NUMAXIS> (0, 0) = Pp;
+    K.block<NUMAXIS, sckf::P_OBSERVATION_VECTOR_SIZE> (0, 0) = Kp;
+    
+    eposition = xp_k;
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<< "[Update] Rmp_k is of size "<<Rmp_k.rows()<<"x"<<Rmp_k.cols()<<"\n";
+    std::cout<< "[Update] Rmp_k:\n"<<Rmp_k<<"\n";
+    std::cout<< "[Update] Rp_k is of size "<<Rp_k.rows()<<"x"<<Rp_k.cols()<<"\n";
+    std::cout<< "[Update] Rp_k:\n"<<Rp_k<<"\n";
+    std::cout<< "[Update] Kp is of size "<<Kp.rows()<<"x"<<Kp.cols()<<"\n";
+    std::cout<< "[Update] Kp:\n"<<Kp<<"\n";
+    std::cout<< "[Update] xp_k is of size "<<xp_k.rows()<<"x"<<xp_k.cols()<<"\n";
+    std::cout<< "[Update] xp_k:\n"<<xp_k<<"\n";
+    std::cout<< "[Update] Pp is of size "<<Pp.rows()<<"x"<<Pp.cols()<<"\n";
+    std::cout<< "[Update] Pp:\n"<<Pp<<"\n";
+    #endif
+    
+    
+    return;
+}
+
+
+
+
+void sckf::resetStateVector()
+{
+
+    /**------------------------------ **/
+    /** Reset some parts of the state **/
+    /**------------------------------ **/
+    
+    /** Reset the slip vector **/
+    for (int i = 0; i<sckf::NUMBER_OF_WHEELS; i++)
+    {
+	slipMatrix.col(i) = xki_k.block<NUMAXIS, 1> ((i+1)*NUMAXIS,0);
+	xki_k.block<NUMAXIS, 1> ((i+1)*NUMAXIS,0) = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
+    }
+    
+    /** Reset the quaternion part of the state vector (the error quaternion) **/
+    xki_k.block<NUMAXIS,1>(NUMAXIS+sckf::E_STATE_VECTOR_SIZE,0) = Matrix<double, NUMAXIS, 1>::Zero();
+    
+    /** Reset the gyroscopes bias **/
+    xki_k.block<NUMAXIS, 1> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE + NUMAXIS,0) = Matrix <double, NUMAXIS, 1>::Zero();
+    
+    /** Reset the accelerometers bias **/
+    xki_k.block<NUMAXIS, 1> (NUMAXIS+sckf::E_STATE_VECTOR_SIZE + (2*NUMAXIS),0) = Matrix <double, NUMAXIS, 1>::Zero();
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<< "[Update After Reset] xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
+    std::cout<< "[Update After Reset] xki_k:\n"<<xki_k<<"\n";
+    std::cout<< "[Update] bghat is of size "<<bghat.rows()<<"x"<<bghat.cols()<<"\n";
+    std::cout<< "[Update] bghat:\n"<<bghat<<"\n";
+    std::cout<< "[Update] bahat is of size "<<bahat.rows()<<"x"<<bahat.cols()<<"\n";
+    std::cout<< "[Update] bahat:\n"<<bahat<<"\n";
+    #endif
+    
+    return;
 }
 
 

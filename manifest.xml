@@ -1,6 +1,6 @@
 <package>
-  <description brief="Library set of classes to compute the Asguard localization.">
-  This has the set of libraries developed under the ESA-NPI project for the Asguard localization
+  <description brief="Library set of classes for a general mobile rover localization approach.">
+  This has the set of libraries developed under the ESA-NPI project for rovers localization
   </description>
   <author>Javier Hidalgo Carrio/javier.hidalgo_carrio@dfki.de</author>
   <license></license>
