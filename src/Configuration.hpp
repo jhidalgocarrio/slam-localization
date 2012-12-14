@@ -71,40 +71,15 @@ namespace localization
     #define R2D 180.00/M_PI /** Convert radian to degree **/
     #endif
     
-    static const int NUMBER_OF_WHEELS = 4; /** Rover number of wheels **/
+    static const unsigned int NUMBER_OF_WHEELS = 4; /** Rover number of wheels **/
     
-    static const int NUMBER_OF_PASSIVE_JOINTS = 1; /** Rover chassis number of passive joints **/
+    static const unsigned int NUMBER_OF_PASSIVE_JOINTS = 1; /** Rover chassis number of passive joints **/
     
-    static const int NUMBER_OF_ACTIVE_JOINTS = 0; /** Rover chassis number of actuated joints **/
+    static const unsigned int NUMBER_OF_ACTIVE_JOINTS = 0; /** Rover chassis number of actuated joints **/
     
-    static const int ENCODERS_VECTOR_SIZE = NUMBER_OF_ACTIVE_JOINTS+NUMBER_OF_PASSIVE_JOINTS+NUMBER_OF_WHEELS; /** Vector of rover sensed joints with encoders **/
+    static const unsigned int ENCODERS_VECTOR_SIZE = NUMBER_OF_ACTIVE_JOINTS+NUMBER_OF_PASSIVE_JOINTS+NUMBER_OF_WHEELS; /** Vector of rover sensed joints with encoders **/
     
-    static const int SLIP_VECTOR_SIZE = NUMAXIS * NUMBER_OF_WHEELS; /** Size of slip vector of the mobil robot **/
-    
-    /**
-    * Represents the linear velocity
-    */
-    struct LinVelocity {
-	Eigen::Matrix<double, NUMAXIS, 1> v; //! instantaneous rover velocity vector
-	Eigen::Matrix<double, NUMAXIS, NUMAXIS> R; //! Covariance matrix
-
-	LinVelocity()
-	    : v( Eigen::Matrix<double, NUMAXIS,1>::Zero() ), R( Eigen::Matrix<double, NUMAXIS,NUMAXIS>::Zero() ) {}
-    };
-    
-    /**
-    * Represents the slip vector
-    */
-    struct SlipVelocity {
-	unsigned int foot_idx; //! foot_idx (in case of multiples feet in a non-round wheel i.e: Asguard)
-	Eigen::Matrix<double, NUMAXIS, 1> slip; //! instantaneous slip velocity vector
-	Eigen::Matrix<double, NUMAXIS, NUMAXIS> R; //! Covariance matrix
-
-	SlipVelocity()
-	    : foot_idx(0), slip( Eigen::Matrix<double, NUMAXIS,1>::Zero()), R( Eigen::Matrix<double, NUMAXIS,NUMAXIS>::Zero() ) {}
-    };
-
-    
+    static const unsigned int SLIP_VECTOR_SIZE = NUMAXIS * NUMBER_OF_WHEELS; /** Size of slip vector of the mobil robot **/
     
 }
 

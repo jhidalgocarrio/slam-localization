@@ -10,13 +10,14 @@
 #include <algorithm> /** Algorithm C++ Standard library */
 #include <boost/circular_buffer.hpp> /** Boost library circula buffer **/
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
-#include <Eigen/Core> /** Core methods of Aigen implementation **/
+#include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
-#include "configuration.hpp" /** For the localization framework constant and configuration values **/
+#include "DataModel.hpp" /** For the quantities models **/
+#include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 
 namespace localization	
 {
-    class measurement
+    class Measurement
     {
 	
     public:
@@ -30,16 +31,11 @@ namespace localization
     
     private:
 	
-	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Ra; /** Measurement noise convariance matrix for linear acceleration */
-	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement noise convariance matrix for angular velocities */
 	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> Rencoders; /** Measurement noise convariance matrix for joint velocities */
 	Eigen::Matrix <double,NUMBER_OF_WHEELS,NUMBER_OF_WHEELS> Rcontact; /** Measurement noise convariance matrix for contact angle */
 	
-	/** Vector of accelerations for the simpsonsIntegral method **/
-	Eigen::Matrix<double, NUMAXIS, 3> linacceleration; /** col(2) -> t-2 col(1) -> t-1 col(0) -> t **/
-	
 	/** Linear and angular velocities (from IMU) **/
-	Eigen::Matrix <double, NUMAXIS, 1> linvelocity, angvelocity;
+	Eigen::Matrix <double, NUMAXIS, 1> linvelocity;
 	
 	/** Sensed encoders velocities **/
 	Eigen::Matrix <double, ENCODERS_VECTOR_SIZE, 1>encodersvelocity;
@@ -48,7 +44,7 @@ namespace localization
 	Eigen::Matrix <double,NUMBER_OF_WHEELS, 1> acontact;
 	
 	/** Slip vector **/
-	std::vector<SlipVelocity> slipModel, slipInertial, slipError;
+	DataModel slipModel, slipInertial, slipError;
 	
 	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
 	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
@@ -64,44 +60,6 @@ namespace localization
 	/** Array of past rover velocity model **/
 	boost::circular_buffer<double> cbVelModelX, cbVelModelY, cbVelModelZ;
 	
-    private:
-	
-	/**
-	* @brief Set the current velocity
-	* 
-	* It stores the current rover velocity from the odometry model
-	* 
-	* @param[in] velocity  current rover velocity
-	* 
-	*/
-	void setCurrentVeloModel(Eigen::Matrix<double, NUMAXIS, 1> velocity);
-	
-	/**
-	* @brief Simpson's rule for numerical integration
-	* 
-	* It computes Simpson's numerical integration method
-	*
-	* @author Javier Hidalgo Carrio.
-	*
-	* @param[in] fa sample at time t-2
-	* @param[in] fm sample at time t-1
-	* @param[in] fb sample at time t
-	* @param[in] delta_ab time between samples b and a
-	*
-	* @return OK is everything all right. ERROR on other cases.
-	*
-	*/
-	inline double simpsonsIntegral (double fa, double fm, double fb, double delta_ab);
-	
-	/**
-	* @brief Perform the accelerometers integration
-	* 
-	* Integration of accelerometers for the window defined
-	* in INTEGRATION_WINDOWS_SIZE
-	*/
-	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
-
-	
     public:
 	
 	/**
@@ -116,9 +74,7 @@ namespace localization
 	* Class initialization.
 	* 
 	*/
-	void Init (Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
-		    Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
-		    Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
+	void Init ( Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
 		    Eigen::Matrix< double, NUMBER_OF_WHEELS , NUMBER_OF_WHEELS  >& Rcont);
 	
 	/**
@@ -146,7 +102,7 @@ namespace localization
 	* @return void
 	*
 	*/
-	void setLinearVelocities(Eigen::Matrix <double,NUMAXIS,1> linvelo);
+	void setLinearVelocities(Eigen::Matrix <double,NUMAXIS,1> &linvelo);
 	
 	/**
 	* @brief Gets Linear velocities
@@ -166,7 +122,7 @@ namespace localization
 	* @return void
 	*
 	*/
-	void setAngularVelocities(Eigen::Matrix <double,NUMAXIS,1> angvelo);
+	void setAngularVelocities(Eigen::Matrix <double,NUMAXIS,1> &angvelo);
 	
 	/**
 	* @brief Gets Angular velocities
@@ -186,7 +142,7 @@ namespace localization
 	* @return Linear acceleration
 	*
 	*/
-	void setLinearAcceleration(Eigen::Matrix <double,NUMAXIS,1> linacc);
+	void setLinearAcceleration(Eigen::Matrix <double,NUMAXIS,1> &linacc);
 	
 	/**
 	* @brief Gets Linear Acceleration
@@ -208,7 +164,17 @@ namespace localization
 	* @return the slip vector
 	*
 	*/
-	Eigen::Matrix <double,NUMAXIS,1> getSlipVector(int wheel_idx);
+	Eigen::Matrix <double,NUMAXIS,1> getSlipVector(const unsigned int wheel_idx);
+	
+	/**
+	* @brief Set the current contact angles
+	* 
+	* Set the contact angle for the current wheel/foot point in contact
+	* 
+	* @param[in] contact_angles the vector of contact angles
+	* 
+	*/
+	void setContactAnglesVelocity(Eigen::Matrix<double, localization::NUMBER_OF_WHEELS, 1> &contact_angles);
 	
 	/**
 	* @brief Gets contact angle vector
@@ -221,6 +187,16 @@ namespace localization
 	Eigen::Matrix <double,Eigen::Dynamic,1> getContactAnglesVelocity();
 	
 	/**
+	* @brief Set the current encoders velocities
+	* 
+	* Set the encoders velocities for the kinematics
+	* 
+	* @param[in] vjoints the vector of joints encoders velocities
+	* 
+	*/
+	void setEncodersVelocity(Eigen::Matrix<double, Eigen::Dynamic, 1> &vjoints);
+	
+	/**
 	* @brief Get the velocity from the odometry model
 	* 
 	* Rover velocity from pure odometry model
@@ -231,16 +207,50 @@ namespace localization
 	Eigen::Matrix<double, NUMAXIS, 1 > getCurrentVeloModel();
 	
 	/**
-	* @brief Set the current contact angles
+	* @brief Set the current velocity
 	* 
-	* Set the contact angle for the current wheel/foot point in contact
+	* It stores the current rover velocity from the odometry model
 	* 
-	* @param[in] contact_angles the vector of contact angles
+	* @param[in] velocity  current rover velocity
 	* 
 	*/
-	void setContactAnglesVelocity(Eigen::Matrix<double, localization::NUMBER_OF_WHEELS, 1> contact_angles);
+	void setCurrentVeloModel(Eigen::Matrix<double, NUMAXIS, 1> &velocity);
+	
+	/**
+	 * @brief Returns the covariance noise matrix
+	 */
+	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> getEncodersVelocityCovariance();
+	
+	/**
+	 * @brief Returns the covariance noise matrix
+	 */
+	Eigen::Matrix <double,NUMBER_OF_WHEELS,NUMBER_OF_WHEELS>  getContactAnglesVelocityCovariance();
 	
 	
+	/**
+	* @brief Simpson's rule for numerical integration
+	* 
+	* It computes Simpson's numerical integration method
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @param[in] fa sample at time t-2
+	* @param[in] fm sample at time t-1
+	* @param[in] fb sample at time t
+	* @param[in] delta_ab time between samples b and a
+	*
+	* @return OK is everything all right. ERROR on other cases.
+	*
+	*/
+	inline double simpsonsIntegral (double fa, double fm, double fb, double delta_ab);
+	
+	/**
+	* @brief Perform the accelerometers integration
+	* 
+	* Integration of accelerometers for the window defined
+	* in INTEGRATION_WINDOWS_SIZE
+	*/
+	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
 	
 	/**
 	* @brief Least-Squares navigation kinematics solution
@@ -252,20 +262,11 @@ namespace localization
 	* @param[in] B the matrix with the sensed values
 	* @param[in] R covariance matrix of the sensed values.
 	* 
-	*/
-	void navigationKinematics (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
-				   const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R);
-	
-	/**
-	* @brief Compute the least-Squares navigation kinematics solution
-	* 
-	* Form the necesary matrix and call the method navigationKinematics
-	* 
-	* @param[in] A the matrix with the non-sensed values
-	* @param[in] B the matrix with the sensed values
+	* @return relative least-squares error
 	* 
 	*/
-	void calculateNavigationKinematics (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B);
+	double navigationKinematics (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
+				     const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R);
 	
 	/**
 	* @brief Least-Squares slip kinematics solution
@@ -279,9 +280,11 @@ namespace localization
 	* @param[in] R covariance matrix of the sensed values.
 	* @param[in] dt delta integration step for the acc
 	* 
+	* @return relative least-squares error
+	* 
 	*/
-	void slipKinematics (Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> A, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> B,
-	    Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > R, double dt);
+	double slipKinematics (const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
+				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R);
 	
 	/**
 	* @brief This computes the theoretical gravity value according to the WGS-84 ellipsoid earth model.

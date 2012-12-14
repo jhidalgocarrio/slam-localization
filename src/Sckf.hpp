@@ -1,4 +1,4 @@
-/**\file sckf.hpp
+/**\file Sckf.hpp
  * Header function file and defines
  */
 
@@ -10,8 +10,8 @@
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
-#include "configuration.hpp" /** For the localization framework constant and configuration values **/
-#include "measurement.hpp" /** For the Measurement Generation module of the framework **/
+#include "Configuration.hpp" /** For the localization framework constant and configuration values **/
+#include "Measurement.hpp" /** For the Measurement Generation module of the framework **/
 
 namespace localization	
 {
@@ -19,7 +19,7 @@ namespace localization
 //     #define EIGEN_NO_AUTOMATIC_RESIZING
 //     #endif
     
-    class sckf
+    class Sckf
     {
 	
     public:
@@ -37,7 +37,7 @@ namespace localization
 	/** MEASUREMENT GENERATION **/
 	
 	/** Object of the measurement class **/
-	measurement mymeasurement;
+	Measurement filtermeasurement;
 		
     private:
 	
@@ -358,6 +358,17 @@ namespace localization
 	void update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::Matrix <double,SLIP_VECTOR_SIZE,SLIP_VECTOR_SIZE> &Rme,
 		  Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  >& slip_error,
 		  Eigen::Matrix< double, NUMAXIS , 1  >& acc,Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off);
+	
+	
+	/**
+	* @brief It calls the measurement class to perform the proprioceptive measurement.
+	* 
+	* It computes the nav kinematics and slip kinematics
+	* 
+	*/
+	void measurementGeneration (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bnav,
+				    const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bslip,
+				    Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, double dt);
 	
 	/**
 	* @brief It resets the state vector error

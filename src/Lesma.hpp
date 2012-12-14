@@ -11,7 +11,7 @@
 
 namespace localization	
 {
-	class lesma
+	class Lesma
 	{
 		public: 
 			/**

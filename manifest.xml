@@ -14,4 +14,6 @@
   <depend package="dummy-dependency-n" />
   -->
   <depend package="base/types" />
+  <depend package="slam/envire" />
+
 </package>

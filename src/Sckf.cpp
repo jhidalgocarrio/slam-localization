@@ -1,4 +1,4 @@
-/**\file sckf.cpp
+/**\file Sckf.cpp
  *
  * This class has the primitive methods for an Stochastic Cloning Indirect Kalman Filter implementation
  * the state vector are formed by the errors. Therefore the name of indirect kalman filter 
@@ -9,14 +9,14 @@
  * @version 1.0.
  */
 
-#include "sckf.hpp"
+#include "Sckf.hpp"
 
 #define DEBUG_PRINTS 1
 
 using namespace localization;
 using namespace Eigen;
 
-void sckf::welcome()
+void Sckf::welcome()
 {
 	std::cout << "You successfully compiled and executed SCFK. Welcome!" << std::endl;
 }
@@ -25,7 +25,7 @@ void sckf::welcome()
 /**
 * @brief Gets the current vector x
 */
-Eigen::Matrix< double, Eigen::Dynamic, 1  > sckf::getStatex()
+Eigen::Matrix< double, Eigen::Dynamic, 1  > Sckf::getStatex()
 {
     return xki_k;
 }
@@ -33,7 +33,7 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > sckf::getStatex()
 /**
 * @brief Gets the current orientation of the robot in Quaternion
 */
-Eigen::Quaternion< double > sckf::getAttitude()
+Eigen::Quaternion< double > Sckf::getAttitude()
 {
     return this->q4;
 }
@@ -41,7 +41,7 @@ Eigen::Quaternion< double > sckf::getAttitude()
 /**
 * @brief Gets the gravity value
 */
-double sckf::getGravity()
+double Sckf::getGravity()
 {
     return this->gtilde.norm();
 }
@@ -50,7 +50,7 @@ double sckf::getGravity()
 /**
 * @brief Gets the current orientation of the robot in Euler angles
 */
-Eigen::Matrix< double, NUMAXIS , 1  > sckf::getEuler()
+Eigen::Matrix< double, NUMAXIS , 1  > Sckf::getEuler()
 {
     Eigen::Matrix <double, NUMAXIS, 1> euler;
     
@@ -70,7 +70,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > sckf::getEuler()
 /**
 * @brief Gets Noise covariance matrix
 */
-Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getCovariancex()
+Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > Sckf::getCovariancex()
 {
     return Pki_k;
 }
@@ -78,15 +78,15 @@ Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getCovariancex()
 /**
 * @brief Gets Noise covariance matrix for attitude estimation
 */
-Eigen::Matrix< double, sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE > sckf::getCovarianceAttitude()
+Eigen::Matrix< double, Sckf::A_STATE_VECTOR_SIZE, Sckf::A_STATE_VECTOR_SIZE > Sckf::getCovarianceAttitude()
 {
-    return Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> (2*NUMAXIS, 2*NUMAXIS);
+    return Pki_k.block<Sckf::A_STATE_VECTOR_SIZE, Sckf::A_STATE_VECTOR_SIZE> (2*NUMAXIS, 2*NUMAXIS);
 }
 
 /**
 * @brief Return the K matrix
 */
-Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getKalmanGain()
+Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > Sckf::getKalmanGain()
 {
     return this->K;
 }
@@ -94,15 +94,15 @@ Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getKalmanGain()
 /**
 * @brief Return the K associated to the attitude
 */
-Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > sckf::getAttitudeKalmanGain()
+Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > Sckf::getAttitudeKalmanGain()
 {
-    return this->K.block<sckf::A_STATE_VECTOR_SIZE, A_STATE_VECTOR_SIZE> (2*NUMAXIS, 2*NUMAXIS);
+    return this->K.block<Sckf::A_STATE_VECTOR_SIZE, A_STATE_VECTOR_SIZE> (2*NUMAXIS, 2*NUMAXIS);
 }
 
 /**
 * @brief Return the innovation vector
 */
-Eigen::Matrix< double, Eigen::Dynamic, 1  > localization::sckf::getInnovation()
+Eigen::Matrix< double, Eigen::Dynamic, 1  > localization::Sckf::getInnovation()
 {
     return this->innovation;
 }
@@ -110,7 +110,7 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > localization::sckf::getInnovation()
 /**
 * @brief This function Initialize Attitude
 */
-int sckf::setAttitude(Eigen::Quaternion< double >& initq)
+int Sckf::setAttitude(Eigen::Quaternion< double >& initq)
 {
     /** Initial orientation **/
     q4 = initq;
@@ -122,7 +122,7 @@ int sckf::setAttitude(Eigen::Quaternion< double >& initq)
 /**
 * @brief This function sets the gravity value
 */
-void sckf::setGravity(double g)
+void Sckf::setGravity(double g)
 {
     this->gtilde << 0, 0, g;
 }
@@ -130,7 +130,7 @@ void sckf::setGravity(double g)
 /**
 * @brief This function set the initial Omega matrix
 */
-int sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
+int Sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
 {
     if (&u != NULL)
     {
@@ -150,16 +150,16 @@ int sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
 /**
 * @brief Gets the current state vector of the filter
 */
-void sckf::setStatex(Eigen::Matrix< double, Eigen::Dynamic, 1  > &x_0)
+void Sckf::setStatex(Eigen::Matrix< double, Eigen::Dynamic, 1  > &x_0)
 {
-    x_0.resize(sckf::X_STATE_VECTOR_SIZE,1);
+    x_0.resize(Sckf::X_STATE_VECTOR_SIZE,1);
     this->xki_k = x_0;
 }
 
 /**
 * @brief Set the Heading angle
 */
-void sckf::setHeading(double yaw)
+void Sckf::setHeading(double yaw)
 {
     Eigen::Matrix< double, NUMAXIS , 1> euler;
     Eigen::Vector3d e = Eigen::Matrix3d(q4).eulerAngles(2,1,0);
@@ -208,7 +208,7 @@ void Quaternion2DCM(Eigen::Quaternion< double >* q, Eigen::Matrix< double, NUMAX
  /**
 * @brief This function Initilize the vectors and matrices
 */
-void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
+void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qbg,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba, 
@@ -219,25 +219,25 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
 {
     
     /** Set the matrix and vector dimension to the static values of the class **/
-    xk_k.resize(sckf::X_STATE_VECTOR_SIZE,1);
-    xki_k.resize(sckf::X_STATE_VECTOR_SIZE,1);
+    xk_k.resize(Sckf::X_STATE_VECTOR_SIZE,1);
+    xki_k.resize(Sckf::X_STATE_VECTOR_SIZE,1);
     
-    A.resize(sckf::A_STATE_VECTOR_SIZE,sckf::A_STATE_VECTOR_SIZE);
-    Fki.resize(sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE);
+    A.resize(Sckf::A_STATE_VECTOR_SIZE,Sckf::A_STATE_VECTOR_SIZE);
+    Fki.resize(Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE);
     
-    Qk.resize(sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE);
+    Qk.resize(Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE);
     
-    Pk_k.resize(sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE);
-    Pki_k.resize(sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE);
+    Pk_k.resize(Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE);
+    Pki_k.resize(Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE);
     
-    K.resize(sckf::X_STATE_VECTOR_SIZE, 2*NUMAXIS);
+    K.resize(Sckf::X_STATE_VECTOR_SIZE, 2*NUMAXIS);
     
-    H1a.resize(NUMAXIS, sckf::A_STATE_VECTOR_SIZE);
-    H2a.resize(NUMAXIS, sckf::A_STATE_VECTOR_SIZE);
-    Hk.resize(2*NUMAXIS, sckf::X_STATE_VECTOR_SIZE);
+    H1a.resize(NUMAXIS, Sckf::A_STATE_VECTOR_SIZE);
+    H2a.resize(NUMAXIS, Sckf::A_STATE_VECTOR_SIZE);
+    Hk.resize(2*NUMAXIS, Sckf::X_STATE_VECTOR_SIZE);
     
     /** Resizing dynamic arguments to the correct dimension to avoid matrices errors **/
-    P_0.resize(sckf::X_STATE_VECTOR_SIZE, sckf::X_STATE_VECTOR_SIZE);
+    P_0.resize(Sckf::X_STATE_VECTOR_SIZE, Sckf::X_STATE_VECTOR_SIZE);
     
     /** Gravitation acceleration **/
     gtilde << 0, 0, g;
@@ -248,18 +248,18 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     mtilde(2) = -sin(alpha);
 
     /** Kalman filter state, system matrix, error covariance and process noise covariance **/
-    xki_k = Matrix <double,sckf::X_STATE_VECTOR_SIZE,1>::Zero();
+    xki_k = Matrix <double,Sckf::X_STATE_VECTOR_SIZE,1>::Zero();
     xk_k = xki_k;
     
     /** System matrix F **/
-    Fki = Matrix <double,sckf::X_STATE_VECTOR_SIZE, sckf::X_STATE_VECTOR_SIZE>::Zero();
+    Fki = Matrix <double,Sckf::X_STATE_VECTOR_SIZE, Sckf::X_STATE_VECTOR_SIZE>::Zero();
     
     /** System matrix A **/
-    A = Matrix <double,sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE>::Zero();      
+    A = Matrix <double,Sckf::A_STATE_VECTOR_SIZE, Sckf::A_STATE_VECTOR_SIZE>::Zero();      
     A(0,3) = -0.5;A(1,4) = -0.5;A(2,5) = -0.5;
     
     /** Process noise **/
-    Qk = Matrix <double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE>::Zero();
+    Qk = Matrix <double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Zero();
     Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Ra;
     Qk.block <NUMAXIS, NUMAXIS> (2*NUMAXIS,2*NUMAXIS) = 0.25 * Rg;
     Qk.block <NUMAXIS, NUMAXIS> ((2*NUMAXIS)+NUMAXIS,(2*NUMAXIS)+NUMAXIS) = Qbg;
@@ -270,8 +270,8 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     Pk_k = Pki_k;
     
     /** Assign the initial value for the measurement matrix of the attitude **/
-    H1a = Matrix <double,NUMAXIS,sckf::A_STATE_VECTOR_SIZE>::Zero();
-    H2a = Matrix <double,NUMAXIS,sckf::A_STATE_VECTOR_SIZE>::Zero();
+    H1a = Matrix <double,NUMAXIS,Sckf::A_STATE_VECTOR_SIZE>::Zero();
+    H2a = Matrix <double,NUMAXIS,Sckf::A_STATE_VECTOR_SIZE>::Zero();
     H1a(0,6) = 1; H1a(1,7) = 1; H1a(2,8) = 1;
 
     /** Set the history of noise for the attitude **/
@@ -359,7 +359,7 @@ void sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
 /**
 * @brief Performs the prediction step of the filter.
 */
-void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< double, NUMAXIS , 1  >& v, double dt)
+void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< double, NUMAXIS , 1  >& v, double dt)
 {
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> velo2product; /** Vec 2 product  matrix */
@@ -369,12 +369,12 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     Eigen::Matrix <double,NUMAXIS,1> gtilde_body; /** Gravitation in the body frame */
     Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4; /** Quaternion integration matrix */
     Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
-    Eigen::Matrix <double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE> dFki; /** Discrete System matrix */
+    Eigen::Matrix <double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE> dFki; /** Discrete System matrix */
     Eigen::Matrix <double,X_STATE_VECTOR_SIZE,X_STATE_VECTOR_SIZE> Qdk; /** Discrete Qk matrix */
 
     /** Compute the cross product matrix with the angular velocity **/
     angvelo = u - bghat; /** Eliminate the Bias **/
-    mymeasurement.setAngularVelocities(angvelo); /** Save it in the global variable **/
+    filtermeasurement.setAngularVelocities(angvelo); /** Save it in the global variable **/
 
     /** In cross product form **/
     velo2product << 0, -angvelo(2), angvelo(1),
@@ -389,7 +389,7 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
 		
     /** Compute the cross product matrix with the linear acceleration **/
     linacc = v - bahat - gtilde_body; /** Eliminate the Bias and the local gravity vector **/
-    mymeasurement.setLinearAcceleration(linacc); /** Save it in the measurement **/
+    filtermeasurement.setLinearAcceleration(linacc); /** Save it in the measurement **/
     
     #ifdef DEBUG_PRINTS
     std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
@@ -414,10 +414,10 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     Fki.block<NUMAXIS, NUMAXIS> (NUMAXIS, 4*NUMAXIS) = -Cq.inverse();
     
     /** Attitude part **/
-    Fki.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE>(2*NUMAXIS, 2*NUMAXIS) = A;
+    Fki.block<Sckf::A_STATE_VECTOR_SIZE, Sckf::A_STATE_VECTOR_SIZE>(2*NUMAXIS, 2*NUMAXIS) = A;
 
     /** Discretization of the linear system **/
-    dFki = Eigen::Matrix<double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE>::Identity() + Fki * dt + Fki * Fki * pow(dt,2)/2.0;
+    dFki = Eigen::Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity() + Fki * dt + Fki * Fki * pow(dt,2)/2.0;
     
     #ifdef DEBUG_PRINTS
     std::cout<< "[Predict] xki|k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
@@ -480,7 +480,7 @@ void sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
 }
 
 
-void sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::Matrix <double,SLIP_VECTOR_SIZE,SLIP_VECTOR_SIZE> &Rme,
+void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::Matrix <double,SLIP_VECTOR_SIZE,SLIP_VECTOR_SIZE> &Rme,
 		  Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  >& slip_error,
 		  Eigen::Matrix< double, NUMAXIS , 1  >& acc,Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off)
 {
@@ -509,8 +509,8 @@ void sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
     
     
     /** Copy the attitude part of the state vector and covariance matrix **/
-    xa_k = xki_k.block<sckf::A_STATE_VECTOR_SIZE, 1> (2*NUMAXIS, 0);
-    P1a = Pki_k.block<sckf::A_STATE_VECTOR_SIZE, sckf::A_STATE_VECTOR_SIZE> (2*NUMAXIS, 2*NUMAXIS);
+    xa_k = xki_k.block<Sckf::A_STATE_VECTOR_SIZE, 1> (2*NUMAXIS, 0);
+    P1a = Pki_k.block<Sckf::A_STATE_VECTOR_SIZE, Sckf::A_STATE_VECTOR_SIZE> (2*NUMAXIS, 2*NUMAXIS);
     
     #ifdef DEBUG_PRINTS
     std::cout<<"[Update] xa_k is of size "<<xa_k.rows()<<"x"<<xa_k.cols()<<"\n";
@@ -622,7 +622,7 @@ void sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
       
     /** Update the state vector and the covariance matrix **/
     xki_k = xki_k + K * (zki - Hk * xki_k);    
-    Pki_k = (Matrix<double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,sckf::X_STATE_VECTOR_SIZE,sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
+    Pki_k = (Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
     Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
     
     #ifdef DEBUG_PRINTS
@@ -687,7 +687,53 @@ void sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
 
 }
 
-void sckf::resetStateVector()
+void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bnav,
+				 const Eigen::Matrix< double,Eigen::Dynamic, Eigen::Dynamic >& Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bslip,
+				 Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, double dt)
+{
+    Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> Rm; /** Measurement Noise matrix of the measurement vector of the LS**/
+    Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> R; /** Measurement Noise matrix of the observation vector of the LS**/
+    Eigen::Matrix< double, NUMAXIS , 1  > linvelo; /** Linear velocities from acc integration **/
+    
+    R.resize(NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS));
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<<"********** MEASUREMENT GENERATION *****************\n";
+    #endif
+	
+    /** Form the noise matrix for the velocity model (navigationKinematics) **/
+    Rm.resize(NUMAXIS+ENCODERS_VECTOR_SIZE, NUMAXIS+ENCODERS_VECTOR_SIZE);
+    Rm.setZero();
+//     R.block<NUMAXIS, NUMAXIS>(0,0) = this->Rg;
+//     R.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
+    Rm.setIdentity();
+    R.setIdentity();
+    
+    /** Set encoders velocity **/
+    filtermeasurement.setEncodersVelocity(vjoints);
+    
+    /** Call the Navigation kinematics to know the velocity from odometry, and contact angles velocities **/
+    filtermeasurement.navigationKinematics(Anav, Bnav, R);
+    
+    /** Integrate accelerometers to have velocity **/
+    linvelo = filtermeasurement.accIntegrationWindow(dt);
+    filtermeasurement.setLinearVelocities(linvelo);
+    
+    /** Form the noise matrix for the slip model (slipKinematics) **/
+    Rm.resize(2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS);
+    Rm.setZero();
+    Rm.setIdentity();
+    R.setIdentity();
+    
+    /** Compute the Slip Kinematics **/
+    filtermeasurement.slipKinematics(Aslip, Bslip, R);
+    
+    /** Compute the slip vector error **/
+
+}
+
+
+void Sckf::resetStateVector()
 {
 
     /**------------------------------ **/

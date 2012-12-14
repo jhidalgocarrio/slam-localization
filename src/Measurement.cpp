@@ -1,7 +1,7 @@
-/**\file measurement.cpp
+/**\file Measurement.cpp
  *
  * This class has the primitive methods for the Measurement Generation of the localization framework.
- * The class perform proprioceptive measurements according to the kinematics jacobian
+ * The class perform proprioceptive Measurements according to the kinematics jacobian
  * The Jacobian should externally being provided by the Navigation Kinematics implementation
  * which is particular of each mobile robot chassis.
  * 
@@ -13,14 +13,14 @@
  * @version 1.0.
  */
 
-#include "measurement.hpp"
+#include "Measurement.hpp"
 
 #define DEBUG_PRINTS 1
 
 using namespace localization;
 using namespace Eigen;
 
-void measurement::welcome()
+void Measurement::welcome()
 {
 	std::cout << "You successfully compiled and executed Measurement Generation. Welcome!" << std::endl;
 }
@@ -28,7 +28,7 @@ void measurement::welcome()
 /**
 * @brief Set the current linear velocities
 */
-void measurement::setLinearVelocities(Eigen::Matrix< double, 3 , 1  > linvelo)
+void Measurement::setLinearVelocities(Eigen::Matrix< double, NUMAXIS , 1  > &linvelo)
 {
     this->linvelocity = linvelo;
     
@@ -38,7 +38,7 @@ void measurement::setLinearVelocities(Eigen::Matrix< double, 3 , 1  > linvelo)
 /**
 * @brief Return linear velocities
 */
-Eigen::Matrix< double, NUMAXIS , 1  > measurement::getLinearVelocities()
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearVelocities()
 {
     return this->linvelocity;
 }
@@ -46,9 +46,17 @@ Eigen::Matrix< double, NUMAXIS , 1  > measurement::getLinearVelocities()
 /**
 * @brief Set the current angular velocity
 */
-void measurement::setAngularVelocities(Eigen::Matrix< double, NUMAXIS , 1  > angvelo)
+void Measurement::setAngularVelocities(Eigen::Matrix< double, NUMAXIS , 1  > &angvelo)
 {
-    this->angvelocity = angvelo;
+    this->cbAngveloX.push_back(angvelo[0]);
+    this->cbAngveloY.push_back(angvelo[1]);
+    this->cbAngveloZ.push_back(angvelo[2]);
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<<"Buffer cbAngveloX.size()"<<cbAngveloX.size()<<"\n";
+    std::cout<<"Buffer cbAngveloY.size()"<<cbAngveloY.size()<<"\n";
+    std::cout<<"Buffer cbAngveloZ.size()"<<cbAngveloZ.size()<<"\n";
+    #endif
     
     return;
 }
@@ -56,17 +64,31 @@ void measurement::setAngularVelocities(Eigen::Matrix< double, NUMAXIS , 1  > ang
 /**
 * @brief Return angular velocities
 */
-Eigen::Matrix< double, NUMAXIS , 1  > measurement::getAngularVelocities()
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getAngularVelocities()
 {
-    return this->angvelocity;
+    Eigen::Matrix< double, NUMAXIS , 1  > angvelo;
+    
+    angvelo[0] = cbAngveloX[cbAngveloX.size()-1];
+    angvelo[1] = cbAngveloY[cbAngveloY.size()-1];
+    angvelo[2] = cbAngveloZ[cbAngveloZ.size()-1];
+    
+    return angvelo;
 }
 
 /**
 * @brief Set the linear Acceleration
 */
-void measurement::setLinearAcceleration(Eigen::Matrix< double, NUMAXIS , 1  > linacc)
+void Measurement::setLinearAcceleration(Eigen::Matrix< double, NUMAXIS , 1  > &linacc)
 {
-    this->linacceleration.col(0) = linacc;
+    this->cbAccX.push_back(linacc[0]);
+    this->cbAccY.push_back(linacc[1]);
+    this->cbAccZ.push_back(linacc[2]);
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<<"Buffer cbAccX.size()"<<cbAccX.size()<<"\n";
+    std::cout<<"Buffer cbAccY.size()"<<cbAccY.size()<<"\n";
+    std::cout<<"Buffer cbAccZ.size()"<<cbAccZ.size()<<"\n";
+    #endif
 
     return;
 }
@@ -75,16 +97,22 @@ void measurement::setLinearAcceleration(Eigen::Matrix< double, NUMAXIS , 1  > li
 /**
 * @brief Return linear acceleration
 */
-Eigen::Matrix< double, NUMAXIS , 1  > measurement::getLinearAcceleration()
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearAcceleration()
 {
-    return this->linacceleration.col(0);
+    Eigen::Matrix< double, NUMAXIS , 1  > acc;
+    
+    acc[0] = cbAccX[cbAccX.size()-1];
+    acc[1] = cbAccY[cbAccY.size()-1];
+    acc[2] = cbAccZ[cbAccZ.size()-1];
+    
+    return acc;
 }
 
 
 /**
 * @brief Return slip vector for wheel_idx
 */
-Eigen::Matrix< double, NUMAXIS , 1  > measurement::getSlipVector(int wheel_idx)
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getSlipVector(const unsigned int wheel_idx)
 {
     if (wheel_idx < NUMBER_OF_WHEELS)
 	return this->slipMatrix.col(wheel_idx);
@@ -93,10 +121,18 @@ Eigen::Matrix< double, NUMAXIS , 1  > measurement::getSlipVector(int wheel_idx)
 }
 
 /**
+* @brief Set the current contact angles
+*/
+void Measurement::setContactAnglesVelocity(Eigen::Matrix<double, localization::NUMBER_OF_WHEELS, 1> &contact_angles)
+{
+    this->acontact = contact_angles;
+}
+
+
+/**
 * @brief Return the contact angles
 */
-
-Eigen::Matrix< double, Eigen::Dynamic, 1  > measurement::getContactAnglesVelocity()
+Eigen::Matrix< double, Eigen::Dynamic, 1  > Measurement::getContactAnglesVelocity()
 {
     return this->acontact;
 }
@@ -104,7 +140,7 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > measurement::getContactAnglesVelocit
 /**
 * @brief Set the current velocity model
 */
-void measurement::setCurrentVeloModel(Eigen::Matrix< double, NUMAXIS , 1  > velocity)
+void Measurement::setCurrentVeloModel(Eigen::Matrix< double, NUMAXIS , 1  > &velocity)
 {
     cbVelModelX.push_back(velocity(0));
     cbVelModelY.push_back(velocity(1));
@@ -114,7 +150,7 @@ void measurement::setCurrentVeloModel(Eigen::Matrix< double, NUMAXIS , 1  > velo
 /**
 * @brief Return the current velocity from odometry model
 */
-Eigen::Matrix< double, NUMAXIS , 1  > measurement::getCurrentVeloModel()
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
 {
     Eigen::Matrix< double, NUMAXIS , 1  > velocity;
     
@@ -126,9 +162,38 @@ Eigen::Matrix< double, NUMAXIS , 1  > measurement::getCurrentVeloModel()
 }
 
 /**
+* @brief Set the current encoders velocities
+*/
+void Measurement::setEncodersVelocity(Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints)
+{
+    this->encodersvelocity = vjoints;
+    #ifdef DEBUG_PRINTS
+    std::cout<<"encodersvelocity\n"<<this->encodersvelocity<<"\n";
+    #endif
+    
+    return;
+}
+
+/**
+* @brief Returns the covariance noise matrix
+*/
+Eigen::Matrix< double, ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE > Measurement::getEncodersVelocityCovariance()
+{
+    return Rencoders;
+}
+
+/**
+* @brief Returns the covariance noise matrix
+*/
+Eigen::Matrix< double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS > Measurement::getContactAnglesVelocityCovariance()
+{
+    return Rcontact;
+}
+
+/**
 * @brief This function set the Accelerometers excentricity
 */
-void measurement::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz)
+void Measurement::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz)
 {
     this->eccx = eccx;
     this->eccy = eccy;
@@ -147,9 +212,7 @@ void measurement::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen
 /**
 * @brief Initialization method
 */
-void measurement::Init(Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
-		       Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
-		       Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
+void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
 		       Eigen::Matrix< double, NUMBER_OF_WHEELS , NUMBER_OF_WHEELS  >& Rcont)
 {
     /** Initial encoders velocities **/
@@ -158,18 +221,17 @@ void measurement::Init(Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
     /** Initial contact angle **/
     acontact.setZero();
     
-    /** Slip velocities structures **/
-    slipModel.resize(SLIP_VECTOR_SIZE);
-    slipInertial.resize(SLIP_VECTOR_SIZE);
-    slipError.resize(SLIP_VECTOR_SIZE);
+    /** Slip model **/
+    slipModel = DataModel(SLIP_VECTOR_SIZE);
+    slipInertial = DataModel(SLIP_VECTOR_SIZE);
+    slipError = DataModel(SLIP_VECTOR_SIZE);
+    
     
     /** Initial slip matrix **/
     slipMatrix = Eigen::Matrix <double, NUMAXIS, NUMBER_OF_WHEELS>::Zero();
     
-    /** Velocities for the filter (acce and bias substracted correctly) **/
+    /** Velocities for the filter (acceleration and bias substracted correctly) **/
     linvelocity = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
-    angvelocity = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
-    linacceleration = Eigen::Matrix <double, NUMAXIS, 3>::Zero();
     
     /** Circular vector for the integration **/
     cbAccX.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
@@ -185,20 +247,14 @@ void measurement::Init(Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
     cbVelModelY.set_capacity(INTEGRATION_YAXIS_WINDOW_SIZE);
     cbVelModelZ.set_capacity(INTEGRATION_ZAXIS_WINDOW_SIZE);
 
-    this->Ra = Ra;
-    this->Rg = Rg;
     this->Rencoders = Ren;
     this->Rcontact = Rcont;
     
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
-    std::cout<< "Ra is of size "<<Ra.rows()<<"x"<<Ra.cols()<<"\n";
-    std::cout<< "Ra:\n"<<Ra<<"\n";
-    std::cout<< "Rg is of size "<<Rg.rows()<<"x"<<Rg.cols()<<"\n";
-    std::cout<< "Rg:\n"<<Rg<<"\n";
     std::cout<< "Ren is of size "<<Rencoders.rows()<<"x"<<Rencoders.cols()<<"\n";
     std::cout<< "Ren:\n"<<Rencoders<<"\n";
-    std::cout<< "Rcont is of size "<<Rcontact.rows()<<"x"<<Rcontact.cols()<<"\n";
+    std::cout<< "Rcontact is of size "<<Rcontact.rows()<<"x"<<Rcontact.cols()<<"\n";
     std::cout<< "Rcontact:\n"<<Rcontact<<"\n";
     std::cout<< "acontact is of size "<<acontact.rows()<<"x"<<acontact.cols()<<"\n";
     std::cout<< "acontact:\n"<<acontact<<"\n";
@@ -206,20 +262,13 @@ void measurement::Init(Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
 }
 
 
-/**
-* @brief Set the current contact angles
-*/
-void measurement::setContactAnglesVelocity(Eigen::Matrix<double, localization::NUMBER_OF_WHEELS, 1> contact_angles)
-{
-    this->acontact = contact_angles;
-}
 
 
 
 /**
 * @brief This perform simpson rule for integration
 */
-double measurement::simpsonsIntegral(double fa, double fm, double fb, double delta_ab)
+double Measurement::simpsonsIntegral(double fa, double fm, double fb, double delta_ab)
 {
     return delta_ab/6.0 * (fa + (4.0*fm) + fb);
 }
@@ -227,12 +276,16 @@ double measurement::simpsonsIntegral(double fa, double fm, double fb, double del
 /**
 * @brief To obtain the linear velocity 
 */
-Eigen::Matrix< double, NUMAXIS , 1  > measurement::accIntegrationWindow(double dt)
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::accIntegrationWindow(double dt)
 {
     Eigen::Matrix <double, NUMAXIS, 1> localvelocity;
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> gyros2product; /** Vec 2 product  matrix for the gyroscopes (angular velocity) */
     
     localvelocity.setZero();
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<< "IMU Velocity\n";
+    #endif
         
     for (unsigned int i=0; i<cbAccX.size(); i++)
     {
@@ -245,6 +298,10 @@ Eigen::Matrix< double, NUMAXIS , 1  > measurement::accIntegrationWindow(double d
     
     localvelocity[0] += cbVelModelX[0];
     
+    #ifdef DEBUG_PRINTS
+    std::cout<< "localvelocity[0] "<<localvelocity[0]<<"\n";
+    #endif
+    
     for (unsigned int i=0; i<cbAccY.size(); i++)
     {
 	gyros2product << 0, -cbAngveloZ[i], cbAngveloY[i],
@@ -255,6 +312,10 @@ Eigen::Matrix< double, NUMAXIS , 1  > measurement::accIntegrationWindow(double d
     }
     
     localvelocity[1] += cbVelModelY[0];
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<< "localvelocity[1] "<<localvelocity[1]<<"\n";
+    #endif
     
     for (unsigned int i=0; i<cbAccZ.size(); i++)
     {
@@ -267,15 +328,20 @@ Eigen::Matrix< double, NUMAXIS , 1  > measurement::accIntegrationWindow(double d
     
     localvelocity[2] += cbVelModelZ[0];
     
+    #ifdef DEBUG_PRINTS
+    std::cout<< "localvelocity[2] "<<localvelocity[2]<<"\n";
+    #endif
+    
     return localvelocity;
 }
 
-void measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
+double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
 					const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R)
 {
-    double leastSquaresError;
+    double leastSquaresError = 0.00;
     Eigen::Matrix< double, NUMAXIS , 1  > velocity;
     Eigen::Matrix <double, SLIP_VECTOR_SIZE, 1> slip;
+    Eigen::Matrix <double, NUMAXIS+(2*NUMBER_OF_WHEELS), NUMAXIS+(2*NUMBER_OF_WHEELS)> Iinverse;
     
     /** Navigation Vectors **/
     Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > x;
@@ -288,19 +354,19 @@ void measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynam
     b.resize(NUMBER_OF_WHEELS*(2*NUMAXIS), 1);
     
     /** Form the sensed vector **/
-    y.block<NUMAXIS, 1> (0,0) = angvelocity;
+    y.block<NUMAXIS, 1> (0,0) = this->getAngularVelocities();
     y.block<ENCODERS_VECTOR_SIZE, 1> (NUMAXIS,0) = encodersvelocity;
     
-    #ifdef DEBUG_PRINTS
-    std::cout<<"[VM] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
-    std::cout<<"[VM] R:\n" << R << std::endl;
+    #ifdef DEBUG_PRINTS    
     std::cout<<"[VM] A is of size "<<A.rows()<<"x"<<A.cols()<<"\n";
     std::cout<<"[VM] A:\n" << A << std::endl;
     std::cout<<"[VM] B is of size "<<B.rows()<<"x"<<B.cols()<<"\n";
     std::cout<<"[VM] B:\n" << B << std::endl;
     std::cout<<"[VM] y is of size " <<y.rows()<<"x"<< y.cols()<<"\n";
     std::cout<<"[VM] The sensed vector y\n"<<y<<"\n";
-    #endif
+    std::cout<<"[VM] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
+    std::cout<<"[VM] R:\n" << R << std::endl;
+    #endif   
     
     b = B*y;
     
@@ -323,11 +389,11 @@ void measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynam
     Eigen::FullPivLU<matrixConjType> lu_decompConj(Conj);
     std::cout << "The rank of A|B*y is " << lu_decompConj.rank() << std::endl;
     std::cout << "Pseudoinverse of A\n" << (A.transpose() * A).inverse() << std::endl;
-    std::cout << "Inverse of R\n" << R.inverse() << std::endl;
     #endif
     /** **/
-    
-    x = (A.transpose() * R.inverse() * A).inverse() * A.transpose() * R.inverse() * b;
+   
+    Iinverse = (A.transpose() * R.inverse() * A).inverse();
+    x = Iinverse * A.transpose() * R.inverse() * b;
     
     if (b.norm() != 0.00)
 	leastSquaresError = (A*x - b).norm() / b.norm();
@@ -340,60 +406,41 @@ void measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynam
     /** Save the results **/
     velocity = x.block<NUMAXIS,1>(0,0);
     setCurrentVeloModel(velocity);
+    slip.setZero();
+    slip(2) = x(3); slip(5) = x(4); slip(8) = x(5); slip(11) = x(6);
+    slipModel.data = slip;
+    slipModel.Cov.setIdentity();
     acontact = x.block<NUMBER_OF_WHEELS,1>(NUMAXIS+NUMBER_OF_WHEELS,0);
     setContactAnglesVelocity(acontact);
     
     
-    return;
+    return leastSquaresError;
 }
 
-void measurement::calculateNavigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& B)
+double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
+				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R)
 {
-    Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> R;
-    
-    R.resize(NUMBER_OF_WHEELS*(2*NUMAXIS), NUMBER_OF_WHEELS*(2*NUMAXIS));
-    
-    /** Form the covariance matrix **/
-//     R.setZero();
-//     R.block<NUMAXIS, NUMAXIS>(0,0) = this->Rg;
-//     R.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = this->Rencoders;
-    R.setIdentity();
-    
-    /** Peform the LS solution **/
-    this->navigationKinematics(A, B, R);
-    
-    return;
-}
-
-
-void measurement::slipKinematics(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > A, Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > B,
-				    Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > R, double dt)
-{
-    double leastSquaresError;
-    Eigen::Matrix< double, NUMAXIS , 1  > linvelo; /** Linear velocities from acc integration **/
+    double leastSquaresError = 0.00;
     
     /** Navigation Vectors **/
     Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > x;
     Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > y;
     Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > b;
+    Eigen::Matrix <double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> Iinverse;
     
     /** Resize vector to the correct size **/
     x.resize(SLIP_VECTOR_SIZE, 1);
     y.resize(2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS, 1);
-    
-    /** Vector b **/
     b.resize(NUMBER_OF_WHEELS*(2*NUMAXIS), 1);
     
-    /** Integrate the lin acceleration **/
-    linvelo = accIntegrationWindow(dt);
-    setLinearVelocities(linvelo);
     
     /** Form the sensed vector **/
     y.block<NUMAXIS, 1> (0,0) = linvelocity;
-    y.block<NUMAXIS, 1> (NUMAXIS,0) = angvelocity;
+    y.block<NUMAXIS, 1> (NUMAXIS,0) = this->getAngularVelocities();
     y.block<ENCODERS_VECTOR_SIZE, 1> (2*NUMAXIS,0) = encodersvelocity;
     y.block<NUMBER_OF_WHEELS, 1> ((2*NUMAXIS) + ENCODERS_VECTOR_SIZE,0) = acontact;
     
+
     #ifdef DEBUG_PRINTS
     std::cout<<"[SK] A is of size "<<A.rows()<<"x"<<A.cols()<<"\n";
     std::cout<<"[SK] A:\n" << A << std::endl;
@@ -401,6 +448,8 @@ void measurement::slipKinematics(Eigen::Matrix< double, Eigen::Dynamic, Eigen::D
     std::cout<<"[SK] B:\n" << B << std::endl;
     std::cout<<"[SK] y is of size " <<y.rows()<<"x"<< y.cols()<<"\n";
     std::cout<<"[SK] The sensed vector y\n"<<y<<"\n";
+    std::cout<<"[SK] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
+    std::cout<<"[SK] R:\n" << R << std::endl;
     #endif
     
     b = B*y;
@@ -427,9 +476,11 @@ void measurement::slipKinematics(Eigen::Matrix< double, Eigen::Dynamic, Eigen::D
     #endif
     /** **/
     
-    x = (A.transpose() * R.inverse() * A).inverse() * A.transpose() * R.inverse() * b;
+    Iinverse = (A.transpose() * R.inverse() * A).inverse();
+    x =  Iinverse * A.transpose() * R.inverse() * b;
     
-    leastSquaresError = (A*x - b).norm() / b.norm();
+    if (b.norm() != 0.00)
+	leastSquaresError = (A*x - b).norm() / b.norm();
     #ifdef DEBUG_PRINTS
     std::cout << "[SK] The relative error is:\n" << leastSquaresError << std::endl;
     std::cout << "[SK] The solution is:\n" << x << std::endl;
@@ -437,9 +488,12 @@ void measurement::slipKinematics(Eigen::Matrix< double, Eigen::Dynamic, Eigen::D
     
     
     /** Save the results **/
+    slipInertial.data = x;
+    slipInertial.Cov.setIdentity();
     
+    slipError = slipInertial - slipModel;
     
-    return;
+    return leastSquaresError;
 
 }
 

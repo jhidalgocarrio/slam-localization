@@ -1,10 +1,10 @@
 #include <iostream>
-#include <rover_localization/sckf.hpp>
-#include <rover_localization/lesma.hpp>
+#include <rover_localization/Sckf.hpp>
+#include <rover_localization/Lesma.hpp>
 
 int main(int argc, char** argv)
 {
-	localization::sckf mysckf;
+	localization::Sckf mysckf;
 	mysckf.welcome();
 
 	return 0;

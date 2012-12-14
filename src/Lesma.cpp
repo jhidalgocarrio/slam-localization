@@ -1,9 +1,9 @@
-#include "lesma.hpp"
+#include "Lesma.hpp"
 
 namespace localization
 {
 
-	void lesma::welcome()
+	void Lesma::welcome()
 	{
 		std::cout << "You successfully compiled and executed lesma. Welcome!" << std::endl;
 	}
