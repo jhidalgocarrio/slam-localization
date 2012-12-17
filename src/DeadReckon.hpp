@@ -34,6 +34,10 @@ namespace localization
 	*/
 	DeadReckon(base::samples::RigidBodyState initPose);
 	
+	/** \Brief Initialization method
+	*/
+	void setInitPose(base::samples::RigidBodyState initPose);
+	
 	/** \Brief Performs the time integration of delta pose updates
 	 * 
 	 * @return void

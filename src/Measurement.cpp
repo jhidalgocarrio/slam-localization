@@ -388,12 +388,16 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     Conj.block<NUMBER_OF_WHEELS*(2*NUMAXIS), 1>(0,11) = b;
     Eigen::FullPivLU<matrixConjType> lu_decompConj(Conj);
     std::cout << "The rank of A|B*y is " << lu_decompConj.rank() << std::endl;
-    std::cout << "Pseudoinverse of A\n" << (A.transpose() * A).inverse() << std::endl;
+    std::cout << "Pseudoinverse of A\n" << (A.transpose() * R.inverse() * A).inverse() << std::endl;
     #endif
     /** **/
    
     Iinverse = (A.transpose() * R.inverse() * A).inverse();
     x = Iinverse * A.transpose() * R.inverse() * b;
+    
+    Eigen::MatrixXd M; /** dynamic memory matrix for the solution **/
+    M = A;
+    x = M.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
     
     if (b.norm() != 0.00)
 	leastSquaresError = (A*x - b).norm() / b.norm();

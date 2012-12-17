@@ -24,9 +24,9 @@ namespace localization
 	/** CONSTANT VALUES TO THE CLASS**/
 	
 	/** Integration of the delayed windows **/
-	static const int INTEGRATION_XAXIS_WINDOW_SIZE = 20; /** Windows size of the delay integration **/
-	static const int INTEGRATION_YAXIS_WINDOW_SIZE = 20; /** Windows size of the delay integration **/
-	static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 5; /** Windows size of the delay integration **/
+	static const int INTEGRATION_XAXIS_WINDOW_SIZE = 100; /** Windows size of the delay integration **/
+	static const int INTEGRATION_YAXIS_WINDOW_SIZE = 100; /** Windows size of the delay integration **/
+	static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 10; /** Windows size of the delay integration **/
 	static const int ANGVELO_WINDOW_SIZE = INTEGRATION_XAXIS_WINDOW_SIZE; /** Windows size of the delay integration **/
     
     private:

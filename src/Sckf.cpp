@@ -108,12 +108,22 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > localization::Sckf::getInnovation()
 }
 
 /**
+* @brief Gets the delta orientation in Quaternion
+*/
+Eigen::Quaternion< double > Sckf::deltaQuaternion()
+{
+    return prev_q4.inverse() * q4;
+}
+
+
+/**
 * @brief This function Initialize Attitude
 */
 int Sckf::setAttitude(Eigen::Quaternion< double >& initq)
 {
     /** Initial orientation **/
     q4 = initq;
+    prev_q4 = initq;
 	
     return OK;
     
@@ -155,6 +165,16 @@ void Sckf::setStatex(Eigen::Matrix< double, Eigen::Dynamic, 1  > &x_0)
     x_0.resize(Sckf::X_STATE_VECTOR_SIZE,1);
     this->xki_k = x_0;
 }
+
+/**
+* @brief This function Initialize the Bias offset
+*/
+void Sckf::setBiasOffset(Eigen::Matrix< double, NUMAXIS , 1  > gbias, Eigen::Matrix< double, NUMAXIS , 1  > abias)
+{
+    this->bghat = gbias;
+    this->bahat = abias;
+}
+
 
 /**
 * @brief Set the Heading angle
@@ -290,6 +310,10 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     zki.resize(2*NUMAXIS,1);
     zki = Eigen::Matrix<double, 2*NUMAXIS, 1>::Zero();
     
+    /** Innovation **/
+    innovation.resize(2*NUMAXIS, 1);
+    innovation.setZero();
+    
     /** Initial bias **/
     bghat = Matrix <double,NUMAXIS,1>::Zero();
     bahat = Matrix <double,NUMAXIS,1>::Zero();
@@ -305,6 +329,9 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     q4.x() = std::numeric_limits<double>::quiet_NaN();
     q4.y() = std::numeric_limits<double>::quiet_NaN();
     q4.z() = std::numeric_limits<double>::quiet_NaN();
+    
+    /** Initialize the previous q4 **/
+    prev_q4 = q4;
     
     /** Default initial bias **/
     bghat << 0.00, 0.00, 0.00;
@@ -435,7 +462,7 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     std::cout<< "[Predict] dFki:\n"<<dFki<<"\n";
     #endif
     
-    /** The noise process noise related to teh velocity is depending on the current attitude **/
+    /** The noise process noise related to the velocity is depending on the current attitude **/
     Qk.block <NUMAXIS, NUMAXIS> (0,0) = Ra * dt;
     Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Cq.inverse() * this->Ra;
     
@@ -456,6 +483,10 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
 	    angvelo(1), -angvelo(2), 0, angvelo(0),
 	    angvelo(2), angvelo(1), -angvelo(0), 0;
 	    
+    /** Copy the quaternion in the previous one before performing the rotation given by the gyros **/
+    prev_q4 = q4;
+	    
+    /** copy in a vector form **/
     quat(0) = q4.w();
     quat(1) = q4.x();
     quat(2) = q4.y();
@@ -625,15 +656,21 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
     Pki_k = (Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
     Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
     
+    /** Set the innovation global variable **/
+    innovation = (zki - Hk * xki_k);
+    
     #ifdef DEBUG_PRINTS
+    std::cout<< "[Update] zki is of size "<<zki.rows()<<"x"<<zki.cols()<<"\n";
+    std::cout<< "[Update] zki:\n"<<zki<<"\n";
+    std::cout<< "[Update] observation:\n"<<Hk * xki_k<<"\n";
+    std::cout<< "[Update] innovation is of size "<<innovation.rows()<<"x"<<innovation.cols()<<"\n";
+    std::cout<< "[Update] innovation:\n"<<innovation<<"\n";
     std::cout<< "[Update] Qstar is of size "<<Qstar.rows()<<"x"<<Qstar.cols()<<"\n";
     std::cout<< "[Update] Qstar:\n"<<Qstar<<"\n";
     std::cout<< "[Update] R1a is of size "<<R1a.rows()<<"x"<<R1a.cols()<<"\n";
     std::cout<< "[Update] R1a:\n"<<R1a<<"\n";
-    std::cout<< "[Update] xa_k is of size "<<xa_k.rows()<<"x"<<xa_k.cols()<<"\n";
-    std::cout<< "[Update] xa_k:\n"<<xa_k<<"\n";
-    std::cout<< "[Update] P1a is of size "<<P1a.rows()<<"x"<<P1a.cols()<<"\n";
-    std::cout<< "[Update] P1a:\n"<<P1a<<"\n";
+    std::cout<< "[Update] Rk is of size "<<Rk.rows()<<"x"<<Rk.cols()<<"\n";
+    std::cout<< "[Update] Rk:\n"<<Rk<<"\n";
     std::cout<< "[Update] Hk is of size "<<Hk.rows()<<"x"<<Hk.cols()<<"\n";
     std::cout<< "[Update] Hk:\n"<<Hk<<"\n";
     std::cout<< "[Update] xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
@@ -647,9 +684,9 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
     
     /** Update the quaternion with the Indirect approach **/
     qe.w() = 1;
-    qe.x() = xa_k(0);
-    qe.y() = xa_k(1);
-    qe.z() = xa_k(2);
+    qe.x() = xki_k(6);
+    qe.y() = xki_k(7);
+    qe.z() = xki_k(8);
     
     Eigen::Matrix <double,NUMAXIS,1> error_euler; /** The error in euler angles **/
     error_euler[2] = 0.00; //Dont update the yaw
@@ -704,10 +741,23 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     /** Form the noise matrix for the velocity model (navigationKinematics) **/
     Rm.resize(NUMAXIS+ENCODERS_VECTOR_SIZE, NUMAXIS+ENCODERS_VECTOR_SIZE);
     Rm.setZero();
-//     R.block<NUMAXIS, NUMAXIS>(0,0) = this->Rg;
-//     R.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
-    Rm.setIdentity();
+    Rm.block<NUMAXIS, NUMAXIS>(0,0) = this->Rg;
+    Rm.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
+//     Rm.setIdentity();
     R.setIdentity();
+//     R = Bnav * Rm * Bnav.transpose();
+    
+    for (int i=0; i<NUMBER_OF_WHEELS; ++i)
+	R.block<NUMAXIS, NUMAXIS>((i+1)*NUMAXIS+(i*NUMAXIS),(i+1)*NUMAXIS+(i*NUMAXIS)) = this->Rg;
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<< "[Measurement] Rm is of size "<<Rm.rows()<<"x"<<Rm.cols()<<"\n";
+    std::cout<< "[Measurement] Rm:\n"<<Rm<<"\n";
+    std::cout<< "[Measurement] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
+    std::cout<< "[Measurement] R:\n"<<R<<"\n";
+    std::cout<< "[Measurement] R.inverse():\n"<<R.inverse()<<"\n";
+    
+    #endif
     
     /** Set encoders velocity **/
     filtermeasurement.setEncodersVelocity(vjoints);

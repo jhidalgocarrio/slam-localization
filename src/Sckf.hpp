@@ -45,6 +45,7 @@ namespace localization
 	Eigen::Matrix <double,Eigen::Dynamic,1> xk_k; /** State vector Xk|k at the lastest extereoceptive measurement recorded */
 	Eigen::Matrix <double,Eigen::Dynamic,1> xki_k; /** State vector Xk+i|k at the lastest proprioceptive measurement recorded (Robot's current state) */
 	Eigen::Quaternion <double> q4;  /** Current robot attitude quaternion (integration) */
+	Eigen::Quaternion <double> prev_q4;  /** Previous robot attitude quaternion (integration) (for computing the delta quaternion) */
 	Eigen::Matrix <double,QUATERSIZE, QUATERSIZE> oldomega4; /** Quaternion integration matrix */
 	
 	/** System matrix **/
@@ -197,6 +198,19 @@ namespace localization
 	Eigen::Matrix <double,Eigen::Dynamic, 1> getInnovation();
 	
 	/**
+	* @brief Gets the delta orientation in Quaternion
+	* 
+	* Delta quaternion is the ortation difference between
+	* the previous attitude and the curret one.
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return Quaternion with the delta orientation (q(k-1) to q(k)) .
+	*
+	*/
+	Eigen::Quaternion <double> deltaQuaternion();
+	
+	/**
 	* @brief This function Initialize Attitude
 	* 
 	* Initial orientation value before start the IKF 
@@ -240,12 +254,25 @@ namespace localization
 	* (3-5) -> gyroscope bias estimation
 	* (6-8) -> accelerometer bias estimation
 	*
-	* @param[in] *x_0 a initial/desired state vector
+	* @param[in] x_0 a initial/desired state vector
 	*
 	* @return OK is everything all right. ERROR on other cases.
 	*
 	*/
 	void setStatex (Eigen::Matrix <double,Eigen::Dynamic,1> &x_0);
+	
+	
+	/**
+	* @brief This function Initialize the Bias offset
+	* 
+	* Initial value of the gyros and acc bias offset
+	*
+	* @param[in] 
+	*
+	* @return OK is everything all right. ERROR on other cases.
+	*
+	*/
+	void setBiasOffset (Eigen::Matrix <double,NUMAXIS,1> gbias, Eigen::Matrix <double,NUMAXIS,1> abias);
 	
 	/**
 	* @brief This function set the initial Omega matrix
@@ -255,7 +282,7 @@ namespace localization
 	*
 	* @author Javier Hidalgo Carrio.
 	*
-	* @param[in] *u pointer to vector with the angular velocity
+	* @param[in] u pointer to vector with the angular velocity
 	*
 	* @return OK is everything all right. ERROR on other cases.
 	*

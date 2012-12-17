@@ -37,6 +37,16 @@ DeadReckon::DeadReckon(base::samples::RigidBodyState initPose)
     /** Set the initial pose in the uncertainty variable **/
     this->actualPose = initPose;
 }
+/** \Brief Initialization method
+*/
+void DeadReckon::setInitPose(base::samples::RigidBodyState initPose)
+{
+    vState.setZero();
+    
+    /** Set the initial pose in the uncertainty variable **/
+    this->actualPose = initPose;
+}
+
 
 
 /** \Brief Performs the time integration of the delta pose updates.
@@ -47,8 +57,8 @@ base::samples::RigidBodyState DeadReckon::updatePose(Eigen::Matrix< double, NUMA
 						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covlinvelo_error, Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covdelta_qe,
 						     base::Time timeStamp, double delta_t)
 {
-    base::samples::RigidBodyState rbsDeltaPose, rbsBC;
-    envire::TransformWithUncertainty deltaPose;
+    base::samples::RigidBodyState rbsDeltaPose, rbsBC; /** rbs form of the computation **/
+    envire::TransformWithUncertainty deltaPose; /** delta transformation between current pose and nezt pose **/
     
     /** Prepare the vState variable for the dead reckoning **/
     vState.block<NUMAXIS,1>(0,1) = vState.block<NUMAXIS,1>(0,0); // move the previous state to the col(1)
@@ -58,6 +68,11 @@ base::samples::RigidBodyState DeadReckon::updatePose(Eigen::Matrix< double, NUMA
 
     /** Calculate the delta position from velocity (dead reckoning) asuming constant acceleration **/
     rbsDeltaPose.position = ((delta_t/2.0) * (vState.block<3,1>(0,1) + vState.block<3,1>(0,0)));
+    rbsDeltaPose.orientation = delta_q;
+    
+    /** Set the uncertainty matrices **/
+    rbsDeltaPose.cov_position = covlinvelo * delta_t;
+    rbsDeltaPose.cov_orientation = covdelta_q;
     
     /** Create the transformation from the delta position and the actual position **/
     deltaPose = rbsDeltaPose;
