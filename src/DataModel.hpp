@@ -1,4 +1,4 @@
-/**\file datamodel.hpp
+/**\file Datamodel.hpp
  * Header function file and defines
  */
 
@@ -30,6 +30,10 @@ namespace localization
 	DataModel operator-(const DataModel& data1) const;
 
     };
+    
+    /** Default std::cout function
+     */
+    std::ostream & operator<<(std::ostream &out, const  DataModel& trans);
 
 }
 

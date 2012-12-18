@@ -395,7 +395,8 @@ namespace localization
 	*/
 	void measurementGeneration (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bnav,
 				    const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bslip,
-				    Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, double dt);
+				    const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1> &slip_error,
+				    Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> &slip_errorCov, double dt);
 	
 	/**
 	* @brief It resets the state vector error
@@ -404,6 +405,15 @@ namespace localization
 	* 
 	*/
 	void resetStateVector ();
+	
+	
+	/**
+	* @brief Save the current filter status
+	* 
+	* Save the current filter status in FilterInfo form
+	* 
+	*/
+	void toFilterInfo(localization::FilterInfo &finfo);
 	 
     };
     

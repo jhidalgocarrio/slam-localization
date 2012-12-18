@@ -121,11 +121,29 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getSlipVector(const unsigned 
 }
 
 /**
+* @brief Gets rover slip error vector
+*/
+Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  > Measurement::getSlipErrorVector()
+{
+    return slipError.data;
+}
+
+/**
+* @brief Gets rover slip error covariance
+*/
+Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE > Measurement::getSlipErrorVectorCovariance()
+{
+    return slipError.Cov;
+}
+
+
+/**
 * @brief Set the current contact angles
 */
-void Measurement::setContactAnglesVelocity(Eigen::Matrix<double, localization::NUMBER_OF_WHEELS, 1> &contact_angles)
+void Measurement::setContactAnglesVelocity(Eigen::Matrix<double, NUMBER_OF_WHEELS, 1> &contact_angles, Eigen::Matrix<double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS> &Cov)
 {
-    this->acontact = contact_angles;
+    this->acontact.data = contact_angles;
+    this->acontact.Cov = Cov;
 }
 
 
@@ -134,7 +152,7 @@ void Measurement::setContactAnglesVelocity(Eigen::Matrix<double, localization::N
 */
 Eigen::Matrix< double, Eigen::Dynamic, 1  > Measurement::getContactAnglesVelocity()
 {
-    return this->acontact;
+    return this->acontact.data;
 }
 
 /**
@@ -164,9 +182,10 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
 /**
 * @brief Set the current encoders velocities
 */
-void Measurement::setEncodersVelocity(Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints)
+void Measurement::setEncodersVelocity(const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints)
 {
     this->encodersvelocity = vjoints;
+    
     #ifdef DEBUG_PRINTS
     std::cout<<"encodersvelocity\n"<<this->encodersvelocity<<"\n";
     #endif
@@ -187,7 +206,7 @@ Eigen::Matrix< double, ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE > Measurement:
 */
 Eigen::Matrix< double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS > Measurement::getContactAnglesVelocityCovariance()
 {
-    return Rcontact;
+    return acontact.Cov;
 }
 
 /**
@@ -219,7 +238,7 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     encodersvelocity.setZero();
     
     /** Initial contact angle **/
-    acontact.setZero();
+    acontact = DataModel(NUMBER_OF_WHEELS);
     
     /** Slip model **/
     slipModel = DataModel(SLIP_VECTOR_SIZE);
@@ -248,16 +267,15 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     cbVelModelZ.set_capacity(INTEGRATION_ZAXIS_WINDOW_SIZE);
 
     this->Rencoders = Ren;
-    this->Rcontact = Rcont;
     
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
     std::cout<< "Ren is of size "<<Rencoders.rows()<<"x"<<Rencoders.cols()<<"\n";
     std::cout<< "Ren:\n"<<Rencoders<<"\n";
-    std::cout<< "Rcontact is of size "<<Rcontact.rows()<<"x"<<Rcontact.cols()<<"\n";
-    std::cout<< "Rcontact:\n"<<Rcontact<<"\n";
-    std::cout<< "acontact is of size "<<acontact.rows()<<"x"<<acontact.cols()<<"\n";
+    std::cout<< "acontact is of size "<<acontact.data.size()<<"\n";
     std::cout<< "acontact:\n"<<acontact<<"\n";
+    std::cout<< "Rcontact is of size "<<acontact.Cov.rows()<<"x"<<acontact.Cov.cols()<<"\n";
+    std::cout<< "Rcontact:\n"<<acontact.Cov<<"\n";
     #endif
 }
 
@@ -335,6 +353,18 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::accIntegrationWindow(double d
     return localvelocity;
 }
 
+/**
+* @brief Return the buffer size for x,y and z
+*/
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getIntegrationWindowSize()
+{
+    Eigen::Matrix< double, NUMAXIS , 1  > windowsSize;
+    
+    windowsSize << cbAccX.size(), cbAccY.size(), cbAccZ.size();
+    
+    return windowsSize;
+}
+
 double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
 					const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R)
 {
@@ -395,28 +425,36 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     Iinverse = (A.transpose() * R.inverse() * A).inverse();
     x = Iinverse * A.transpose() * R.inverse() * b;
     
-    Eigen::MatrixXd M; /** dynamic memory matrix for the solution **/
-    M = A;
-    x = M.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
+//     Eigen::MatrixXd M; /** dynamic memory matrix for the solution **/
+//     M = A;
+//     x = M.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
     
-    if (b.norm() != 0.00)
-	leastSquaresError = (A*x - b).norm() / b.norm();
-    #ifdef DEBUG_PRINTS
-    std::cout << "[VM] The relative error is:\n" << leastSquaresError << std::endl;
-    std::cout << "[VM] The solution is:\n" << x << std::endl;
-    #endif
-    
-    
-    /** Save the results **/
+    /** Save the velocity model results **/
     velocity = x.block<NUMAXIS,1>(0,0);
     setCurrentVeloModel(velocity);
+    
+    /** Save the z-axis slip vector results **/
     slip.setZero();
     slip(2) = x(3); slip(5) = x(4); slip(8) = x(5); slip(11) = x(6);
     slipModel.data = slip;
-    slipModel.Cov.setIdentity();
-    acontact = x.block<NUMBER_OF_WHEELS,1>(NUMAXIS+NUMBER_OF_WHEELS,0);
-    setContactAnglesVelocity(acontact);
+    slipModel.Cov(2,2) = Iinverse(3,3);
+    slipModel.Cov(5,5) = Iinverse(4,4);
+    slipModel.Cov(8,8) = Iinverse(5,5);
+    slipModel.Cov(11,11) = Iinverse(6,6);
     
+    /** Store it in acontact variable **/
+    acontact.data = x.block<NUMBER_OF_WHEELS,1>(NUMAXIS+NUMBER_OF_WHEELS,0);
+    acontact.Cov = Iinverse.bottomRightCorner<NUMBER_OF_WHEELS,NUMBER_OF_WHEELS>();
+    
+    Eigen::Matrix<double, 1,1> squaredError = (((A*x - b).transpose() * R * (A*x - b)));
+    
+    if (b.norm() != 0.00)
+	leastSquaresError = sqrt(squaredError[0]) / b.norm();
+    #ifdef DEBUG_PRINTS
+    std::cout << "[VM] The relative error is:\n" << leastSquaresError << std::endl;
+    std::cout << "[VM] The solution is:\n" << x << std::endl;
+    std::cout << "[VM] The uncertainty is:\n" << Iinverse << std::endl;
+    #endif
     
     return leastSquaresError;
 }
@@ -442,7 +480,7 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     y.block<NUMAXIS, 1> (0,0) = linvelocity;
     y.block<NUMAXIS, 1> (NUMAXIS,0) = this->getAngularVelocities();
     y.block<ENCODERS_VECTOR_SIZE, 1> (2*NUMAXIS,0) = encodersvelocity;
-    y.block<NUMBER_OF_WHEELS, 1> ((2*NUMAXIS) + ENCODERS_VECTOR_SIZE,0) = acontact;
+    y.block<NUMBER_OF_WHEELS, 1> ((2*NUMAXIS) + ENCODERS_VECTOR_SIZE,0) = acontact.data;
     
 
     #ifdef DEBUG_PRINTS
@@ -482,22 +520,42 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     
     Iinverse = (A.transpose() * R.inverse() * A).inverse();
     x =  Iinverse * A.transpose() * R.inverse() * b;
+   
+    /** Save the results **/
+    slipInertial.data = x;
+    slipInertial.Cov = Iinverse;
+    
+    /** Compute the slip vector error **/
+    slipError = slipInertial - slipModel;
+    
+    Eigen::Matrix<double, 1,1> squaredError = (((A*x - b).transpose() * R * (A*x - b)));
     
     if (b.norm() != 0.00)
-	leastSquaresError = (A*x - b).norm() / b.norm();
+	leastSquaresError = sqrt(squaredError[0]) / b.norm();
+    
     #ifdef DEBUG_PRINTS
     std::cout << "[SK] The relative error is:\n" << leastSquaresError << std::endl;
     std::cout << "[SK] The solution is:\n" << x << std::endl;
+    std::cout << "[SK] The uncertainty is:\n" << Iinverse << std::endl;
+    std::cout << "[SK] SlipInertial is:\n" << slipInertial << std::endl;
+    std::cout << "[SK] SlipModel is:\n" << slipModel << std::endl;
+    std::cout << "[SK] SlipError is:\n" << slipError << std::endl;
     #endif
-    
-    
-    /** Save the results **/
-    slipInertial.data = x;
-    slipInertial.Cov.setIdentity();
-    
-    slipError = slipInertial - slipModel;
     
     return leastSquaresError;
 
 }
+
+/**
+* @brief Save slip info to the Orogen-compatible DataType
+*/
+void Measurement::toSlipInfo(SlipInfo& sinfo)
+{
+
+    sinfo.slip_vector = slipInertial.data;
+    sinfo.Cov = slipInertial.Cov;
+    
+    return;
+}
+
 

@@ -14,6 +14,7 @@
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
 #include "DataModel.hpp" /** For the quantities models **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
+#include "DataTypes.hpp" /** Orogen compatible export data types **/
 
 namespace localization	
 {
@@ -32,7 +33,6 @@ namespace localization
     private:
 	
 	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> Rencoders; /** Measurement noise convariance matrix for joint velocities */
-	Eigen::Matrix <double,NUMBER_OF_WHEELS,NUMBER_OF_WHEELS> Rcontact; /** Measurement noise convariance matrix for contact angle */
 	
 	/** Linear and angular velocities (from IMU) **/
 	Eigen::Matrix <double, NUMAXIS, 1> linvelocity;
@@ -41,7 +41,7 @@ namespace localization
 	Eigen::Matrix <double, ENCODERS_VECTOR_SIZE, 1>encodersvelocity;
 	
 	/** For the contact angle **/
-	Eigen::Matrix <double,NUMBER_OF_WHEELS, 1> acontact;
+	DataModel acontact;
 	
 	/** Slip vector **/
 	DataModel slipModel, slipInertial, slipError;
@@ -167,6 +167,30 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,1> getSlipVector(const unsigned int wheel_idx);
 	
 	/**
+	* @brief Gets rover slip error vector
+	* 
+	* Return the slip error vector for the complete number of wheels
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the rover slip error vector
+	*
+	*/
+	Eigen::Matrix <double,SLIP_VECTOR_SIZE,1> getSlipErrorVector();
+	
+	/**
+	* @brief Gets rover slip error covariance matrix
+	* 
+	* Return the slip error covariance matrix for the complete number of wheels
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the rover slip error covariance matrix
+	*
+	*/
+	Eigen::Matrix <double,SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> getSlipErrorVectorCovariance();
+	
+	/**
 	* @brief Set the current contact angles
 	* 
 	* Set the contact angle for the current wheel/foot point in contact
@@ -174,7 +198,8 @@ namespace localization
 	* @param[in] contact_angles the vector of contact angles
 	* 
 	*/
-	void setContactAnglesVelocity(Eigen::Matrix<double, localization::NUMBER_OF_WHEELS, 1> &contact_angles);
+	void setContactAnglesVelocity(Eigen::Matrix<double, NUMBER_OF_WHEELS, 1> &contact_angles,
+				      Eigen::Matrix<double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS> &Cov);
 	
 	/**
 	* @brief Gets contact angle vector
@@ -194,7 +219,7 @@ namespace localization
 	* @param[in] vjoints the vector of joints encoders velocities
 	* 
 	*/
-	void setEncodersVelocity(Eigen::Matrix<double, Eigen::Dynamic, 1> &vjoints);
+	void setEncodersVelocity(const Eigen::Matrix<double, Eigen::Dynamic, 1> &vjoints);
 	
 	/**
 	* @brief Get the velocity from the odometry model
@@ -253,6 +278,13 @@ namespace localization
 	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
 	
 	/**
+	* @brief Return the buffer size for x,y and z
+	* 
+	* Integration size of the windows for each coordinates
+	*/
+	Eigen::Matrix< double, NUMAXIS , 1  > getIntegrationWindowSize();
+	
+	/**
 	* @brief Least-Squares navigation kinematics solution
 	* 
 	* Computes the rover velocity, slip vector due to non-holonomic constraints
@@ -285,6 +317,19 @@ namespace localization
 	*/
 	double slipKinematics (const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
 				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R);
+	
+	
+	/**
+	* @brief Save slip info to the Orogen-compatible DataType
+	* 
+	* 
+	* @param[out] sinfo the slip information
+	* 
+	* @return void
+	* 
+	*/
+	void toSlipInfo (localization::SlipInfo &sinfo);
+	
 	
 	/**
 	* @brief This computes the theoretical gravity value according to the WGS-84 ellipsoid earth model.

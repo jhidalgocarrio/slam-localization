@@ -15,11 +15,12 @@ set (LOCALIZATION_HDRS
     Lesma.hpp
     DataModel.hpp
     DeadReckon.hpp
+    DataTypes.hpp
     )
 
 rock_library(rover_localization
     SOURCES ${LOCALIZATION_SRCS}
-    DEPS_PKGCONFIG base-types base-lib odometry envire
+    DEPS_PKGCONFIG base-types base-lib yaml-cpp envire
     DEPS_CMAKE Boost
     HEADERS ${LOCALIZATION_HDRS})
 
