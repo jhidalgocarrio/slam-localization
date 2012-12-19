@@ -65,28 +65,6 @@ DataModel DataModel::operator+(const DataModel& data1) const
 
 }
 
-DataModel DataModel::operator-(const localization::DataModel& data1) const
-{
-
-    const DataModel &data2 (*this);
-    
-    if ((data1.Cov.size() != 0 && data2.Cov.size() != 0) && (data1.Cov.size() == data2.Cov.size()))
-    {
-	Eigen::Matrix <double, Eigen::Dynamic, 1> result;
-	Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> P;
-	
-	result.resize(data1.data.size(), 1);
-	P.resize(data1.Cov.size(), data1.Cov.size());
-	
-	P = (data1.Cov.inverse() + data2.Cov.inverse()).inverse();
-	result = P *((data1.Cov.inverse() * data1.data) - (data2.Cov.inverse() * data2.data));
-	
-	return DataModel(result, P);
-    }
-    
-    return data1;
-}
-
 std::ostream& localization::operator<<(std::ostream &out, const  DataModel& data1)
 {
     out << data1.data << "\n";

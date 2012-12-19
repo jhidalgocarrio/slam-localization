@@ -526,7 +526,8 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     slipInertial.Cov = Iinverse;
     
     /** Compute the slip vector error **/
-    slipError = slipInertial - slipModel;
+    slipError.data = slipInertial.data - slipModel.data;
+    slipError.Cov = slipInertial.Cov;
     
     Eigen::Matrix<double, 1,1> squaredError = (((A*x - b).transpose() * R * (A*x - b)));
     
@@ -539,7 +540,9 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     std::cout << "[SK] The uncertainty is:\n" << Iinverse << std::endl;
     std::cout << "[SK] SlipInertial is:\n" << slipInertial << std::endl;
     std::cout << "[SK] SlipModel is:\n" << slipModel << std::endl;
-    std::cout << "[SK] SlipError is:\n" << slipError << std::endl;
+    std::cout << "[SK] SlipError(+) is:\n" << slipError << std::endl;
+    std::cout << "[SK] SlipError(-) is:\n" << slipInertial.data - slipModel.data << std::endl;
+    std::cout << "[SK] SlipError(+) is:\n" << slipInertial.data + slipModel.data << std::endl;
     #endif
     
     return leastSquaresError;

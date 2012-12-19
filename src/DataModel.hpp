@@ -27,7 +27,6 @@ namespace localization
 	DataModel(const unsigned int dim);
 	DataModel(Eigen::Matrix<double, Eigen::Dynamic, 1> &data, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &Cov);
 	DataModel operator+(const DataModel& data1) const;
-	DataModel operator-(const DataModel& data1) const;
 
     };
     

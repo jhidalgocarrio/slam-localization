@@ -23,6 +23,10 @@ namespace localization
 	base::MatrixXd Hk;
 	base::VectorXd zki;
 	base::VectorXd innovation;
+	base::Vector3d eposition;
+	base::Vector3d evelocity;
+	base::Vector3d bghat;
+	base::Vector3d bahat;
     };
     
     struct SlipInfo
