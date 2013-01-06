@@ -375,6 +375,8 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     std::cout<< "Rg:\n"<<Rg<<"\n";
     std::cout<< "Ra is of size "<<Ra.rows()<<"x"<<Ra.cols()<<"\n";
     std::cout<< "Ra:\n"<<Ra<<"\n";
+    std::cout<< "Rat is of size "<<Rat.rows()<<"x"<<Rat.cols()<<"\n";
+    std::cout<< "Rat:\n"<<Rat<<"\n";
     std::cout<< "Rm is of size "<<Rm.rows()<<"x"<<Rm.cols()<<"\n";
     std::cout<< "Rm:\n"<<Rm<<"\n";
     std::cout<< "mtilde is of size "<<mtilde.rows()<<"x"<<mtilde.cols()<<"\n";
@@ -428,6 +430,11 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
     std::cout<<"[Predict] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
     std::cout<<"[Predict] g in body_frame:\n"<<gtilde_body<<"\n";
+    std::cout<<"[Predict] g in body_frame(quat):\n"<<q4*gtilde<<"\n";
+    std::cout<<"[Predict] g in body_frame(quat.inverse):\n"<<q4.inverse()*gtilde<<"\n";
+    std::cout<<"[Predict] g in body_frame(Rot):\n"<<q4.toRotationMatrix()*gtilde<<"\n";
+    std::cout<<"[Predict] g in body_frame(Rot.inverse):\n"<<q4.toRotationMatrix().inverse()*gtilde<<"\n";
+    std::cout<<"[Predict] g in world_frame(Cq.inverse):\n"<<Cq.inverse() * gtilde_body<<"\n";
     std::cout<<"[Predict] linacc:\n"<<linacc<<"\n";
     #endif
 
@@ -468,8 +475,8 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     std::cout<< "[Predict] dFki:\n"<<dFki<<"\n";
     #endif
     
-    /** The noise process noise related to the velocity is depending on the current attitude **/
-    Qk.block <NUMAXIS, NUMAXIS> (0,0) = Cq * Ra * dt;
+    /** The process noise related to the velocity is depending on the current attitude **/
+    Qk.block <NUMAXIS, NUMAXIS> (0,0) = Cq.inverse() * Ra * dt;
     Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = /*Cq.inverse() */ this->Ra;
     
     /** Form the system noise matrix for the attitude **/
@@ -517,14 +524,14 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
 }
 
 
-void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::Matrix <double,SLIP_VECTOR_SIZE,SLIP_VECTOR_SIZE> &Rme,
-		  Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  >& slip_error,
+void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Rme,
+		  Eigen::Matrix< double, NUMAXIS, 1  >& slip_error,
 		  Eigen::Matrix< double, NUMAXIS , 1  >& acc,Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off)
 {
     register int j;
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
-    Eigen::Matrix <double,NUMAXIS,NUMAXIS> gtilde2product; /** Vec 2 product  matrix for the gravity vector in body frame*/
-    Eigen::Matrix <double,NUMAXIS,NUMAXIS> fooR2; /**  Measurement noise matrix from accelerometers matrix Ra*/
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> gtilde2product; /** Vec 2 product  matrix for the gravity vector in body frame */
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> fooR2; /**  Measurement noise matrix from accelerometers matrix Ra */
     Eigen::Matrix <double,A_STATE_VECTOR_SIZE,1> xa_k; /** Attitude part of the state vector xk+i|k */
     Eigen::Matrix <double,A_STATE_VECTOR_SIZE,A_STATE_VECTOR_SIZE> P1a; /** Error convariance matrix for measurement 1 of the attitude */
     Eigen::Matrix <double,A_STATE_VECTOR_SIZE,A_STATE_VECTOR_SIZE> P2a; /** Error convariance matrix for measurement 2 of the attitude */
@@ -636,7 +643,7 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
     }
     
     /** Measurement vector **/
-    zki.block<NUMAXIS, 1> (0,0) = Hme * slip_error;
+    zki.block<NUMAXIS, 1> (0,0) = Hme * slip_error;//xki_k.block<NUMAXIS,1> (3,0);
     zki.block<NUMAXIS, 1> (NUMAXIS,0) = z1a;
     
     /** Form the observation matrix Hk **/
@@ -648,21 +655,12 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
     Rve = Hme * Rme * Hme.transpose();
     
     /** Define the attitude measurement noise **/
-    R1a = Ra + Rat + Qstar; //Qstart is the external acceleration covariance
+    R1a = Rat + Qstar; //Qstart is the external acceleration covariance
     
     /** Composition of the measurement noise matrix **/
     Rk.setZero();
     Rk.block<NUMAXIS, NUMAXIS> (0,0) = Rve;
     Rk.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = R1a;
-    
-    /** Compute the Kalman Gain Matrix **/
-    Eigen::Matrix<double, 2*NUMAXIS, 2*NUMAXIS> S = Hk * Pki_k * Hk.transpose() + Rk;
-    K = Pki_k * Hk.transpose() * ((S.transpose() * S).inverse() * S.transpose());
-      
-    /** Update the state vector and the covariance matrix **/
-    xki_k = xki_k + K * (zki - Hk * xki_k);    
-    Pki_k = (Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
-    Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
     
     /** Set the innovation global variable **/
     innovation = (zki - Hk * xki_k);
@@ -673,6 +671,19 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
     std::cout<< "[Update] observation:\n"<<Hk * xki_k<<"\n";
     std::cout<< "[Update] innovation is of size "<<innovation.rows()<<"x"<<innovation.cols()<<"\n";
     std::cout<< "[Update] innovation:\n"<<innovation<<"\n";
+    #endif
+    
+    /** Compute the Kalman Gain Matrix **/
+    Eigen::Matrix<double, 2*NUMAXIS, 2*NUMAXIS> S = Hk * Pki_k * Hk.transpose() + Rk;
+//     K = Pki_k * Hk.transpose() * ((S.transpose() * S).inverse() * S.transpose()); //!Calculte K using the pseudoinverse of S
+    K = Pki_k * Hk.transpose() * S.inverse(); //!Calculate K using the inverse of S
+      
+    /** Update the state vector and the covariance matrix **/
+    xki_k = xki_k + K * (zki - Hk * xki_k);    
+    Pki_k = (Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
+    Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
+    
+    #ifdef DEBUG_PRINTS
     std::cout<< "[Update] Qstar is of size "<<Qstar.rows()<<"x"<<Qstar.cols()<<"\n";
     std::cout<< "[Update] Qstar:\n"<<Qstar<<"\n";
     std::cout<< "[Update] R1a is of size "<<R1a.rows()<<"x"<<R1a.cols()<<"\n";
@@ -696,15 +707,15 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::M
     qe.y() = xki_k(7);
     qe.z() = xki_k(8);
     
-    Eigen::Matrix <double,NUMAXIS,1> error_euler; /** The error in euler angles **/
-    error_euler[2] = 0.00; //Dont update the yaw
-    error_euler[1] = qe.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
-    error_euler[0] = qe.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
-    
-    qe = Eigen::Quaternion <double> (Eigen::AngleAxisd(error_euler[0], Eigen::Vector3d::UnitX())*
-			Eigen::AngleAxisd(error_euler[1], Eigen::Vector3d::UnitY()) *
-			Eigen::AngleAxisd(error_euler[2], Eigen::Vector3d::UnitZ()));
-    
+//     Eigen::Matrix <double,NUMAXIS,1> error_euler; /** The error in euler angles **/
+//     error_euler[2] = 0.00; //Dont update the yaw
+//     error_euler[1] = qe.toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
+//     error_euler[0] = qe.toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
+//     
+//     qe = Eigen::Quaternion <double> (Eigen::AngleAxisd(error_euler[2], Eigen::Vector3d::UnitZ())*
+// 			Eigen::AngleAxisd(error_euler[1], Eigen::Vector3d::UnitY()) *
+// 			Eigen::AngleAxisd(error_euler[0], Eigen::Vector3d::UnitX()));
+//     
 //     xki_k(6) = qe.x();
 //     xki_k(7) = qe.y();
 //     xki_k(8) = qe.z();
@@ -814,42 +825,105 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     filtermeasurement.setLinearVelocities(linvelo);
     
     /** Form the Rv covariance matrix **/
-    Rv = 0.003 * Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Identity();//this->Ra * (dt * filtermeasurement.getIntegrationWindowSize()).asDiagonal();
+//     Rv = 0.003 * Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Identity();//this->Ra * (dt * filtermeasurement.getIntegrationWindowSize()).asDiagonal();
+//     
+//     /** Form the noise matrix for the slip model (slipKinematics) **/
+//     Rm2.block<NUMAXIS, NUMAXIS> (0,0) = Rv;
+//     Rm2.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Rg;
+//     Rm2.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE> (2*NUMAXIS,2*NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
+//     Rm2.block<NUMBER_OF_WHEELS, NUMBER_OF_WHEELS> (2*NUMAXIS+ENCODERS_VECTOR_SIZE,2*NUMAXIS+ENCODERS_VECTOR_SIZE) = filtermeasurement.getContactAnglesVelocityCovariance();
+//     
+//     R.setZero();
+//     
+//     for (unsigned int i=0; i<NUMBER_OF_WHEELS; ++i)
+//     {
+// 	Ri = Bslip.block<2*NUMAXIS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS>(i*(2*NUMAXIS),0) * Rm2 * Bslip.block<2*NUMAXIS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS>(i*(2*NUMAXIS),0).transpose();
+// 	R.block<2*NUMAXIS, 2*NUMAXIS>(i*(2*NUMAXIS), i*(2*NUMAXIS)) = Ri;
+// 	#ifdef DEBUG_PRINTS
+// 	std::cout<< "[Measurement] Ri(slip):\n"<<Ri<<"\n";
+// 	#endif
+//     }
+//     
+//     Eigen::FullPivLU<matrixRType> lu_decompRslip(R);
+//     std::cout << "The rank of R is " << lu_decompRslip.rank() << std::endl;
+//     
+//     #ifdef DEBUG_PRINTS
+//     std::cout<< "[Measurement] Rm2 is of size "<<Rm2.rows()<<"x"<<Rm2.cols()<<"\n";
+//     std::cout<< "[Measurement] Rm2:\n"<<Rm2<<"\n";
+//     std::cout<< "[Measurement] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
+//     std::cout<< "[Measurement] R:\n"<<R<<"\n";
+//     std::cout<< "[Measurement] R.inverse():\n"<<R.inverse()<<"\n";
+//     #endif
+//     
+//     /** Compute the Slip Kinematics **/
+//     filtermeasurement.slipKinematics(Aslip, Bslip, R);
+//     
+//     /** Get the estimated slip error vector and the covariance **/
+//     slip_error = filtermeasurement.getSlipErrorVector();
+//     slip_errorCov = filtermeasurement.getSlipErrorVectorCovariance();
     
-    /** Form the noise matrix for the slip model (slipKinematics) **/
-    Rm2.block<NUMAXIS, NUMAXIS> (0,0) = Rv;
-    Rm2.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Rg;
-    Rm2.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE> (2*NUMAXIS,2*NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
-    Rm2.block<NUMBER_OF_WHEELS, NUMBER_OF_WHEELS> (2*NUMAXIS+ENCODERS_VECTOR_SIZE,2*NUMAXIS+ENCODERS_VECTOR_SIZE) = filtermeasurement.getContactAnglesVelocityCovariance();
+    return;
+}
+
+
+void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bnav,
+				 const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, Eigen::Matrix< double, NUMAXIS, 1> &velo_error,
+				 Eigen::Matrix< double, NUMAXIS, NUMAXIS> &vel_errorCov, double dt)
+{
+    Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> R; /** Measurement Noise matrix of the observation vector of the LS **/
+    Eigen::Matrix <double, NUMAXIS+ENCODERS_VECTOR_SIZE, NUMAXIS+ENCODERS_VECTOR_SIZE> Rm1; /** Measurement Noise matrix of the measurement vector of the LS **/
+    Eigen::Matrix <double, 2*NUMAXIS, 2*NUMAXIS> Ri; /** Measurement Noise matrix of the measurement vector of the LS **/
+    Eigen::Matrix <double, NUMAXIS, NUMAXIS> Rv; /** Measurement Noise matrix of the linear velocity from IMU **/
+    Eigen::Matrix< double, NUMAXIS , 1  > linvelo; /** Linear velocities from acc integration **/
     
-    R.setZero();
-    
-    for (unsigned int i=0; i<NUMBER_OF_WHEELS; ++i)
-    {
-	Ri = Bslip.block<2*NUMAXIS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS>(i*(2*NUMAXIS),0) * Rm2 * Bslip.block<2*NUMAXIS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS>(i*(2*NUMAXIS),0).transpose();
-	R.block<2*NUMAXIS, 2*NUMAXIS>(i*(2*NUMAXIS), i*(2*NUMAXIS)) = Ri;
-	#ifdef DEBUG_PRINTS
-	std::cout<< "[Measurement] Ri(slip):\n"<<Ri<<"\n";
-	#endif
-    }
-    
-    Eigen::FullPivLU<matrixRType> lu_decompRslip(R);
-    std::cout << "The rank of R is " << lu_decompRslip.rank() << std::endl;
+    R.resize(NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS));
+    R.setZero(); Rm1.setZero();
     
     #ifdef DEBUG_PRINTS
-    std::cout<< "[Measurement] Rm2 is of size "<<Rm2.rows()<<"x"<<Rm2.cols()<<"\n";
-    std::cout<< "[Measurement] Rm2:\n"<<Rm2<<"\n";
+    std::cout<<"********** MEASUREMENT GENERATION *****************\n";
+    #endif
+	
+    /** Form the noise matrix for the velocity model (navigationKinematics) **/
+    Rm1.block<NUMAXIS, NUMAXIS>(0,0) = this->Rg;
+    Rm1.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
+    
+    Ri = Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS) * filtermeasurement.getEncodersVelocityCovariance() * Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS).transpose();
+    
+    for (unsigned int i=0; i<NUMBER_OF_WHEELS; ++i)
+    {	
+	R(i*(2*NUMAXIS),i*(2*NUMAXIS)) = Ri(0,0);
+	R(i*(2*NUMAXIS)+1,i*(2*NUMAXIS)+1) = Ri(0,0);
+	R(i*(2*NUMAXIS)+2,i*(2*NUMAXIS)+2) = Ri(0,0);
+	R.block<NUMAXIS, NUMAXIS>(NUMAXIS+i*(2*NUMAXIS), NUMAXIS+i*(2*NUMAXIS)) = Rg;
+    }
+
+    typedef Eigen::Matrix <double, NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS)> matrixRType;
+    Eigen::FullPivLU<matrixRType> lu_decompR(R);
+    std::cout << "The rank of R is " << lu_decompR.rank() << std::endl;
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<< "[Measurement] Rm1 is of size "<<Rm1.rows()<<"x"<<Rm1.cols()<<"\n";
+    std::cout<< "[Measurement] Rm1:\n"<<Rm1<<"\n";
     std::cout<< "[Measurement] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
     std::cout<< "[Measurement] R:\n"<<R<<"\n";
     std::cout<< "[Measurement] R.inverse():\n"<<R.inverse()<<"\n";
     #endif
     
-    /** Compute the Slip Kinematics **/
-    filtermeasurement.slipKinematics(Aslip, Bslip, R);
+    /** Set encoders velocity **/
+    filtermeasurement.setEncodersVelocity(vjoints);
     
-    /** Get the estimated slip error vector and the covariance **/
-    slip_error = filtermeasurement.getSlipErrorVector();
-    slip_errorCov = filtermeasurement.getSlipErrorVectorCovariance();
+    /** Call the Navigation kinematics to know the velocity from odometry, slip vector and contact angles velocities **/
+    filtermeasurement.navigationKinematics(Anav, Bnav, R);
+    
+    /** Integrate accelerometers to have velocity **/
+    linvelo = filtermeasurement.accIntegrationWindow(dt);
+    if (linvelo[0] < -0.05)
+	linvelo[0] = 0.00;
+    filtermeasurement.setLinearVelocities(linvelo);
+    
+    /** Compute the velocity error **/
+    velo_error = filtermeasurement.getLinearVelocities() -  filtermeasurement.getIncrementalVeloModel();
+    vel_errorCov = (this->Ra * dt) + filtermeasurement.getIncrementalVeloModelCovariance();
     
     return;
 }
@@ -863,7 +937,7 @@ void Sckf::resetStateVector()
     /**------------------------------ **/
     
     /** Reset the position part of the state **/
-    xki_k.block<NUMAXIS,1>(0,0) = Matrix<double, NUMAXIS, 1>::Zero();
+//     xki_k.block<NUMAXIS,1>(0,0) = Matrix<double, NUMAXIS, 1>::Zero();
     
     /** Reset the velocity part of the state **/
     xki_k.block<NUMAXIS,1>(NUMAXIS,0) = Matrix<double, NUMAXIS, 1>::Zero();
@@ -897,8 +971,8 @@ void Sckf::toFilterInfo(localization::FilterInfo &finfo)
     finfo.xki_k = this->xki_k;
     finfo.Pki_k = this->Pki_k;
     finfo.K = this->K;
-    finfo.Rk = this->Rk;
     finfo.Qk = this->Qk;
+    finfo.Rk = this->Rk;
     finfo.Hk = this->Hk;
     finfo.zki = this->zki;
     finfo.innovation = this->innovation;

@@ -180,6 +180,31 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
 }
 
 /**
+* @brief Get the covariance of the velocity from the odometry model
+*/
+Eigen::Matrix< double, NUMAXIS , NUMAXIS> Measurement::getCurrentVeloModelCovariance()
+{
+    return velModel.Cov;
+}
+
+/**
+* @brief Get the increment in velocity
+*/
+Eigen::Matrix< double, NUMAXIS, 1  > Measurement::getIncrementalVeloModel()
+{
+    
+    return increVelModel.data;
+}
+
+/**
+* @brief Get the covariance of the increment in velocity
+*/
+Eigen::Matrix< double, NUMAXIS, NUMAXIS> Measurement::getIncrementalVeloModelCovariance()
+{
+    return increVelModel.Cov;
+}
+
+/**
 * @brief Set the current encoders velocities
 */
 void Measurement::setEncodersVelocity(const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints)
@@ -240,11 +265,17 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     /** Initial contact angle **/
     acontact = DataModel(NUMBER_OF_WHEELS);
     
+    /** Velocity model from navigation kinematics **/
+    velModel = DataModel(NUMAXIS);
+    prevVelModel = DataModel(NUMAXIS);
+    
+    /** Incremental velocity model from navigation kinematics **/
+    increVelModel = DataModel(NUMAXIS);
+    
     /** Slip model **/
     slipModel = DataModel(SLIP_VECTOR_SIZE);
     slipInertial = DataModel(SLIP_VECTOR_SIZE);
     slipError = DataModel(SLIP_VECTOR_SIZE);
-    
     
     /** Initial slip matrix **/
     slipMatrix = Eigen::Matrix <double, NUMAXIS, NUMBER_OF_WHEELS>::Zero();
@@ -265,7 +296,7 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     cbVelModelX.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
     cbVelModelY.set_capacity(INTEGRATION_YAXIS_WINDOW_SIZE);
     cbVelModelZ.set_capacity(INTEGRATION_ZAXIS_WINDOW_SIZE);
-
+    
     this->Rencoders = Ren;
     
     /** Print filter information **/
@@ -314,7 +345,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::accIntegrationWindow(double d
 	localvelocity[0] += (cbAccX[i] * dt) - (gyros2product.row(0) * eccx);
     }
     
-    localvelocity[0] += cbVelModelX[0];
+//     localvelocity[0] += cbVelModelX[0];
     
     #ifdef DEBUG_PRINTS
     std::cout<< "localvelocity[0] "<<localvelocity[0]<<"\n";
@@ -329,7 +360,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::accIntegrationWindow(double d
 	localvelocity[1] += (cbAccY[i] * dt) - (gyros2product.row(1) * eccy);
     }
     
-    localvelocity[1] += cbVelModelY[0];
+//     localvelocity[1] += cbVelModelY[0];
     
     #ifdef DEBUG_PRINTS
     std::cout<< "localvelocity[1] "<<localvelocity[1]<<"\n";
@@ -344,7 +375,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::accIntegrationWindow(double d
 	localvelocity[2] += (cbAccZ[i] * dt) - (gyros2product.row(2) * eccz);
     }
     
-    localvelocity[2] += cbVelModelZ[0];
+//     localvelocity[2] += cbVelModelZ[0];
     
     #ifdef DEBUG_PRINTS
     std::cout<< "localvelocity[2] "<<localvelocity[2]<<"\n";
@@ -422,6 +453,7 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     #endif
     /** **/
    
+    /** Least-Squares solution **/
     Iinverse = (A.transpose() * R.inverse() * A).inverse();
     x = Iinverse * A.transpose() * R.inverse() * b;
     
@@ -431,7 +463,16 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     
     /** Save the velocity model results **/
     velocity = x.block<NUMAXIS,1>(0,0);
+    velModel.data = velocity;
+    velModel.Cov = Iinverse.block<NUMAXIS, NUMAXIS> (0,0);
     setCurrentVeloModel(velocity);
+    
+    /** Compute the increment in velocity **/
+    increVelModel.data = velModel.data - prevVelModel.data;
+    increVelModel.Cov = velModel.Cov;
+    
+    /** Set the prev value to the actual one for the next iteration **/
+    prevVelModel = velModel;
     
     /** Save the z-axis slip vector results **/
     slip.setZero();

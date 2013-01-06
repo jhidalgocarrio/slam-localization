@@ -65,6 +65,15 @@ DataModel DataModel::operator+(const DataModel& data1) const
 
 }
 
+DataModel& DataModel::operator=(const DataModel& dmodel)
+{
+    data = dmodel.data;
+    Cov = dmodel.Cov;
+    
+    return *this;
+}
+
+
 std::ostream& localization::operator<<(std::ostream &out, const  DataModel& data1)
 {
     out << data1.data << "\n";

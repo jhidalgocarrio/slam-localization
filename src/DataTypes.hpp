@@ -18,8 +18,8 @@ namespace localization
 	base::VectorXd xki_k;
 	base::MatrixXd Pki_k;
 	base::MatrixXd K;
-	base::MatrixXd Rk;
 	base::MatrixXd Qk;
+	base::MatrixXd Rk;
 	base::MatrixXd Hk;
 	base::VectorXd zki;
 	base::VectorXd innovation;

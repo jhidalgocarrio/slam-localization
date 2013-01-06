@@ -374,7 +374,7 @@ namespace localization
 	*
 	* @param[in] He observation submatrix of the vector xk+1|k related to the encoders.
 	* @param[in] Hme measurement submatrix of the measurement vector z related to the encoders.
-	* @param[in] encoders vector with the measurement values from the encoders.
+	* @param[in] slip_error vector with the velocity error in slip.
 	* @param[in] acc vector with accelerations
 	* @param[in] gyro vector with angular velocities
 	* @param[in] magn vector with magnetometers
@@ -382,8 +382,8 @@ namespace localization
 	* @return void
 	*
 	*/
-	void update(Eigen::Matrix <double,NUMAXIS,SLIP_VECTOR_SIZE> &Hme, Eigen::Matrix <double,SLIP_VECTOR_SIZE,SLIP_VECTOR_SIZE> &Rme,
-		  Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  >& slip_error,
+	void update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Rme,
+		  Eigen::Matrix< double, NUMAXIS, 1  >& slip_error,
 		  Eigen::Matrix< double, NUMAXIS , 1  >& acc,Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off);
 	
 	
@@ -397,6 +397,16 @@ namespace localization
 				    const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bslip,
 				    const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1> &slip_error,
 				    Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> &slip_errorCov, double dt);
+	
+	/**
+	* @brief It calls the measurement class to perform the proprioceptive measurement.
+	* 
+	* It computes the nav kinematics and incremental velocity error
+	* 
+	*/
+	void measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bnav,
+				 const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, Eigen::Matrix< double, NUMAXIS, 1> &velo_error,
+				 Eigen::Matrix< double, NUMAXIS, NUMAXIS> &vel_errorCov, double dt);
 	
 	/**
 	* @brief It resets the state vector error

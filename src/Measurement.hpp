@@ -25,9 +25,9 @@ namespace localization
 	/** CONSTANT VALUES TO THE CLASS**/
 	
 	/** Integration of the delayed windows **/
-	static const int INTEGRATION_XAXIS_WINDOW_SIZE = 100; /** Windows size of the delay integration **/
-	static const int INTEGRATION_YAXIS_WINDOW_SIZE = 100; /** Windows size of the delay integration **/
-	static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 10; /** Windows size of the delay integration **/
+	static const int INTEGRATION_XAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
+	static const int INTEGRATION_YAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
+	static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 1;//10; /** Windows size of the delay integration **/
 	static const int ANGVELO_WINDOW_SIZE = INTEGRATION_XAXIS_WINDOW_SIZE; /** Windows size of the delay integration **/
     
     private:
@@ -39,6 +39,12 @@ namespace localization
 	
 	/** Sensed encoders velocities **/
 	Eigen::Matrix <double, ENCODERS_VECTOR_SIZE, 1>encodersvelocity;
+	
+	/** Velocity model from navigation kinematics **/
+	DataModel velModel, prevVelModel;
+	
+	/** Increment in velocity model from navigation kinematics **/
+	DataModel increVelModel;
 	
 	/** For the contact angle **/
 	DataModel acontact;
@@ -59,6 +65,7 @@ namespace localization
 	
 	/** Array of past rover velocity model **/
 	boost::circular_buffer<double> cbVelModelX, cbVelModelY, cbVelModelZ;
+	
 	
     public:
 	
@@ -224,12 +231,22 @@ namespace localization
 	/**
 	* @brief Get the velocity from the odometry model
 	* 
-	* Rover velocity from pure odometry model
+	* Rover velocity from pure odometry model (navigation kinematics)
 	* 
 	* @return current rover velocity from odometry
 	* 
 	*/
 	Eigen::Matrix<double, NUMAXIS, 1 > getCurrentVeloModel();
+	
+	/**
+	* @brief Get the covariance of the velocity from the odometry model
+	* 
+	* Covariance matrix of the estimated quantity
+	* 
+	* @return the covariance matrix
+	* 
+	*/
+	Eigen::Matrix<double, NUMAXIS, NUMAXIS > getCurrentVeloModelCovariance();
 	
 	/**
 	* @brief Set the current velocity
@@ -240,6 +257,27 @@ namespace localization
 	* 
 	*/
 	void setCurrentVeloModel(Eigen::Matrix<double, NUMAXIS, 1> &velocity);
+	
+	
+	/**
+	* @brief Get the increment in velocity
+	* 
+	* Rover increment velocity from odometry model (navigation kinematics)
+	* 
+	* @return current rover incremet in velocity from odometry
+	* 
+	*/
+	Eigen::Matrix<double, NUMAXIS, 1 > getIncrementalVeloModel();
+	
+	/**
+	* @brief Get the covariance of the increment in velocity
+	* 
+	* Covariance matrix of the estimated quantity
+	* 
+	* @return the covariance matrix
+	* 
+	*/
+	Eigen::Matrix<double, NUMAXIS, NUMAXIS > getIncrementalVeloModelCovariance();
 	
 	/**
 	 * @brief Returns the covariance noise matrix

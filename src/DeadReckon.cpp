@@ -58,15 +58,15 @@ base::samples::RigidBodyState DeadReckon::updatePose(Eigen::Matrix< double, NUMA
 						     base::Time timeStamp, double delta_t)
 {
     base::samples::RigidBodyState rbsDeltaPose, rbsBC; /** rbs form of the computation **/
-    envire::TransformWithUncertainty deltaPose; /** delta transformation between current pose and nezt pose **/
+    envire::TransformWithUncertainty deltaPose; /** delta transformation between current pose and next pose **/
     
     /** Prepare the vState variable for the dead reckoning **/
     vState.block<NUMAXIS,1>(0,1) = vState.block<NUMAXIS,1>(0,0); // move the previous state to the col(1)
 
     /** Update the internal variables with the new measurements **/
-    vState.block<NUMAXIS,1>(0,0) = linvelo; // x,y and z
+    vState.block<NUMAXIS,1>(0,0) = linvelo + linvelo_error; // x,y and z
 
-    /** Calculate the delta position from velocity (dead reckoning) asuming constant acceleration **/
+    /** Calculate the delta position from velocity (dead reckoning) assuming constant acceleration **/
     rbsDeltaPose.position = ((delta_t/2.0) * (vState.block<3,1>(0,1) + vState.block<3,1>(0,0)));
     rbsDeltaPose.orientation = delta_q;
     
