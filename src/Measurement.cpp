@@ -254,10 +254,20 @@ void Measurement::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen
 }
 
 /**
+* @brief Returns the quaternion with the projection for the nadir vector
+*/
+Eigen::Quaternion< double > Measurement::getLevelWeightDistribution()
+{
+    return q_weight_distribution;
+}
+
+
+/**
 * @brief Initialization method
 */
 void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
-		       Eigen::Matrix< double, NUMBER_OF_WHEELS , NUMBER_OF_WHEELS  >& Rcont)
+		       Eigen::Matrix< double, NUMBER_OF_WHEELS , NUMBER_OF_WHEELS  >& Rcont,
+		       Eigen::Quaternion <double> q_weight)
 {
     /** Initial encoders velocities **/
     encodersvelocity.setZero();
@@ -282,6 +292,9 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     
     /** Velocities for the filter (acceleration and bias substracted correctly) **/
     linvelocity = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
+    
+    /** Set the eneven weight quaternion of the nadir vector to the rover platform **/
+    q_weight_distribution = q_weight;
     
     /** Circular vector for the integration **/
     cbAccX.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
@@ -397,7 +410,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getIntegrationWindowSize()
 }
 
 double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
-					const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R)
+					const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &W)
 {
     double leastSquaresError = 0.00;
     Eigen::Matrix< double, NUMAXIS , 1  > velocity;
@@ -449,27 +462,45 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     Conj.block<NUMBER_OF_WHEELS*(2*NUMAXIS), 1>(0,11) = b;
     Eigen::FullPivLU<matrixConjType> lu_decompConj(Conj);
     std::cout << "The rank of A|B*y is " << lu_decompConj.rank() << std::endl;
-    std::cout << "Pseudoinverse of A\n" << (A.transpose() * R.inverse() * A).inverse() << std::endl;
+    std::cout << "Pseudoinverse of A\n" << (A.transpose() * (W + R.inverse()) * A).inverse() << std::endl;
     #endif
     /** **/
    
     /** Least-Squares solution **/
-    Iinverse = (A.transpose() * R.inverse() * A).inverse();
-    x = Iinverse * A.transpose() * R.inverse() * b;
+    Iinverse = (A.transpose() * (W + R.inverse()) * A).inverse();
+    x = Iinverse * A.transpose() * (W + R.inverse()) * b;
     
 //     Eigen::MatrixXd M; /** dynamic memory matrix for the solution **/
 //     M = A;
 //     x = M.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
     
+    Iinverse = (A.transpose() * (R.inverse()) * A).inverse();
+    
+    Eigen::Matrix<double, 1,1> squaredError = (((A*x - b).transpose() * R * (A*x - b)));
+    
+    if (b.norm() != 0.00)
+	leastSquaresError = sqrt(squaredError[0]) / b.norm();
+    #ifdef DEBUG_PRINTS
+    std::cout << "[VM] The relative error is:\n" << leastSquaresError << std::endl;
+    std::cout << "[VM] The solution is:\n" << x << std::endl;
+    std::cout << "[VM] The uncertainty is:\n" << Iinverse << std::endl;
+    #endif
+    
     /** Save the velocity model results **/
     velocity = x.block<NUMAXIS,1>(0,0);
     velModel.data = velocity;
-    velModel.Cov = Iinverse.block<NUMAXIS, NUMAXIS> (0,0);
+    velModel.Cov = leastSquaresError * Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() + Iinverse.block<NUMAXIS, NUMAXIS> (0,0);
     setCurrentVeloModel(velocity);
     
+    #ifdef DEBUG_PRINTS
+    std::cout << "[VM] velModel.data:\n" << velModel.data << std::endl;
+    std::cout << "[VM] velModel.Cov:\n" << velModel.Cov << std::endl;
+    #endif
+    
     /** Compute the increment in velocity **/
-    increVelModel.data = velModel.data - prevVelModel.data;
-    increVelModel.Cov = velModel.Cov;
+    increVelModel = velModel - prevVelModel;
+//     increVelModel.data = velModel.data - prevVelModel.data;
+//     increVelModel.Cov = velModel.Cov;
     
     /** Set the prev value to the actual one for the next iteration **/
     prevVelModel = velModel;
@@ -483,19 +514,9 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     slipModel.Cov(8,8) = Iinverse(5,5);
     slipModel.Cov(11,11) = Iinverse(6,6);
     
-    /** Store it in acontact variable **/
+    /** Store the acontact variable **/
     acontact.data = x.block<NUMBER_OF_WHEELS,1>(NUMAXIS+NUMBER_OF_WHEELS,0);
     acontact.Cov = Iinverse.bottomRightCorner<NUMBER_OF_WHEELS,NUMBER_OF_WHEELS>();
-    
-    Eigen::Matrix<double, 1,1> squaredError = (((A*x - b).transpose() * R * (A*x - b)));
-    
-    if (b.norm() != 0.00)
-	leastSquaresError = sqrt(squaredError[0]) / b.norm();
-    #ifdef DEBUG_PRINTS
-    std::cout << "[VM] The relative error is:\n" << leastSquaresError << std::endl;
-    std::cout << "[VM] The solution is:\n" << x << std::endl;
-    std::cout << "[VM] The uncertainty is:\n" << Iinverse << std::endl;
-    #endif
     
     return leastSquaresError;
 }

@@ -84,7 +84,8 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,1> eposition; /** Position error */
 	
 	/** Tilde velocity **/
-	Eigen::Matrix <double,NUMAXIS,1> evelocity; /** Velocity error */
+// 	Eigen::Matrix <double,NUMAXIS,1> evelocity; /** Velocity error */
+	DataModel evelocity; /** Velocity error */
 	
 	/** For the attitude computation **/
 	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
@@ -95,6 +96,10 @@ namespace localization
 	/** Adaptive external acceleration variables **/
 	unsigned int r1count; /** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
 	double r2count; /** Variable used in the adaptive algorithm, to compute the final Qstart cov. matrix*/
+	
+	/** Vel model at k-1 **/
+	DataModel veloModelk_1, veloTruth;
+	DataModel increVeloError;
 	
     public:
 
@@ -416,6 +421,12 @@ namespace localization
 	*/
 	void resetStateVector ();
 	
+	
+	DataModel getVeloTruth ();
+	
+	DataModel getVeloError ();
+	
+	DataModel getIncreVeloError();
 	
 	/**
 	* @brief Save the current filter status

@@ -40,6 +40,9 @@ namespace localization
 	/** Sensed encoders velocities **/
 	Eigen::Matrix <double, ENCODERS_VECTOR_SIZE, 1>encodersvelocity;
 	
+	/** Offset quaternion to set the uneven weight distribution of the rover **/
+	Eigen::Quaternion <double> q_weight_distribution;
+	
 	/** Velocity model from navigation kinematics **/
 	DataModel velModel, prevVelModel;
 	
@@ -82,7 +85,8 @@ namespace localization
 	* 
 	*/
 	void Init ( Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
-		    Eigen::Matrix< double, NUMBER_OF_WHEELS , NUMBER_OF_WHEELS  >& Rcont);
+		    Eigen::Matrix< double, NUMBER_OF_WHEELS , NUMBER_OF_WHEELS  >& Rcont,
+		    Eigen::Quaternion <double> q_weight);
 	
 	/**
 	* @brief This function set the Accelerometers excentricity
@@ -289,6 +293,11 @@ namespace localization
 	 */
 	Eigen::Matrix <double,NUMBER_OF_WHEELS,NUMBER_OF_WHEELS>  getContactAnglesVelocityCovariance();
 	
+	/**
+	 * @brief Returns the quaternion with the projection for the nadir vector
+	 */
+	Eigen::Quaternion <double>  getLevelWeightDistribution();
+	
 	
 	/**
 	* @brief Simpson's rule for numerical integration
@@ -336,7 +345,7 @@ namespace localization
 	* 
 	*/
 	double navigationKinematics (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
-				     const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R);
+				     const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &W);
 	
 	/**
 	* @brief Least-Squares slip kinematics solution
