@@ -5,6 +5,8 @@
 #ifndef _DATAMODEL_HPP_
 #define _DATAMODEL_HPP_
 
+#include <iostream>
+
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
@@ -26,7 +28,10 @@ namespace localization
 	DataModel();
 	DataModel(const unsigned int dim);
 	DataModel(Eigen::Matrix<double, Eigen::Dynamic, 1> &data, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &Cov);
-	DataModel operator+(const DataModel& data1) const;
+	void fusion(const DataModel& data2);
+	void safeFusion(const DataModel& data2);
+	DataModel operator+(const DataModel& data2) const;
+	DataModel operator-(const DataModel& data2) const;
 	DataModel& operator=(const DataModel& dmodel);
 
     };
