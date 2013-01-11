@@ -71,6 +71,10 @@ namespace localization
     #define R2D 180.00/M_PI /** Convert radian to degree **/
     #endif
     
+    #ifndef ZERO_UNCERTAINTY
+    #define ZERO_UNCERTAINTY 1.0e-10 /** Set as default zero uncertainty **/
+    #endif
+    
     static const unsigned int NUMBER_OF_WHEELS = 4; /** Rover number of wheels **/
     
     static const unsigned int NUMBER_OF_PASSIVE_JOINTS = 1; /** Rover chassis number of passive joints **/
