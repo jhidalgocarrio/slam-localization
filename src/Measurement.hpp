@@ -482,7 +482,7 @@ namespace localization
 		#ifdef DEBUG_PRINTS
 		std::cerr << "[ERROR] In the correction of the magnetic declination\n";
 		#endif
-		return ERROR;
+		return ERROR_OUT;
 	    }
 	    
 	    *quat = Eigen::Quaternion <double> (Eigen::AngleAxisd(euler[0], Eigen::Vector3d::UnitX())*

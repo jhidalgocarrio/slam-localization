@@ -153,7 +153,7 @@ int Sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
 	return OK;
     }
 
-    return ERROR;
+    return ERROR_OUT;
 
 }
 
@@ -1019,7 +1019,7 @@ void Sckf::resetStateVector()
 //     xki_k.block<NUMAXIS,1>(0,0) = Matrix<double, NUMAXIS, 1>::Zero();
     
     /** Reset the velocity part of the state **/
-//     xki_k.block<NUMAXIS,1>(NUMAXIS,0) = Matrix<double, NUMAXIS, 1>::Zero();
+    xki_k.block<NUMAXIS,1>(NUMAXIS,0) = Matrix<double, NUMAXIS, 1>::Zero();
     
     /** Reset the quaternion part of the state vector (the error quaternion) (q4 is corrected in the update step) **/
     xki_k.block<NUMAXIS,1>(2*NUMAXIS,0) = Matrix<double, NUMAXIS, 1>::Zero();

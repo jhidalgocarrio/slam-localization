@@ -12,8 +12,8 @@ namespace localization
     #ifndef OK
     #define OK	0  /** Integer value in order to return when everything is all right. */
     #endif
-    #ifndef ERROR
-    #define ERROR -1  /** Integer value in order to return when an error occured. */
+    #ifndef ERROR_OUT
+    #define ERROR_OUT -1  /** Integer value in order to return when an error occured. */
     #endif
     
     #ifndef QUATERSIZE
