@@ -8,7 +8,6 @@
 #include <iostream> /** IO C++ Standard library */
 #include <vector>
 #include <algorithm> /** Algorithm C++ Standard library */
-#include <boost/circular_buffer.hpp> /** Boost library circula buffer **/
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
@@ -22,6 +21,9 @@ namespace localization
     {
 	
     public:
+	
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+	
 	/** CONSTANT VALUES TO THE CLASS**/
 	
 	/** Integration of the delayed windows **/
@@ -62,12 +64,10 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,1> eccx, eccy, eccz; /** Accelerometers excentricity with respect to the body center of the robot **/
 	
 	/** Circular Vector of accelerations for integral method **/
-	boost::circular_buffer<double> cbAccX, cbAngveloX;
-	boost::circular_buffer<double> cbAccY, cbAngveloY;
-	boost::circular_buffer<double> cbAccZ, cbAngveloZ;
+	Eigen::Matrix <double,NUMAXIS,1> cbAcc, cbAngvelo;
 	
 	/** Array of past rover velocity model **/
-	boost::circular_buffer<double> cbVelModelX, cbVelModelY, cbVelModelZ;
+	Eigen::Matrix <double,NUMAXIS,1> cbVelModel;
 	
 	
     public:

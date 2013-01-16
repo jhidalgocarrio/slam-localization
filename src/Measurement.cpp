@@ -48,15 +48,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearVelocities()
 */
 void Measurement::setAngularVelocities(Eigen::Matrix< double, NUMAXIS , 1  > &angvelo)
 {
-    this->cbAngveloX.push_back(angvelo[0]);
-    this->cbAngveloY.push_back(angvelo[1]);
-    this->cbAngveloZ.push_back(angvelo[2]);
-    
-    #ifdef DEBUG_PRINTS
-    std::cout<<"Buffer cbAngveloX.size()"<<cbAngveloX.size()<<"\n";
-    std::cout<<"Buffer cbAngveloY.size()"<<cbAngveloY.size()<<"\n";
-    std::cout<<"Buffer cbAngveloZ.size()"<<cbAngveloZ.size()<<"\n";
-    #endif
+    this->cbAngvelo = angvelo;
     
     return;
 }
@@ -66,13 +58,8 @@ void Measurement::setAngularVelocities(Eigen::Matrix< double, NUMAXIS , 1  > &an
 */
 Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getAngularVelocities()
 {
-    Eigen::Matrix< double, NUMAXIS , 1  > angvelo;
     
-    angvelo[0] = cbAngveloX[cbAngveloX.size()-1];
-    angvelo[1] = cbAngveloY[cbAngveloY.size()-1];
-    angvelo[2] = cbAngveloZ[cbAngveloZ.size()-1];
-    
-    return angvelo;
+    return this->cbAngvelo;
 }
 
 /**
@@ -80,16 +67,9 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getAngularVelocities()
 */
 void Measurement::setLinearAcceleration(Eigen::Matrix< double, NUMAXIS , 1  > &linacc)
 {
-    this->cbAccX.push_back(linacc[0]);
-    this->cbAccY.push_back(linacc[1]);
-    this->cbAccZ.push_back(linacc[2]);
     
-    #ifdef DEBUG_PRINTS
-    std::cout<<"Buffer cbAccX.size()"<<cbAccX.size()<<"\n";
-    std::cout<<"Buffer cbAccY.size()"<<cbAccY.size()<<"\n";
-    std::cout<<"Buffer cbAccZ.size()"<<cbAccZ.size()<<"\n";
-    #endif
-
+    this->cbAcc = linacc;
+    
     return;
 }
 
@@ -99,13 +79,8 @@ void Measurement::setLinearAcceleration(Eigen::Matrix< double, NUMAXIS , 1  > &l
 */
 Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearAcceleration()
 {
-    Eigen::Matrix< double, NUMAXIS , 1  > acc;
-    
-    acc[0] = cbAccX[cbAccX.size()-1];
-    acc[1] = cbAccY[cbAccY.size()-1];
-    acc[2] = cbAccZ[cbAccZ.size()-1];
-    
-    return acc;
+        
+    return this->cbAcc;
 }
 
 
@@ -160,9 +135,7 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > Measurement::getContactAnglesVelocit
 */
 void Measurement::setCurrentVeloModel(Eigen::Matrix< double, NUMAXIS , 1  > &velocity)
 {
-    cbVelModelX.push_back(velocity(0));
-    cbVelModelY.push_back(velocity(1));
-    cbVelModelZ.push_back(velocity(2));
+    this->cbVelModel = velocity;
 }
 
 /**
@@ -170,13 +143,8 @@ void Measurement::setCurrentVeloModel(Eigen::Matrix< double, NUMAXIS , 1  > &vel
 */
 Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
 {
-    Eigen::Matrix< double, NUMAXIS , 1  > velocity;
     
-    velocity[0] = cbVelModelX[cbVelModelX.size()-1];
-    velocity[1] = cbVelModelY[cbVelModelY.size()-1];
-    velocity[2] = cbVelModelZ[cbVelModelZ.size()-1];
-    
-    return velocity;
+    return this->cbVelModel;
 }
 
 /**
@@ -296,19 +264,12 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     /** Set the eneven weight quaternion of the nadir vector to the rover platform **/
     q_weight_distribution = q_weight;
     
-    /** Circular vector for the integration **/
-    cbAccX.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
-    cbAccY.set_capacity(INTEGRATION_YAXIS_WINDOW_SIZE);
-    cbAccZ.set_capacity(INTEGRATION_ZAXIS_WINDOW_SIZE);
-    
-    cbAngveloX.set_capacity(ANGVELO_WINDOW_SIZE);
-    cbAngveloY.set_capacity(ANGVELO_WINDOW_SIZE);
-    cbAngveloZ.set_capacity(ANGVELO_WINDOW_SIZE);
+    /** Vector for the integration **/
+    cbAcc.setZero();
+    cbAngvelo.setZero();
     
     /** Resize the circular buffer for the velocities model **/
-    cbVelModelX.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
-    cbVelModelY.set_capacity(INTEGRATION_YAXIS_WINDOW_SIZE);
-    cbVelModelZ.set_capacity(INTEGRATION_ZAXIS_WINDOW_SIZE);
+    cbVelModel.setZero();
     
     this->Rencoders = Ren;
     
@@ -348,47 +309,31 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::accIntegrationWindow(double d
     #ifdef DEBUG_PRINTS
     std::cout<< "IMU Velocity\n";
     #endif
-        
-    for (unsigned int i=0; i<cbAccX.size(); i++)
-    {
-	gyros2product << 0, -cbAngveloZ[i], cbAngveloY[i],
-		cbAngveloZ[i], 0, -cbAngveloX[i],
-		-cbAngveloY[i], cbAngveloX[i], 0;
-		
-	localvelocity[0] += (cbAccX[i] * dt) - (gyros2product.row(0) * eccx);
-    }
     
-//     localvelocity[0] += cbVelModelX[0];
+    gyros2product << 0, -cbAngvelo[2], cbAngvelo[1],
+	cbAngvelo[2], 0, -cbAngvelo[0],
+	-cbAngvelo[1], cbAngvelo[0], 0;
+		
+    localvelocity[0] += (cbAcc[0] * dt) - (gyros2product.row(0) * eccx);
+    
+//     localvelocity[0] += cbVelModel[0];
     
     #ifdef DEBUG_PRINTS
     std::cout<< "localvelocity[0] "<<localvelocity[0]<<"\n";
     #endif
     
-    for (unsigned int i=0; i<cbAccY.size(); i++)
-    {
-	gyros2product << 0, -cbAngveloZ[i], cbAngveloY[i],
-		cbAngveloZ[i], 0, -cbAngveloX[i],
-		-cbAngveloY[i], cbAngveloX[i], 0;
-		
-	localvelocity[1] += (cbAccY[i] * dt) - (gyros2product.row(1) * eccy);
-    }
+    	
+    localvelocity[1] += (cbAcc[1] * dt) - (gyros2product.row(1) * eccy);
     
-//     localvelocity[1] += cbVelModelY[0];
+//     localvelocity[1] += cbVelModel[1];
     
     #ifdef DEBUG_PRINTS
     std::cout<< "localvelocity[1] "<<localvelocity[1]<<"\n";
     #endif
     
-    for (unsigned int i=0; i<cbAccZ.size(); i++)
-    {
-	gyros2product << 0, -cbAngveloZ[i], cbAngveloY[i],
-		cbAngveloZ[i], 0, -cbAngveloX[i],
-		-cbAngveloY[i], cbAngveloX[i], 0;
-		
-	localvelocity[2] += (cbAccZ[i] * dt) - (gyros2product.row(2) * eccz);
-    }
+    localvelocity[2] += (cbAcc[2] * dt) - (gyros2product.row(2) * eccz);
     
-//     localvelocity[2] += cbVelModelZ[0];
+//     localvelocity[2] += cbVelModel[2];
     
     #ifdef DEBUG_PRINTS
     std::cout<< "localvelocity[2] "<<localvelocity[2]<<"\n";
@@ -404,7 +349,8 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getIntegrationWindowSize()
 {
     Eigen::Matrix< double, NUMAXIS , 1  > windowsSize;
     
-    windowsSize << cbAccX.size(), cbAccY.size(), cbAccZ.size();
+//     windowsSize << cbAccX.size(), cbAccY.size(), cbAccZ.size();
+    windowsSize.setIdentity();
     
     return windowsSize;
 }
