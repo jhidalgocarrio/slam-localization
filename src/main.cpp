@@ -84,6 +84,22 @@ int main(int argc, char** argv)
 	std::cout<<"v1\n"<<v1<<"\n";
 	std::cout<<"v2\n"<<v2<<"\n";
 	
+	double theoretical_g = 9.81; /** Ideal gravity value **/
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Ra; /** Measurement noise convariance matrix for acc */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rat; /** Measurement noise convariance matrix for attitude correction (gravity vector noise) */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rv; /** Measurement noise convariance matrix for velocity (accelerometers integration) */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement noise convariance matrix for gyros */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rm; /** Measurement noise convariance matrix for mag */
+	Eigen::Matrix <double,localization::ENCODERS_VECTOR_SIZE,localization::ENCODERS_VECTOR_SIZE> Ren; /** Measurement noise of encoders **/
+	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> P_0; /** Initial covariance matrix **/
+	Eigen::Matrix <double,localization::NUMBER_OF_WHEELS,localization::NUMBER_OF_WHEELS> Rcontact; /** Measurement noise for contact angle */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Qbg; /** Process noise matrix of gyros bias (bias instability) **/
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Qba; /** Process noise matric of acc bias (bias instability) **/
+	
+    
+	/** Initialization of the filter **/
+	mysckf.Init(P_0, Rg, Qbg, Qba, Ra, Rat, Rm, theoretical_g, 0.12);
+	
 // 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> angle2product;
 // 	
 // 	v1 << 0.0, 0.0, 1.0;
