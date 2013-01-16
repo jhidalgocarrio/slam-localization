@@ -24,6 +24,8 @@ namespace localization
 	
     public:
 	
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+	
 	/** CONSTANT VALUES TO THE CLASS**/
 	
 	/** Constants for the process model **/

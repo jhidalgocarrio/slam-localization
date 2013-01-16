@@ -20,6 +20,7 @@ namespace localization
     
     public:
 	
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	/** Dead reckoning variables **/
 	Eigen::Matrix <double, NUMAXIS, 2> vState; /** robot state linear velocities time nT col(0) and (n-1)T col(1) (order is x,y,z) **/
 	envire::TransformWithUncertainty actualPose; /** robot pose (rbsBC) in transformation with uncertainty form **/

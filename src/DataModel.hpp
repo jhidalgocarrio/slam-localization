@@ -20,6 +20,7 @@ namespace localization
     {
     
     public:
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	Eigen::Matrix<double, Eigen::Dynamic, 1> data; //! instantaneous slip velocity vector
 	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Cov; //! Covariance matrix
 
