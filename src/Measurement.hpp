@@ -11,6 +11,7 @@
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
+#include <boost/circular_buffer.hpp> /** For circular_buffer **/
 #include "DataModel.hpp" /** For the quantities models **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 #include "DataTypes.hpp" /** Orogen compatible export data types **/
@@ -24,16 +25,8 @@ namespace localization
 	
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	
-	/** CONSTANT VALUES TO THE CLASS**/
-	
-	/** Integration of the delayed windows **/
-	static const int INTEGRATION_XAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
-	static const int INTEGRATION_YAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
-	static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 1;//10; /** Windows size of the delay integration **/
-	static const int ANGVELO_WINDOW_SIZE = INTEGRATION_XAXIS_WINDOW_SIZE; /** Windows size of the delay integration **/
-    
     private:
-	
+
 	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> Rencoders; /** Measurement noise convariance matrix for joint velocities */
 	
 	/** Linear and angular velocities (from IMU) **/
@@ -69,8 +62,17 @@ namespace localization
 	/** Array of past rover velocity model **/
 	Eigen::Matrix <double,NUMAXIS,1> cbVelModel;
 	
+	boost::circular_buffer<double> testAcc;
 	
     public:
+	
+	/** Measurement contructor
+         */
+        Measurement();
+	
+	/** Measurement default descontructor
+         */
+        ~Measurement();
 	
 	/**
 	* Print a welcome to stdout
@@ -489,7 +491,7 @@ namespace localization
 				Eigen::AngleAxisd(euler[1], Eigen::Vector3d::UnitY()) *
 				Eigen::AngleAxisd(euler[2], Eigen::Vector3d::UnitZ()));
 	    
-	    return OK;
+	    return OK_LOCALIZATION;
 	};
 	    
     }; //end of measurement class

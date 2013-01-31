@@ -20,6 +20,24 @@
 using namespace localization;
 using namespace Eigen;
 
+/**
+* @brief Default constructor
+*/
+Measurement::Measurement()
+{
+
+    this->testAcc = boost::circular_buffer<double>(2);
+}
+
+/**
+* @brief Default desconstructor
+*/
+Measurement::~Measurement()
+{
+
+}
+
+
 void Measurement::welcome()
 {
 	std::cout << "You successfully compiled and executed Measurement Generation. Welcome!" << std::endl;
@@ -270,6 +288,8 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     
     /** Resize the circular buffer for the velocities model **/
     cbVelModel.setZero();
+    
+    testAcc.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
     
     this->Rencoders = Ren;
     
