@@ -125,7 +125,7 @@ int Sckf::setAttitude(Eigen::Quaternion< double >& initq)
     q4 = initq;
     prev_q4 = initq;
 	
-    return OK;
+    return OK_LOCALIZATION;
     
 }
 
@@ -150,7 +150,7 @@ int Sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
 	    u(1), -u(2), 0, u(0),
 	    u(2), u(1), -u(0), 0;
 	
-	return OK;
+	return OK_LOCALIZATION;
     }
 
     return ERROR_OUT;

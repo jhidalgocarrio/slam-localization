@@ -9,8 +9,8 @@ namespace localization
 {
 
     /** General defines **/
-    #ifndef OK
-    #define OK	0  /** Integer value in order to return when everything is all right. */
+    #ifndef OK_LOCALIZATION
+    #define OK_LOCALIZATION 0  /** Integer value in order to return when everything is all right. */
     #endif
     #ifndef ERROR_OUT
     #define ERROR_OUT -1  /** Integer value in order to return when an error occured. */
@@ -75,6 +75,16 @@ namespace localization
     #define ZERO_UNCERTAINTY 1.0e-10 /** Set as default zero uncertainty **/
     #endif
     
+    
+    /** Integration of the delayed windows **/
+    static const int INTEGRATION_XAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
+    
+    static const int INTEGRATION_YAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
+    
+    static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 1;//10; /** Windows size of the delay integration **/
+    
+    static const int ANGVELO_WINDOW_SIZE = INTEGRATION_XAXIS_WINDOW_SIZE; /** Windows size of the delay integration **/
+	
     static const unsigned int NUMBER_OF_WHEELS = 4; /** Rover number of wheels **/
     
     static const unsigned int NUMBER_OF_PASSIVE_JOINTS = 1; /** Rover chassis number of passive joints **/

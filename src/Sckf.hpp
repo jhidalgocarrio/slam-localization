@@ -35,11 +35,6 @@ namespace localization
 	/** Constants for the measurement model **/
 	static const int X_OBSERVATION_VECTOR_SIZE = X_STATE_VECTOR_SIZE; /** Observation vector for the correction of vector state **/
 	static const int X_MEASUREMENT_VECTOR_SIZE = SLIP_VECTOR_SIZE + (2*NUMAXIS); /** Measurement vector for computation of the correction measurement **/
-	
-	/** MEASUREMENT GENERATION **/
-	
-	/** Object of the measurement class **/
-	Measurement filtermeasurement;
 		
     private:
 	
@@ -102,6 +97,11 @@ namespace localization
 	/** Vel model at k-1 **/
 	DataModel veloModelk_1, veloTruth;
 	DataModel increVeloError;
+	
+	/** MEASUREMENT GENERATION **/
+    public:
+	/** Object of the measurement class **/
+	Measurement filtermeasurement;
 	
     public:
 
