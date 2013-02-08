@@ -41,9 +41,6 @@ namespace localization
 	/** FILTER VARIABLES (UPPER CASE MATRICES, LOWER CASE VECTORS) **/
 	Eigen::Matrix <double,Eigen::Dynamic,1> xk_k; /** State vector Xk|k at the lastest extereoceptive measurement recorded */
 	Eigen::Matrix <double,Eigen::Dynamic,1> xki_k; /** State vector Xk+i|k at the lastest proprioceptive measurement recorded (Robot's current state) */
-	Eigen::Quaternion <double> q4;  /** Current robot attitude quaternion (integration) */
-	Eigen::Quaternion <double> prev_q4;  /** Previous robot attitude quaternion (integration) (for computing the delta quaternion) */
-	Eigen::Matrix <double,QUATERSIZE, QUATERSIZE> oldomega4; /** Quaternion integration matrix */
 	
 	/** System matrix **/
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> A; /** Attitude System matrix */
@@ -77,13 +74,21 @@ namespace localization
 	
 	Eigen::Matrix <double,Eigen::Dynamic,1> innovation; /** Internal variable of the filter innovation (zki - Hk*xki_k **/
 	
+	/** Velocity **/
+	Eigen::Matrix <double,NUMAXIS,1> velocity; /** Rover Velocity */
+	
+	/** Attitude **/
+	Eigen::Quaternion <double> q4;  /** Current robot attitude quaternion (integration) */
+	Eigen::Quaternion <double> prev_q4;  /** Previous robot attitude quaternion (integration) (for computing the delta quaternion) */
+	Eigen::Matrix <double,QUATERSIZE, QUATERSIZE> oldomega4; /** Quaternion integration matrix */
+	
 	/** Tilde position **/
 	Eigen::Matrix <double,NUMAXIS,1> eposition; /** Position error */
 	
 	/** Tilde velocity **/
-// 	Eigen::Matrix <double,NUMAXIS,1> evelocity; /** Velocity error */
-	DataModel evelocity; /** Velocity error */
-	
+	Eigen::Matrix <double,NUMAXIS,1> evelocity; /** Velocity error */
+// 	DataModel evelocity; /** Velocity error */
+
 	/** For the attitude computation **/
 	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
 	Eigen::Matrix <double,NUMAXIS,1> mtilde; /** Magnetic dip angle in world frame */
@@ -94,9 +99,9 @@ namespace localization
 	unsigned int r1count; /** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
 	double r2count; /** Variable used in the adaptive algorithm, to compute the final Qstart cov. matrix*/
 	
-	/** Vel model at k-1 **/
-	DataModel veloModelk_1, veloTruth;
-	DataModel increVeloError;
+// 	/** Vel model at k-1 **/
+// 	DataModel veloModelk_1, veloTruth;
+// 	DataModel increVeloError;
 	
 	/** MEASUREMENT GENERATION **/
     public:
@@ -424,11 +429,11 @@ namespace localization
 	void resetStateVector ();
 	
 	
-	DataModel getVeloTruth ();
+	Eigen::Matrix <double,NUMAXIS,1> getVelocity ();
 	
-	DataModel getVeloError ();
+	Eigen::Matrix <double,NUMAXIS,1> getVeloError ();
 	
-	DataModel getIncreVeloError();
+// 	DataModel getIncreVeloError();
 	
 	/**
 	* @brief Save the current filter status

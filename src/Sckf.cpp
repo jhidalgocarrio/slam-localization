@@ -337,8 +337,8 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     eposition<<0.00, 0.00, 0.00;
     
     /** Default initial velocity errors **/
-//     evelocity<<0.00, 0.00, 0.00;
-    evelocity = DataModel(NUMAXIS);
+    evelocity<<0.00, 0.00, 0.00;
+//     evelocity = DataModel(NUMAXIS);
     
     /** Default initial bias **/
     bghat << 0.00, 0.00, 0.00;
@@ -348,9 +348,9 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     r1count = 0;
     r2count = R2COUNT;
     
-    veloModelk_1 = DataModel(NUMAXIS); //! Initialize vel from model at k-1
-    veloTruth = DataModel(NUMAXIS);
-    increVeloError = DataModel(NUMAXIS);
+//     veloModelk_1 = DataModel(NUMAXIS); //! Initialize vel from model at k-1
+//     veloTruth = DataModel(NUMAXIS);
+//     increVeloError = DataModel(NUMAXIS);
         
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
@@ -452,7 +452,7 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     A.block<NUMAXIS, NUMAXIS> (0,0) = -velo2product;
     
     /** Form the complete system model matrix (position error) **/
-    Fki.block<NUMAXIS, NUMAXIS> (0,NUMAXIS) = Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Identity();
+    Fki.block<NUMAXIS, NUMAXIS> (0,NUMAXIS) = Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Identity();//!Cq.inverse if velocity is in body_frame
     
     /** Velocity part **/
     Fki.block<NUMAXIS, NUMAXIS> (NUMAXIS, 2*NUMAXIS) = -/*Cq.inverse() */ acc2product;
@@ -731,13 +731,15 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     /** Normalize quaternion **/
     q4.normalize();
     
-    
     /** Update the position error **/
-    eposition = xki_k.block<NUMAXIS, 1> (0,0);
+    eposition = eposition + xki_k.block<NUMAXIS, 1> (0,0);
     
     /** Update the velocity error **/
-    evelocity.data = xki_k.block<NUMAXIS, 1> (NUMAXIS,0);
-    evelocity.Cov = Pki_k.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS);
+    evelocity = evelocity + xki_k.block<NUMAXIS, 1> (NUMAXIS,0);
+//     evelocity.Cov = Pki_k.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS);
+    
+    /** Correct the velocity **/
+    velocity = filtermeasurement.getCurrentVeloModel() + evelocity;
     
     /** Update the bias with the bias error **/
     bghat = bghat + xki_k.block<NUMAXIS, 1> (3*NUMAXIS,0);
@@ -962,8 +964,9 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     filtermeasurement.setLinearVelocities(linvelo);
     
     /** Compute the velocity error **/
-    DataModel veloModel, veloError;
+    DataModel veloModel;
     DataModel delta_VeloModel, delta_veloIMU;
+    DataModel increVeloError;
     
     veloModel.data = filtermeasurement.getCurrentVeloModel();
     veloModel.Cov = filtermeasurement.getCurrentVeloModelCovariance();
@@ -972,20 +975,29 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     delta_veloIMU.data  = filtermeasurement.getLinearVelocities();
     delta_veloIMU.Cov = (this->Ra * dt);
     
-    if (delta_veloIMU.data[0] < -0.05)
-	delta_veloIMU.data[0] = 0.00;
-    
-    veloTruth = (veloModelk_1 + evelocity) + delta_veloIMU; //! veloTruth = veloTruth(k-1) + delta_veloIMU
-    
-    
-    veloError = veloTruth - veloModel;
-    
-    velo_error = veloError.data;
-    vel_errorCov =  veloError.Cov;
-    
+    /** Compute the error in the incremental velocity **/
     increVeloError = delta_veloIMU - delta_VeloModel;
     
-//     velo_error[1] = 0.00;
+    /** Estimate if there is statictical significant difference for the incremental velocity error **/
+    Eigen::Matrix<double, Eigen::Dynamic, 1> eigen_values;
+    Eigen::JacobiSVD <Eigen::MatrixXd > svdOfCov(increVeloError.Cov, Eigen::ComputeThinU); //!SVD
+    
+    /** Eigen values are the axis of the ellipsoid **/
+    eigen_values.resize(increVeloError.data.rows());
+    eigen_values = svdOfCov.singularValues();
+    
+    for (register int i=0; i < eigen_values.rows();++i)
+    {
+	/** If the std if bigger that the difference, discard the measurement **/
+	if (sqrt(eigen_values[i]) > fabs(increVeloError.data[i]))
+	    velo_error[i] = 0.00;
+	else
+	    velo_error[i] = increVeloError.data[i];
+	    
+    }
+    
+    vel_errorCov =  increVeloError.Cov;
+    
     velo_error[2] = 0.00;
     
     #ifdef DEBUG_PRINTS
@@ -995,14 +1007,10 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     std::cout<< "[Measurement] incre_vel_model_cov:\n"<<delta_VeloModel.Cov<<"\n";
     std::cout<< "[Measurement] vel_model:\n"<<veloModel.data<<"\n";
     std::cout<< "[Measurement] vel_model_cov:\n"<<veloModel.Cov<<"\n";
-    std::cout<< "[Measurement] vel_truth:\n"<<veloTruth.data<<"\n";
-    std::cout<< "[Measurement] vel_truth_cov:\n"<<veloTruth.Cov<<"\n";
+    std::cout<< "[Measurement] sqrt(eigen_values):\n"<<eigen_values.cwiseSqrt()<<"\n";
     std::cout<< "[Measurement] vel_error:\n"<<velo_error<<"\n";
     std::cout<< "[Measurement] vel_error_cov(Rme):\n"<<vel_errorCov<<"\n";
     #endif
-    
-    /** Set the velModel at K-1 for the next iteration **/
-    veloModelk_1 = veloModel;
     
     return;
 }
@@ -1016,7 +1024,7 @@ void Sckf::resetStateVector()
     /**------------------------------ **/
     
     /** Reset the position part of the state **/
-//     xki_k.block<NUMAXIS,1>(0,0) = Matrix<double, NUMAXIS, 1>::Zero();
+    xki_k.block<NUMAXIS,1>(0,0) = Matrix<double, NUMAXIS, 1>::Zero();
     
     /** Reset the velocity part of the state **/
     xki_k.block<NUMAXIS,1>(NUMAXIS,0) = Matrix<double, NUMAXIS, 1>::Zero();
@@ -1043,22 +1051,22 @@ void Sckf::resetStateVector()
 }
 
 
-DataModel Sckf::getVeloError()
+Eigen::Matrix <double,NUMAXIS,1> Sckf::getVeloError()
 {
     return evelocity;
 }
 
 
-DataModel Sckf::getVeloTruth()
+Eigen::Matrix <double,NUMAXIS,1> Sckf::getVelocity()
 {
-    return veloTruth;
+    return velocity;
 }
 
 
-DataModel Sckf::getIncreVeloError()
-{
-    return increVeloError;
-}
+// DataModel Sckf::getIncreVeloError()
+// {
+//     return increVeloError;
+// }
 
 
 /**
@@ -1075,7 +1083,7 @@ void Sckf::toFilterInfo(localization::FilterInfo &finfo)
     finfo.zki = this->zki;
     finfo.innovation = this->innovation;
     finfo.eposition = this->eposition;
-    finfo.evelocity = this->evelocity.data;
+    finfo.evelocity = this->evelocity;
     finfo.bghat = this->bghat;
     finfo.bahat = this->bahat;
     
