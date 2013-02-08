@@ -455,7 +455,7 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     /** Save the velocity model results **/
     velocity = x.block<NUMAXIS,1>(0,0);
     velModel.data = velocity;
-    velModel.Cov = leastSquaresError * Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() + Iinverse.block<NUMAXIS, NUMAXIS> (0,0);
+    velModel.Cov = Iinverse.block<NUMAXIS, NUMAXIS> (0,0);
     setCurrentVeloModel(velocity);
     
     #ifdef DEBUG_PRINTS
