@@ -25,6 +25,7 @@ namespace localization
 	base::VectorXd innovation;
 	base::Vector3d eposition;
 	base::Vector3d evelocity;
+	base::Matrix3d evelocity_cov;
 	base::Vector3d bghat;
 	base::Vector3d bahat;
     };
