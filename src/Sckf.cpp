@@ -135,6 +135,9 @@ int Sckf::setAttitude(Eigen::Quaternion< double >& initq)
 void Sckf::setGravity(double g)
 {
     this->gtilde << 0, 0, g;
+    #ifdef DEBUG_PRINTS
+    std::cout<<"Set gravity to: "<<gtilde[2]<<"\n";
+    #endif
 }
 
 /**
@@ -337,7 +340,9 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     eposition<<0.00, 0.00, 0.00;
     
     /** Default initial velocity errors **/
+    evelstep = 1;
     evelocity<<0.00, 0.00, 0.00;
+    evelocity_cov.setZero();
 //     evelocity = DataModel(NUMAXIS);
     
     /** Default initial bias **/
@@ -421,7 +426,7 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
 		angvelo(2), 0, -angvelo(0),
 		-angvelo(1), angvelo(0), 0;
 
-    /** Create the orientation matrix from the quaternion **/
+    /** Create the orientation matrix from the quaternion (q_body2world) **/
     Quaternion2DCM (&q4, &Cq);
     
     /** Calculate the gravity vector in the body frame **/
@@ -452,7 +457,7 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     A.block<NUMAXIS, NUMAXIS> (0,0) = -velo2product;
     
     /** Form the complete system model matrix (position error) **/
-    Fki.block<NUMAXIS, NUMAXIS> (0,NUMAXIS) = Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Identity();//!Cq.inverse if velocity is in body_frame
+    Fki.block<NUMAXIS, NUMAXIS> (0,NUMAXIS) = Cq.inverse();//Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Identity();//!Cq.inverse() if velocity is in body_frame
     
     /** Velocity part **/
     Fki.block<NUMAXIS, NUMAXIS> (NUMAXIS, 2*NUMAXIS) = -/*Cq.inverse() */ acc2product;
@@ -988,17 +993,23 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     
     for (register int i=0; i < eigen_values.rows();++i)
     {
-	/** If the std if bigger that the difference, discard the measurement **/
-	if (sqrt(eigen_values[i]) > fabs(increVeloError.data[i]))
-	    velo_error[i] = 0.00;
-	else
+// 	/** If the std if bigger that the difference, discard the measurement **/
+// 	if (sqrt(eigen_values[i]) > fabs(increVeloError.data[i]))
+// 	{
+// 	    velo_error[i] = 0.00;
+// 	    vel_errorCov.row(i).setZero();
+// 	    vel_errorCov.col(i).setZero();
+// 	}
+// 	else
+// 	{
 	    velo_error[i] = increVeloError.data[i];
+	    vel_errorCov.row(i) = increVeloError.Cov.row(i);
+	    vel_errorCov.col(i) = increVeloError.Cov.col(i);
+// 	}
 	    
     }
     
-    vel_errorCov =  increVeloError.Cov;
-    
-    velo_error[2] = 0.00;
+//     velo_error[2] = 0.00;
     
     #ifdef DEBUG_PRINTS
     std::cout<< "[Measurement] incre_vel_imu:\n"<<delta_veloIMU.data<<"\n";
@@ -1047,6 +1058,9 @@ void Sckf::resetStateVector()
     std::cout<< "[Update] bahat:\n"<<bahat<<"\n";
     #endif
     
+    /** Update the evelocity covariance matrix **/
+    evelocity_cov += Pki_k.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS);
+    
     return;
 }
 
@@ -1084,6 +1098,7 @@ void Sckf::toFilterInfo(localization::FilterInfo &finfo)
     finfo.innovation = this->innovation;
     finfo.eposition = this->eposition;
     finfo.evelocity = this->evelocity;
+    finfo.evelocity_cov = this->evelocity_cov;
     finfo.bghat = this->bghat;
     finfo.bahat = this->bahat;
     

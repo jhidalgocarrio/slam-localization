@@ -86,7 +86,9 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,1> eposition; /** Position error */
 	
 	/** Tilde velocity **/
+	unsigned int evelstep;
 	Eigen::Matrix <double,NUMAXIS,1> evelocity; /** Velocity error */
+	Eigen::Matrix <double,NUMAXIS, NUMAXIS> evelocity_cov; /** Velocity error covariance matrix **/
 // 	DataModel evelocity; /** Velocity error */
 
 	/** For the attitude computation **/
