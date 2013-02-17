@@ -28,6 +28,8 @@ namespace localization
 	base::Matrix3d evelocity_cov;
 	base::Vector3d bghat;
 	base::Vector3d bahat;
+	base::Matrix3d Hellinger;
+	double Mahalanobis;
     };
     
     struct SlipInfo
