@@ -91,6 +91,9 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS, NUMAXIS> evelocity_cov; /** Velocity error covariance matrix **/
 // 	DataModel evelocity; /** Velocity error */
 
+	Eigen::Matrix<double, NUMAXIS, NUMAXIS> Hellinger; /** Hellinger coefficient **/
+	double Mahalanobis; /** Mahalanobis distance **/
+
 	/** For the attitude computation **/
 	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
 	Eigen::Matrix <double,NUMAXIS,1> mtilde; /** Magnetic dip angle in world frame */
@@ -423,6 +426,15 @@ namespace localization
 				 Eigen::Matrix< double, NUMAXIS, NUMAXIS> &vel_errorCov, double dt);
 	
 	/**
+	* @brief It computes the whole slip vector
+	* 
+	* Computes the slip vector
+	* 
+	*/
+	void computeSlipVector (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bslip,
+				Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1> &slip_vector, Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> &slip_vectorCov, double dt);
+	
+	/**
 	* @brief It resets the state vector error
 	* 
 	* It reset the part of the error state that are independent for the next propagation
@@ -435,7 +447,6 @@ namespace localization
 	
 	Eigen::Matrix <double,NUMAXIS,1> getVeloError ();
 	
-// 	DataModel getIncreVeloError();
 	
 	/**
 	* @brief Save the current filter status

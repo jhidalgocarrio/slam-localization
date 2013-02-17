@@ -897,7 +897,7 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     W.resize(NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS));
     R.setZero(); Rm1.setZero(); W.setIdentity();
     
-    /** Set the initial attitude with the Yaw provided from the initial pose **/
+    /** Get the attitude with Yaw to Zero **/
     Eigen::Vector3d e = Eigen::Matrix3d(q4).eulerAngles(2,1,0);
     attitude = Eigen::Quaternion <double> (Eigen::AngleAxisd(0.00 * D2R, Eigen::Vector3d::UnitZ())*
     Eigen::AngleAxisd(e[1] * D2R, Eigen::Vector3d::UnitY()) *
@@ -966,6 +966,8 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     
     /** Integrate accelerometers to have velocity **/
     linvelo = filtermeasurement.accIntegrationWindow(dt);
+    
+    /** Set the IMU velocity to the linear ones **/
     filtermeasurement.setLinearVelocities(linvelo);
     
     /** Compute the velocity error **/
@@ -980,8 +982,40 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     delta_veloIMU.data  = filtermeasurement.getLinearVelocities();
     delta_veloIMU.Cov = (this->Ra * dt);
     
+    for (register int i=0; i<veloModel.size();i++)
+    {
+	for (register int j=0; j<veloModel.size();j++)
+	{
+	    if (veloModel.Cov(i,j) < 0.00)
+		veloModel.Cov(i,j) = 0.00;
+	    if (delta_VeloModel.Cov(i,j) < 0.00)
+		delta_VeloModel.Cov(i,j) = 0.00;
+	    if (delta_veloIMU.Cov(i,j) < 0.00)
+		delta_veloIMU.Cov(i,j) = 0.00;
+	}
+	
+    }
+    
+    
     /** Compute the error in the incremental velocity **/
     increVeloError = delta_veloIMU - delta_VeloModel;
+    
+    /** Mahalanobis **/
+    Mahalanobis = filtermeasurement.mahalanobis(increVeloError);
+    
+    /** Compute the Bhattacharyya distance **/
+//     Eigen::Matrix<double, NUMAXIS, NUMAXIS> BC;
+    
+    /*BC = filtermeasurement.bhattacharyya(delta_veloIMU, delta_VeloModel);
+    std::cout<< "[Measurement] Bhattacharyya coeff IMU-Model(function):\n"<<M<<"\n";
+    
+    HellingerI_M = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;*/
+    
+    /** DANGER **/
+/*    BC = filtermeasurement.bhattacharyya(delta_veloIMU, increVeloError);
+    
+    Hellinger = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;*/
+    /** DANGER **/
     
     /** Estimate if there is statictical significant difference for the incremental velocity error **/
     Eigen::Matrix<double, Eigen::Dynamic, 1> eigen_values;
@@ -993,23 +1027,52 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     
     for (register int i=0; i < eigen_values.rows();++i)
     {
-// 	/** If the std if bigger that the difference, discard the measurement **/
-// 	if (sqrt(eigen_values[i]) > fabs(increVeloError.data[i]))
-// 	{
-// 	    velo_error[i] = 0.00;
-// 	    vel_errorCov.row(i).setZero();
-// 	    vel_errorCov.col(i).setZero();
-// 	}
-// 	else
-// 	{
+	/** If the 3-sigma is bigger that the difference, discard the measurement **/
+	if (1.0 * sqrt(eigen_values[i]) > fabs(increVeloError.data[i]))
+	{
+	    velo_error[i] = 0.00;
+	    vel_errorCov.row(i).setZero();
+	    vel_errorCov.col(i).setZero();
+	    
+	    /** Experimental **/
+	    #ifdef DEBUG_PRINTS
+	    std::cout<< "[Update Reset] evelocity_goes_zero\n";
+	    #endif
+	    this->evelocity[i] = 0.00;
+	    this->evelocity_cov.col(i).setZero();
+	    this->evelocity_cov.row(i).setZero();
+	}
+	else
+	{
 	    velo_error[i] = increVeloError.data[i];
 	    vel_errorCov.row(i) = increVeloError.Cov.row(i);
 	    vel_errorCov.col(i) = increVeloError.Cov.col(i);
-// 	}
+	}
 	    
     }
     
-//     velo_error[2] = 0.00;
+    /** DANGER **/
+    
+//     velo_error = increVeloError.data;
+//     vel_errorCov =  increVeloError.Cov;
+//     
+//     
+//     for (register int i=0; i < Hellinger.rows();++i)
+//     {
+// 	if (Hellinger(i,i) < 0.68)
+// 	{
+// 	    this->evelocity[i] = 0.00;
+// 	    this->evelocity_cov.col(i).setZero();
+// 	    this->evelocity_cov.row(i).setZero();
+// 
+// 	
+// 	}
+//     }
+    /** DANGER **/
+    
+    
+    velo_error[2] = 0.00;
+    
     
     #ifdef DEBUG_PRINTS
     std::cout<< "[Measurement] incre_vel_imu:\n"<<delta_veloIMU.data<<"\n";
@@ -1018,13 +1081,78 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     std::cout<< "[Measurement] incre_vel_model_cov:\n"<<delta_VeloModel.Cov<<"\n";
     std::cout<< "[Measurement] vel_model:\n"<<veloModel.data<<"\n";
     std::cout<< "[Measurement] vel_model_cov:\n"<<veloModel.Cov<<"\n";
-    std::cout<< "[Measurement] sqrt(eigen_values):\n"<<eigen_values.cwiseSqrt()<<"\n";
+//     std::cout<< "[Measurement] sqrt(eigen_values):\n"<<eigen_values.cwiseSqrt()<<"\n";
+    std::cout<< "[Measurement] Squared Hellinger distance:\n"<<Hellinger<<"\n";
     std::cout<< "[Measurement] vel_error:\n"<<velo_error<<"\n";
     std::cout<< "[Measurement] vel_error_cov(Rme):\n"<<vel_errorCov<<"\n";
     #endif
     
     return;
 }
+
+void Sckf::computeSlipVector(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Aslip,
+			     const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bslip,
+			     Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  >& slip_vector,
+			     Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE >& slip_vectorCov, double dt)
+{
+    Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> R; /** Measurement Noise matrix for the LS **/
+    Eigen::Matrix <double, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS> Robs; /** Measurement Noise matrix of the measurement vector of the LS **/
+    R.resize(NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS));
+    
+    /** Set the linear velocity to the corrected one **/
+    filtermeasurement.setLinearVelocities(this->velocity);
+    
+    /** Set the angular velocity to the corrected one **/
+    Eigen::Matrix <double,NUMAXIS,1> angevelo;
+    
+    angevelo = (Eigen::Matrix3d(this->deltaQuaternion()).eulerAngles(2,1,0))/dt; //Yaw, Pitch and Roll
+    
+    /** Change the order Yaw is in vector[0] **/
+    double aux = angevelo[0];
+    angevelo[0] = angevelo[2];
+    angevelo[2] = aux;
+    
+    filtermeasurement.setAngularVelocities(angevelo); //Roll Pitch and Yaw
+    
+    /** Form the observation noise matrix **/
+    Robs.setZero();
+    Robs.block<NUMAXIS, NUMAXIS>(0,0) = filtermeasurement.getCurrentVeloModelCovariance() + evelocity_cov; //!Linear Velo
+    Robs.block<NUMAXIS, NUMAXIS>(NUMAXIS,NUMAXIS) = Pki_k.block<NUMAXIS, NUMAXIS> (2*NUMAXIS,2*NUMAXIS);//!Angular velo
+    Robs.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(2*NUMAXIS,2*NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
+    Robs.block<NUMBER_OF_WHEELS, NUMBER_OF_WHEELS>(2*NUMAXIS + ENCODERS_VECTOR_SIZE,2*NUMAXIS + ENCODERS_VECTOR_SIZE) = filtermeasurement.getContactAnglesVelocityCovariance();
+    
+    /** Form the Noise matrix **/
+    Eigen::Matrix <double, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS, 1> robs;
+    Eigen::Matrix <double, NUMBER_OF_WHEELS*(2*NUMAXIS), 1> rdiagonal;
+    
+    robs = Robs.diagonal();
+    R = Bslip * robs.asDiagonal() * Bslip.transpose();
+    rdiagonal = R.diagonal();
+    R = rdiagonal.asDiagonal();
+    
+    #ifdef DEBUG_PRINTS
+    typedef Eigen::Matrix <double, NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS)> matrixRType;
+    Eigen::FullPivLU<matrixRType> lu_decompR(R);
+    std::cout << "The rank of R is " << lu_decompR.rank() << std::endl;
+    
+    std::cout<< "[Measurement] Robs is of size "<<Robs.rows()<<"x"<<Robs.cols()<<"\n";
+    std::cout<< "[Measurement] Robs:\n"<<Robs<<"\n";
+    std::cout<< "[Measurement] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
+    std::cout<< "[Measurement] R:\n"<<R<<"\n";
+    std::cout<< "[Measurement] R.inverse():\n"<<R.inverse()<<"\n";
+    #endif
+    
+    /** Computes the slip kinematics **/
+    filtermeasurement.slipKinematics(Aslip, Bslip, R);
+    
+    /** Get the estimated slip error vector and the covariance **/
+    slip_vector = filtermeasurement.getSlipVector();
+    slip_vectorCov = filtermeasurement.getSlipVectorCov();
+    
+    return;
+
+}
+
 
 
 void Sckf::resetStateVector()
@@ -1077,12 +1205,6 @@ Eigen::Matrix <double,NUMAXIS,1> Sckf::getVelocity()
 }
 
 
-// DataModel Sckf::getIncreVeloError()
-// {
-//     return increVeloError;
-// }
-
-
 /**
 * @brief Save the current filter status
 */
@@ -1101,6 +1223,8 @@ void Sckf::toFilterInfo(localization::FilterInfo &finfo)
     finfo.evelocity_cov = this->evelocity_cov;
     finfo.bghat = this->bghat;
     finfo.bahat = this->bahat;
+    finfo.Hellinger = this->Hellinger;
+    finfo.Mahalanobis = this->Mahalanobis;
     
     
     return;
