@@ -29,6 +29,7 @@ namespace localization
 	DataModel();
 	DataModel(const unsigned int dim);
 	DataModel(Eigen::Matrix<double, Eigen::Dynamic, 1> &data, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &Cov);
+	int size ();
 	void fusion(const DataModel& data2);
 	void safeFusion(const DataModel& data2);
 	DataModel operator+(const DataModel& data2) const;

@@ -47,6 +47,12 @@ DataModel::DataModel(Eigen::Matrix< double, Eigen::Dynamic, 1  >& data, Eigen::M
 }
 
 
+int DataModel::size()
+{
+    return (this->data.rows());
+
+}
+
 
 void DataModel::fusion(const DataModel& data2)
 {
