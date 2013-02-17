@@ -11,6 +11,7 @@
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
+#include <Eigen/Cholesky> /** For the Cholesky decomposition **/
 #include <boost/circular_buffer.hpp> /** For circular_buffer **/
 #include "DataModel.hpp" /** For the quantities models **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
@@ -48,7 +49,7 @@ namespace localization
 	DataModel acontact;
 	
 	/** Slip vector **/
-	DataModel slipModel, slipInertial, slipError;
+	DataModel slipModel, slipVector, slipError;
 	
 	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
 	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
@@ -178,6 +179,28 @@ namespace localization
 	*
 	*/
 	Eigen::Matrix <double,NUMAXIS,1> getSlipVector(const unsigned int wheel_idx);
+	
+	/**
+	* @brief Gets rover slip vector
+	* 
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the complete slip vector
+	*
+	*/
+	Eigen::Matrix <double,SLIP_VECTOR_SIZE,1> getSlipVector();
+	
+	/**
+	* @brief Gets rover slip vector Covariance
+	* 
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @return the complete slip vector cov matrix
+	*
+	*/
+	Eigen::Matrix <double,SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> getSlipVectorCov();
 	
 	/**
 	* @brief Gets rover slip error vector
@@ -378,6 +401,42 @@ namespace localization
 	* 
 	*/
 	void toSlipInfo (localization::SlipInfo &sinfo);
+	
+	/**
+	* @brief Computes the Bhattacharyya coefficient
+	* 
+	* @return BC
+	* 
+	*/
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> bhattacharyya (DataModel &data1, DataModel &data2);
+	
+	/**
+	* @brief Computes the Mahalanobis distance
+	* 
+	* @return MH
+	* 
+	*/
+	double mahalanobis (DataModel &data1);
+	
+	/**
+	* @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
+	*/
+	double getWaveLenghtFromValue (const double value, const double max, const double min);
+
+	/**
+	* @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
+	*/
+	Eigen::Matrix<double, 3, 1> waveLenghtToColor (const double wavelength);
+	
+	/**
+	* @brief Convert data value in the range of MinValues..MaxValues
+	*/
+	Eigen::Matrix<double, 3, 1> waveLenghtToColorv2 (const double wavelength);
+
+	/**
+	* @brief 
+	*/
+	Eigen::Matrix<double, 3, 1> valueToColor (const double value, const double max, const double min);
 	
 	
 	/**
