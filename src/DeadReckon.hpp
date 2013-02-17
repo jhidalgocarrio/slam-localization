@@ -44,9 +44,8 @@ namespace localization
 	 * @return void
 	 */
 	base::samples::RigidBodyState updatePose(Eigen::Matrix< double, NUMAXIS , 1  > linvelo, Eigen::Quaternion <double> delta_q,
-						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covlinvelo, Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covdelta_q,
-						     Eigen::Matrix< double, NUMAXIS , 1  > linvelo_error, Eigen::Quaternion <double> delta_qe,
-						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covlinvelo_error, Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covdelta_qe,
+						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covlinvelo,
+						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covdelta_q,
 						     base::Time timeStamp, double delta_t);
 
     };

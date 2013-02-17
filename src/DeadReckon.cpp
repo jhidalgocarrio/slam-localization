@@ -52,9 +52,8 @@ void DeadReckon::setInitPose(base::samples::RigidBodyState initPose)
 /** \Brief Performs the time integration of the delta pose updates.
 */
 base::samples::RigidBodyState DeadReckon::updatePose(Eigen::Matrix< double, NUMAXIS , 1  > linvelo, Eigen::Quaternion <double> delta_q,
-						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covlinvelo, Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covdelta_q,
-						     Eigen::Matrix< double, NUMAXIS , 1  > linvelo_error, Eigen::Quaternion <double> delta_qe,
-						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covlinvelo_error, Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covdelta_qe,
+						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covlinvelo,
+						     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > covdelta_q,
 						     base::Time timeStamp, double delta_t)
 {
     base::samples::RigidBodyState rbsDeltaPose, rbsBC; /** rbs form of the computation **/
@@ -64,7 +63,7 @@ base::samples::RigidBodyState DeadReckon::updatePose(Eigen::Matrix< double, NUMA
     vState.block<NUMAXIS,1>(0,1) = vState.block<NUMAXIS,1>(0,0); // move the previous state to the col(1)
 
     /** Update the internal variables with the new measurements **/
-    vState.block<NUMAXIS,1>(0,0) = linvelo + linvelo_error; // x,y and z
+    vState.block<NUMAXIS,1>(0,0) = linvelo; // x,y and z
 
     /** Calculate the delta position from velocity (dead reckoning) assuming constant acceleration **/
     rbsDeltaPose.position = ((delta_t/2.0) * (vState.block<3,1>(0,1) + vState.block<3,1>(0,0)));
