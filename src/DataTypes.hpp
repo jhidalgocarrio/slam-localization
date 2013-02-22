@@ -29,7 +29,15 @@ namespace localization
 	base::Vector3d bghat;
 	base::Vector3d bahat;
 	base::Matrix3d Hellinger;
+	base::Vector3d eacceleration;
 	double Mahalanobis;
+    };
+    
+    struct MeasurementGenerationInfo
+    {
+	base::Time time;
+	double wlsNavigation;
+	double wlsSlip;
     };
     
     struct SlipInfo

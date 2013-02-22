@@ -310,6 +310,9 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     
     this->Rencoders = Ren;
     
+    this->leastSquaredNavigation = std::numeric_limits<double>::quiet_NaN();
+    this->leastSquaredSlip = std::numeric_limits<double>::quiet_NaN();
+    
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
     std::cout<< "Ren is of size "<<Rencoders.rows()<<"x"<<Rencoders.cols()<<"\n";
@@ -395,7 +398,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getIntegrationWindowSize()
 double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
 					const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &W)
 {
-    double leastSquaresError = 0.00;
+    double leastSquaresError = std::numeric_limits<double>::quiet_NaN();
     Eigen::Matrix< double, NUMAXIS , 1  > velocity;
     Eigen::Matrix <double, SLIP_VECTOR_SIZE, 1> slip;
     Eigen::Matrix <double, NUMAXIS+(2*NUMBER_OF_WHEELS), NUMAXIS+(2*NUMBER_OF_WHEELS)> Iinverse;
@@ -460,12 +463,23 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     Iinverse = (A.transpose() * (R.inverse()) * A).inverse();
     
     Eigen::Matrix<double, 1,1> squaredError = (((A*x - b).transpose() * R * (A*x - b)));
+    Eigen::Matrix<double, 2*NUMAXIS, NUMBER_OF_WHEELS*(2*NUMAXIS)> idBlock;
+    for (register unsigned int i=0; i<NUMBER_OF_WHEELS;i++)
+    {
+	idBlock.block<2*NUMAXIS, 2*NUMAXIS>(0,i*(2*NUMAXIS)).setIdentity();// = Eigen::Matrix<double, 2*NUMAXIS, 2*NUMAXIS>::Identity();
+    }
+    
+    Eigen::Matrix<double, 2*NUMAXIS,1> vectorError = (idBlock * (R * (A*x - b)));
     
     if (b.norm() != 0.00)
 	leastSquaresError = sqrt(squaredError[0]) / b.norm();
     #ifdef DEBUG_PRINTS
+    std::cout << "[NK] Identity 6x24:\n" << idBlock << std::endl;
     std::cout << "[NK] The relative error is:\n" << leastSquaresError << std::endl;
     std::cout << "[NK] The absolute squared error is:\n" << squaredError << std::endl;
+    std::cout << "[NK] The vector error is:\n" << vectorError << std::endl;
+    std::cout << "[NK] The vector error/norm is:\n" << vectorError/b.norm() << std::endl;
+    std::cout << "[NK] The sqrt(vectorerror)/norm is:\n" << vectorError.array().cwiseSqrt()/b.norm() << std::endl;
     std::cout << "[NK] The solution is:\n" << x << std::endl;
     std::cout << "[NK] The uncertainty is:\n" << Iinverse << std::endl;
     #endif
@@ -483,8 +497,6 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     
     /** Compute the increment in velocity **/
     increVelModel = velModel - prevVelModel;
-//     increVelModel.data = velModel.data - prevVelModel.data;
-//     increVelModel.Cov = velModel.Cov;
     
     /** Set the prev value to the actual one for the next iteration **/
     prevVelModel = velModel;
@@ -502,13 +514,15 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     acontact.data = x.block<NUMBER_OF_WHEELS,1>(NUMAXIS+NUMBER_OF_WHEELS,0);
     acontact.Cov = Iinverse.bottomRightCorner<NUMBER_OF_WHEELS,NUMBER_OF_WHEELS>();
     
+    this->leastSquaredNavigation = leastSquaresError;
+    
     return leastSquaresError;
 }
 
 double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
 				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R)
 {
-    double leastSquaresError = 0.00;
+    double leastSquaresError = std::numeric_limits<double>::quiet_NaN();
     
     /** Navigation Vectors **/
     Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > x;
@@ -592,6 +606,8 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     std::cout << "[SK] SlipError(+) is:\n" << slipVector.data + slipModel.data << std::endl;
     #endif
     
+    this->leastSquaredSlip = leastSquaresError;
+    
     return leastSquaresError;
 
 }
@@ -607,6 +623,15 @@ void Measurement::toSlipInfo(SlipInfo& sinfo)
     
     return;
 }
+
+void Measurement::toMeasurementGenerationInfo(MeasurementGenerationInfo& measurementInfo)
+{
+    measurementInfo.wlsNavigation = this->leastSquaredNavigation;
+    measurementInfo.wlsSlip = this->leastSquaredSlip;
+
+    return;
+}
+
 
 
 /**

@@ -63,6 +63,12 @@ namespace localization
 	/** Array of past rover velocity model **/
 	Eigen::Matrix <double,NUMAXIS,1> cbVelModel;
 	
+	/** Least squared error of the navigation kinematics **/
+	double leastSquaredNavigation;
+	
+	/** Least squared error of the slip kinematics **/
+	double leastSquaredSlip;
+	
 	boost::circular_buffer<double> testAcc;
 	
     public:
@@ -401,6 +407,19 @@ namespace localization
 	* 
 	*/
 	void toSlipInfo (localization::SlipInfo &sinfo);
+	
+	
+	/**
+	* @brief Save some useful measurement generation info.
+	* 
+	* 
+	* @param[out] measurementinfo some debung info the measurement generation
+	* 
+	* @return void
+	* 
+	*/
+	void toMeasurementGenerationInfo (localization::MeasurementGenerationInfo &measurementInfo);
+
 	
 	/**
 	* @brief Computes the Bhattacharyya coefficient
