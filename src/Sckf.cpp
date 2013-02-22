@@ -343,6 +343,7 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     evelstep = 1;
     evelocity<<0.00, 0.00, 0.00;
     evelocity_cov.setZero();
+    filtered_evelocity.setZero();
 //     evelocity = DataModel(NUMAXIS);
     
     /** Default initial bias **/
@@ -740,7 +741,11 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     eposition = eposition + xki_k.block<NUMAXIS, 1> (0,0);
     
     /** Update the velocity error **/
-    evelocity = evelocity + xki_k.block<NUMAXIS, 1> (NUMAXIS,0);
+//     evelocity = evelocity + xki_k.block<NUMAXIS, 1> (NUMAXIS,0);
+    
+    double Tc = 1.0/5.0;
+    filtered_evelocity.col(0) = filtered_evelocity.col(1) + (dt/Tc) * (evelocity - filtered_evelocity.col(1));    
+    
 //     evelocity.Cov = Pki_k.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS);
     
     /** Correct the velocity **/
@@ -1004,7 +1009,7 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     Mahalanobis = filtermeasurement.mahalanobis(increVeloError);
     
     /** Compute the Bhattacharyya distance **/
-//     Eigen::Matrix<double, NUMAXIS, NUMAXIS> BC;
+    Eigen::Matrix<double, NUMAXIS, NUMAXIS> BC;
     
     /*BC = filtermeasurement.bhattacharyya(delta_veloIMU, delta_VeloModel);
     std::cout<< "[Measurement] Bhattacharyya coeff IMU-Model(function):\n"<<M<<"\n";
@@ -1012,49 +1017,77 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     HellingerI_M = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;*/
     
     /** DANGER **/
-/*    BC = filtermeasurement.bhattacharyya(delta_veloIMU, increVeloError);
+    BC = filtermeasurement.bhattacharyya(delta_veloIMU, increVeloError);
     
-    Hellinger = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;*/
+    Hellinger = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;
     /** DANGER **/
     
-    /** Estimate if there is statictical significant difference for the incremental velocity error **/
-    Eigen::Matrix<double, Eigen::Dynamic, 1> eigen_values;
-    Eigen::JacobiSVD <Eigen::MatrixXd > svdOfCov(increVeloError.Cov, Eigen::ComputeThinU); //!SVD
     
-    /** Eigen values are the axis of the ellipsoid **/
-    eigen_values.resize(increVeloError.data.rows());
-    eigen_values = svdOfCov.singularValues();
+//     /** Estimate if there is statictical significant difference for the incremental velocity error **/
+//     Eigen::Matrix<double, Eigen::Dynamic, 1> eigen_values;
+//     Eigen::JacobiSVD <Eigen::MatrixXd > svdOfCov(increVeloError.Cov, Eigen::ComputeThinU); //!SVD
+//     
+//     /** Eigen values are the axis of the ellipsoid **/
+//     eigen_values.resize(increVeloError.data.rows());
+//     eigen_values = svdOfCov.singularValues();
+//     
+//     for (register int i=0; i < eigen_values.rows();++i)
+//     {
+// 	/** If the 3-sigma is bigger that the difference, discard the measurement **/
+// 	if (1.0 * sqrt(eigen_values[i]) > fabs(increVeloError.data[i]))
+// 	{
+// 	    velo_error[i] = 0.00;
+// 	    vel_errorCov.row(i).setZero();
+// 	    vel_errorCov.col(i).setZero();
+// 	}
+// 	else
+// 	{
+// 	    velo_error[i] = increVeloError.data[i];
+// 	    vel_errorCov.row(i) = increVeloError.Cov.row(i);
+// 	    vel_errorCov.col(i) = increVeloError.Cov.col(i);
+// 	}
+// 	    
+//     }
     
-    for (register int i=0; i < eigen_values.rows();++i)
-    {
-	/** If the 3-sigma is bigger that the difference, discard the measurement **/
-	if (1.0 * sqrt(eigen_values[i]) > fabs(increVeloError.data[i]))
-	{
-	    velo_error[i] = 0.00;
-	    vel_errorCov.row(i).setZero();
-	    vel_errorCov.col(i).setZero();
-	    
-	    /** Experimental **/
-	    #ifdef DEBUG_PRINTS
-	    std::cout<< "[Update Reset] evelocity_goes_zero\n";
-	    #endif
-	    this->evelocity[i] = 0.00;
-	    this->evelocity_cov.col(i).setZero();
-	    this->evelocity_cov.row(i).setZero();
-	}
-	else
-	{
-	    velo_error[i] = increVeloError.data[i];
-	    vel_errorCov.row(i) = increVeloError.Cov.row(i);
-	    vel_errorCov.col(i) = increVeloError.Cov.col(i);
-	}
-	    
-    }
+    
+//     Eigen::Matrix<double, NUMAXIS, 1> velrange, modelrange;
+//     velrange = delta_veloIMU.Cov.diagonal().array().cwiseSqrt();
+//     velrange[0] = velrange[0] * 2.0;
+//     modelrange= delta_VeloModel.Cov.diagonal().array().cwiseSqrt();
+//     
+//     
+//     #ifdef DEBUG_PRINTS
+//     std::cout<< "[Measurement] velrange:\n"<<velrange<<"\n";
+//     #endif
+//     
+//     for (register int i=0; i < NUMAXIS;++i)
+//     {
+// 	if (delta_veloIMU.data[i] <= velrange[i])
+// 	{
+// 	    velo_error[i] = 0.00;
+// 	    vel_errorCov.row(i).setZero();
+// 	    vel_errorCov.col(i).setZero();
+// 	 
+// // 	    if (delta_VeloModel.data[i] <= modelrange[i])
+// // 	    {
+// // 		/** Experimental **/
+// // 		#ifdef DEBUG_PRINTS
+// // 		std::cout<< "[Update Reset] evelocity_goes_zero ["<<i<<"]\n";
+// // 		#endif
+// // 		this->evelocity[i] = 0.00;
+// // 		this->evelocity_cov.col(i).setZero();
+// // 		this->evelocity_cov.row(i).setZero();
+// // 	    }
+// 	}
+//     }
     
     /** DANGER **/
     
-//     velo_error = increVeloError.data;
-//     vel_errorCov =  increVeloError.Cov;
+    velo_error = Hellinger * increVeloError.data;
+    vel_errorCov =  increVeloError.Cov;
+    
+    evelocity = evelocity + velo_error;
+    
 //     
 //     
 //     for (register int i=0; i < Hellinger.rows();++i)
@@ -1195,7 +1228,8 @@ void Sckf::resetStateVector()
 
 Eigen::Matrix <double,NUMAXIS,1> Sckf::getVeloError()
 {
-    return evelocity;
+//     return evelocity;
+    return filtered_evelocity.col(0);
 }
 
 
@@ -1208,8 +1242,9 @@ Eigen::Matrix <double,NUMAXIS,1> Sckf::getVelocity()
 /**
 * @brief Save the current filter status
 */
-void Sckf::toFilterInfo(localization::FilterInfo &finfo)
+void Sckf::toFilterInfo(localization::FilterInfo &finfo, double dt)
 {
+    
     finfo.xki_k = this->xki_k;
     finfo.Pki_k = this->Pki_k;
     finfo.K = this->K;
@@ -1223,9 +1258,18 @@ void Sckf::toFilterInfo(localization::FilterInfo &finfo)
     finfo.evelocity_cov = this->evelocity_cov;
     finfo.bghat = this->bghat;
     finfo.bahat = this->bahat;
+    Eigen::VectorXd aux(2);
+    aux = filtered_evelocity.row(0);
+    finfo.eacceleration[0] = Measurement::finiteDifference(aux, dt);
+    aux = filtered_evelocity.row(1);
+    finfo.eacceleration[1] = Measurement::finiteDifference(aux, dt);
+    aux = filtered_evelocity.row(2);
+    finfo.eacceleration[2] = Measurement::finiteDifference(aux, dt);
     finfo.Hellinger = this->Hellinger;
     finfo.Mahalanobis = this->Mahalanobis;
     
+    /** For next step **/
+    filtered_evelocity.col(1) = filtered_evelocity.col(0);
     
     return;
 }

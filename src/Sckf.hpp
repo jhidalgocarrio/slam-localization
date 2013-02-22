@@ -89,6 +89,7 @@ namespace localization
 	unsigned int evelstep;
 	Eigen::Matrix <double,NUMAXIS,1> evelocity; /** Velocity error */
 	Eigen::Matrix <double,NUMAXIS, NUMAXIS> evelocity_cov; /** Velocity error covariance matrix **/
+	Eigen::Matrix <double,NUMAXIS,2> filtered_evelocity; /** Previous Velocity error */
 // 	DataModel evelocity; /** Velocity error */
 
 	Eigen::Matrix<double, NUMAXIS, NUMAXIS> Hellinger; /** Hellinger coefficient **/
@@ -454,7 +455,7 @@ namespace localization
 	* Save the current filter status in FilterInfo form
 	* 
 	*/
-	void toFilterInfo(localization::FilterInfo &finfo);
+	void toFilterInfo(localization::FilterInfo &finfo, double dt);
 	 
     };
     
