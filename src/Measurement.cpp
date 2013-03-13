@@ -26,7 +26,6 @@ using namespace Eigen;
 Measurement::Measurement()
 {
 
-    this->testAcc = boost::circular_buffer<double>(2);
 }
 
 /**
@@ -170,7 +169,7 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > Measurement::getContactAnglesVelocit
 */
 void Measurement::setCurrentVeloModel(Eigen::Matrix< double, NUMAXIS , 1  > &velocity)
 {
-    this->cbVelModel = velocity;
+    this->velModel.data = velocity;
 }
 
 /**
@@ -179,7 +178,7 @@ void Measurement::setCurrentVeloModel(Eigen::Matrix< double, NUMAXIS , 1  > &vel
 Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
 {
     
-    return this->cbVelModel;
+    return this->velModel.data;
 }
 
 /**
@@ -303,15 +302,45 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     cbAcc.setZero();
     cbAngvelo.setZero();
     
-    /** Resize the circular buffer for the velocities model **/
-    cbVelModel.setZero();
-    
-    testAcc.set_capacity(INTEGRATION_XAXIS_WINDOW_SIZE);
-    
     this->Rencoders = Ren;
     
+    /** Set the size of the Filter coeffcients **/
+    besselBCoeff.resize(localization::NORDER_BESSEL_FILTER+1, 1);
+    besselACoeff.resize(localization::NORDER_BESSEL_FILTER+1, 1);
+    
+    /** IIR filter coefficients **/ /** TO_DO: move to method a argument **/
+    besselBCoeff[0] = 0.00467048;
+    besselBCoeff[1] = 0.03736385;
+    besselBCoeff[2] = 0.13077349;
+    besselBCoeff[3] = 0.26154698;
+    besselBCoeff[4] = 0.32693372;
+    besselBCoeff[5] = 0.26154698;
+    besselBCoeff[6] = 0.13077349;
+    besselBCoeff[7] = 0.03736385;
+    besselBCoeff[8] = 0.00467048;
+    
+    besselACoeff[0] = 1.00000000e+00;
+    besselACoeff[1] = -3.87747570e-01;
+    besselACoeff[2] = 7.13520818e-01;
+    besselACoeff[3] = -2.49594003e-01;
+    besselACoeff[4] = 1.47736180e-01;
+    besselACoeff[5] = -3.59003821e-02;
+    besselACoeff[6] = 8.56259334e-03;
+    besselACoeff[7] = -9.97047726e-04;
+    besselACoeff[8] = 6.27404353e-05;
+         
+    /** Initialize the initial LS-Error **/
     this->leastSquaredNavigation = std::numeric_limits<double>::quiet_NaN();
     this->leastSquaredSlip = std::numeric_limits<double>::quiet_NaN();
+    
+    /** Set the size for the Velocity model array buffer **/
+    this->cbVelModel.resize(NUMAXIS, localization::NORDER_BESSEL_FILTER+1);
+    this->cbIIRVelModel.resize(NUMAXIS, localization::NORDER_BESSEL_FILTER+1);
+    
+    /** Initialize the VelModel array **/
+    this->cbVelModel.setZero();
+    this->cbIIRVelModel.setZero();
+    
     
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
@@ -321,6 +350,10 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     std::cout<< "acontact:\n"<<acontact<<"\n";
     std::cout<< "Rcontact is of size "<<acontact.Cov.rows()<<"x"<<acontact.Cov.cols()<<"\n";
     std::cout<< "Rcontact:\n"<<acontact.Cov<<"\n";
+    std::cout<< "besselBCoeff is of size "<<besselBCoeff.rows()<<"x"<<besselBCoeff.cols()<<"\n";
+    std::cout<< "besselBCoeff:\n"<<besselBCoeff<<"\n";
+    std::cout<< "besselACoeff is of size "<<besselACoeff.rows()<<"x"<<besselACoeff.cols()<<"\n";
+    std::cout<< "besselACoeff:\n"<<besselACoeff<<"\n";
     #endif
 }
 
@@ -484,15 +517,30 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     std::cout << "[NK] The uncertainty is:\n" << Iinverse << std::endl;
     #endif
     
-    /** Save the velocity model results **/
+    /** Set the current velocity model **/
     velocity = x.block<NUMAXIS,1>(0,0);
+    
+    /** Copy to the array **/
+    cbVelModel.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,0) = cbVelModel.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,1);
+    cbVelModel.col(localization::NORDER_BESSEL_FILTER) = velocity;
+    
+    /** IIR Low-pass Bessel Filter **/
+    velocity = Measurement::iirFilter(localization::NORDER_BESSEL_FILTER, besselBCoeff, besselACoeff, cbVelModel, cbIIRVelModel);
+   
+    /** Store in the DataModel variables **/
     velModel.data = velocity;
     velModel.Cov = pow(leastSquaresError,2) * Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() +  Iinverse.block<NUMAXIS, NUMAXIS> (0,0);
-    setCurrentVeloModel(velocity);
+    
+    /** Move back one column for the next iteration **/
+    cbIIRVelModel.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,0) = cbIIRVelModel.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,1);
     
     #ifdef DEBUG_PRINTS
     std::cout << "[NK] velModel.data:\n" << velModel.data << std::endl;
     std::cout << "[NK] velModel.Cov:\n" << velModel.Cov << std::endl;
+    std::cout << "[NK] cbVelModel is of size "<< cbVelModel.rows()<<"x"<<cbVelModel.cols()<<"\n";
+    std::cout << "[NK] The cbVelModel is:\n" << cbVelModel << std::endl;
+    std::cout << "[NK] cbIIRVelModel is of size "<< cbIIRVelModel.rows()<<"x"<<cbIIRVelModel.cols()<<"\n";
+    std::cout << "[NK] The cbIIRVelModel is:\n" << cbIIRVelModel << std::endl;
     #endif
     
     /** Compute the increment in velocity **/
@@ -615,7 +663,7 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
 /**
 * @brief Save slip info to the Orogen-compatible DataType
 */
-void Measurement::toSlipInfo(SlipInfo& sinfo)
+void Measurement::toSlipInfo(localization::SlipInfo &sinfo)
 {
 
     sinfo.slip_vector = slipVector.data;

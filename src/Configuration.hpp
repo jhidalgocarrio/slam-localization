@@ -95,6 +95,8 @@ namespace localization
     
     static const unsigned int SLIP_VECTOR_SIZE = NUMAXIS * NUMBER_OF_WHEELS; /** Size of slip vector of the mobil robot **/
     
+    static const unsigned int NORDER_BESSEL_FILTER = 8; /** Order of the IIR Bessel filter **/
+    
 }
 
 #endif // 

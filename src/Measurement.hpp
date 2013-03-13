@@ -12,10 +12,13 @@
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
 #include <Eigen/Cholesky> /** For the Cholesky decomposition **/
-#include <boost/circular_buffer.hpp> /** For circular_buffer **/
+
+
+/** Localization library  headers **/
 #include "DataModel.hpp" /** For the quantities models **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 #include "DataTypes.hpp" /** Orogen compatible export data types **/
+
 
 namespace localization	
 {
@@ -28,6 +31,12 @@ namespace localization
 	
     private:
 
+	/** Least squared error of the navigation kinematics **/
+	double leastSquaredNavigation;
+	
+	/** Least squared error of the slip kinematics **/
+	double leastSquaredSlip;
+	
 	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> Rencoders; /** Measurement noise convariance matrix for joint velocities */
 	
 	/** Linear and angular velocities (from IMU) **/
@@ -38,6 +47,21 @@ namespace localization
 	
 	/** Offset quaternion to set the uneven weight distribution of the rover **/
 	Eigen::Quaternion <double> q_weight_distribution;
+	
+	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
+	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
+	
+	/** Translation distances for the accelerometers w.r.t to rover body **/
+	Eigen::Matrix <double,NUMAXIS,1> eccx, eccy, eccz; /** Accelerometers excentricity with respect to the body center of the robot **/
+	
+	/** Vector of accelerations for integral method **/
+	Eigen::Matrix <double,NUMAXIS,1> cbAcc, cbAngvelo;
+	
+	/** IIR Bessel filter Coefficients **/
+	Eigen::Matrix <double, Eigen::Dynamic, 1> besselBCoeff, besselACoeff;
+	
+	/** Array of past rover velocity model **/
+	Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> cbVelModel, cbIIRVelModel;
 	
 	/** Velocity model from navigation kinematics **/
 	DataModel velModel, prevVelModel;
@@ -51,25 +75,6 @@ namespace localization
 	/** Slip vector **/
 	DataModel slipModel, slipVector, slipError;
 	
-	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
-	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
-	
-	/** Translation distances for the accelerometers w.r.t to rover body **/
-	Eigen::Matrix <double,NUMAXIS,1> eccx, eccy, eccz; /** Accelerometers excentricity with respect to the body center of the robot **/
-	
-	/** Circular Vector of accelerations for integral method **/
-	Eigen::Matrix <double,NUMAXIS,1> cbAcc, cbAngvelo;
-	
-	/** Array of past rover velocity model **/
-	Eigen::Matrix <double,NUMAXIS,1> cbVelModel;
-	
-	/** Least squared error of the navigation kinematics **/
-	double leastSquaredNavigation;
-	
-	/** Least squared error of the slip kinematics **/
-	double leastSquaredSlip;
-	
-	boost::circular_buffer<double> testAcc;
 	
     public:
 	
@@ -609,6 +614,48 @@ namespace localization
 		std::cout << "[Difference] Negative velocity!!\n";
 
 	    return result;
+	};
+	
+	/**
+	* @brief IIR filter
+	*
+	* Infinite Impulse Response (IIR) Filter for a Eigen Vector
+	*
+	* @author Javier Hidalgo Carrio.
+	*
+	* @param[in] norder integer number with the filter order
+	* @param[in] b array of feedforward filter coefficients
+	* @param[in] a array of feedback filter coefficients
+	* @param[in] x array of inputs
+	* @param[in] y array of outputs
+	*
+	* @return double with the result y[n]
+	*
+	*/
+	static Eigen::Matrix <double, Eigen::Dynamic, 1> iirFilter (const unsigned int norder,
+				    const Eigen::Matrix <double, Eigen::Dynamic, 1> &b, const Eigen::Matrix <double, Eigen::Dynamic, 1> &a,
+				    const Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> &x, Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> &y)
+	{
+	    int i=norder;
+	    
+	    std::cout<<"Filter n.cols:"<<x.cols()<<" n.cols:"<<y.cols()<<"\n";
+	    
+	    if ((x.cols() >= norder+1) && (y.cols() >= norder+1))
+	    {
+		std::cout<<"Performing filter\n";
+		/** Perform the filter **/
+		y.col(i) = 1.0/a[0] * (b[0]*x.col(i) + b[1]*x.col(i-1) + b[2]*x.col(i-2)
+				    + b[3]*x.col(i-3) + b[4]*x.col(i-4) + b[5]*x.col(i-5)
+				    + b[6]*x.col(i-6) + b[7]*x.col(i-7) + b[8]*x.col(i-8)
+				    - a[1]*y.col(i-1) - a[2]*y.col(i-2)
+				    - a[3]*y.col(i-3) - a[4]*y.col(i-4)
+				    - a[5]*y.col(i-5) - a[6]*y.col(i-6)
+				    - a[7]*y.col(i-7) - a[8]*y.col(i-8));
+	    }
+	    
+	    std::cout<<"[IIR]Result:\n"<<y.col(i)<<"\n";
+	    
+	    return y.col(i);
 	};
 	  
     }; //end of measurement class
