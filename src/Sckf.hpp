@@ -10,6 +10,8 @@
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
+
+/** Localization library headers **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 #include "Measurement.hpp" /** For the Measurement Generation module of the framework **/
 
@@ -91,6 +93,9 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS, NUMAXIS> evelocity_cov; /** Velocity error covariance matrix **/
 	Eigen::Matrix <double,NUMAXIS,2> filtered_evelocity; /** Previous Velocity error */
 // 	DataModel evelocity; /** Velocity error */
+
+	/** Slip detector **/
+	Eigen::Matrix <double,NUMAXIS,1> slipdetector; /** Rover slippage detector */
 
 	Eigen::Matrix<double, NUMAXIS, NUMAXIS> Hellinger; /** Hellinger coefficient **/
 	double Mahalanobis; /** Mahalanobis distance **/

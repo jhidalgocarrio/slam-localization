@@ -30,6 +30,7 @@ namespace localization
 	base::Vector3d bahat;
 	base::Matrix3d Hellinger;
 	base::Vector3d eacceleration;
+	base::Vector3d slipdetector;
 	double Mahalanobis;
     };
     

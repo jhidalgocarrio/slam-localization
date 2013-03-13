@@ -741,15 +741,36 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     eposition = eposition + xki_k.block<NUMAXIS, 1> (0,0);
     
     /** Update the velocity error **/
-//     evelocity = evelocity + xki_k.block<NUMAXIS, 1> (NUMAXIS,0);
+    evelocity = evelocity + xki_k.block<NUMAXIS, 1> (NUMAXIS,0);
     
     double Tc = 1.0/5.0;
     filtered_evelocity.col(0) = filtered_evelocity.col(1) + (dt/Tc) * (evelocity - filtered_evelocity.col(1));    
     
-//     evelocity.Cov = Pki_k.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS);
-    
     /** Correct the velocity **/
     velocity = filtermeasurement.getCurrentVeloModel() + evelocity;
+    
+    /** Slip detector **/
+    slipdetector = Eigen::Matrix<double,NUMAXIS,1>::Ones()*std::numeric_limits<double>::quiet_NaN();
+    double cov = this->Pki_k(3,3);
+    
+    if (fabs(filtered_evelocity.col(0)[0] - filtered_evelocity.col(1)[0]) > fabs(2.0*sqrt(cov)))
+    {
+	#ifdef DEBUG_PRINTS
+	std::cout<< "[Update] Slip detected in X axis: "<<filtered_evelocity.col(0)[0] - filtered_evelocity.col(1)[0]<<" cov:"<<fabs(sqrt(cov))<<"\n";
+	#endif
+	slipdetector[0] = filtered_evelocity.col(0)[0];
+	
+    }
+	
+    cov = this->Pki_k(4,4);
+    
+    if (fabs(filtered_evelocity.col(0)[1] - filtered_evelocity.col(1)[1]) > fabs(2.0*sqrt(cov)))
+    {
+	#ifdef DEBUG_PRINTS
+	std::cout<< "[Update] Slip detected in Y axis: "<<filtered_evelocity.col(0)[1] - filtered_evelocity.col(1)[1]<<" cov:"<<fabs(sqrt(cov))<<"\n";
+	#endif
+	slipdetector[1] = filtered_evelocity.col(0)[1];
+    }
     
     /** Update the bias with the bias error **/
     bghat = bghat + xki_k.block<NUMAXIS, 1> (3*NUMAXIS,0);
@@ -1086,10 +1107,9 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     velo_error = Hellinger * increVeloError.data;
     vel_errorCov =  increVeloError.Cov;
     
-    evelocity = evelocity + velo_error;
+//     evelocity = evelocity + velo_error;
     
-//     
-//     
+       
 //     for (register int i=0; i < Hellinger.rows();++i)
 //     {
 // 	if (Hellinger(i,i) < 0.68)
@@ -1267,6 +1287,7 @@ void Sckf::toFilterInfo(localization::FilterInfo &finfo, double dt)
     finfo.eacceleration[2] = Measurement::finiteDifference(aux, dt);
     finfo.Hellinger = this->Hellinger;
     finfo.Mahalanobis = this->Mahalanobis;
+    finfo.slipdetector = this->slipdetector;
     
     /** For next step **/
     filtered_evelocity.col(1) = filtered_evelocity.col(0);
