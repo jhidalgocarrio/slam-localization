@@ -40,6 +40,7 @@ namespace localization
 		
     private:
 	
+	/** **/
 	/** FILTER VARIABLES (UPPER CASE MATRICES, LOWER CASE VECTORS) **/
 	Eigen::Matrix <double,Eigen::Dynamic,1> xk_k; /** State vector Xk|k at the lastest extereoceptive measurement recorded */
 	Eigen::Matrix <double,Eigen::Dynamic,1> xki_k; /** State vector Xk+i|k at the lastest proprioceptive measurement recorded (Robot's current state) */
@@ -76,48 +77,43 @@ namespace localization
 	
 	Eigen::Matrix <double,Eigen::Dynamic,1> innovation; /** Internal variable of the filter innovation (zki - Hk*xki_k **/
 	
-	/** Velocity **/
-	Eigen::Matrix <double,NUMAXIS,1> velocity; /** Rover Velocity */
-	
+	/** Adaptive external acceleration variables **/
+	unsigned int r1count; /** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
+	double r2count; /** Variable used in the adaptive algorithm, to compute the final Qstart cov. matrix*/
+		
 	/** Attitude **/
 	Eigen::Quaternion <double> q4;  /** Current robot attitude quaternion (integration) */
 	Eigen::Quaternion <double> prev_q4;  /** Previous robot attitude quaternion (integration) (for computing the delta quaternion) */
 	Eigen::Matrix <double,QUATERSIZE, QUATERSIZE> oldomega4; /** Quaternion integration matrix */
 	
-	/** Tilde position **/
-	Eigen::Matrix <double,NUMAXIS,1> eposition; /** Position error */
+	/** **/
+	/** NAVIGATION ERROR VARIABLES (error in position, velocity and attitude as well as sensors bias) **/
+	Eigen::Matrix <double,NUMAXIS,1> eposition; /** Position error from filter state*/
 	
 	/** Tilde velocity **/
-	unsigned int evelstep;
 	Eigen::Matrix <double,NUMAXIS,1> evelocity; /** Velocity error */
 	Eigen::Matrix <double,NUMAXIS, NUMAXIS> evelocity_cov; /** Velocity error covariance matrix **/
 	Eigen::Matrix <double,NUMAXIS,2> filtered_evelocity; /** Previous Velocity error */
-// 	DataModel evelocity; /** Velocity error */
 
+	/** Inertial Sensor bias **/
+	Eigen::Matrix <double,NUMAXIS,1> bghat; /** Estimated bias for gyroscope */
+	Eigen::Matrix <double,NUMAXIS,1> bahat; /** Estimated bias for accelerometer */
+	
+	/** **/
+	/** EXTRA VARIABLES **/
+	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
+	Eigen::Matrix <double,NUMAXIS,1> mtilde; /** Magnetic dip angle in world frame */
+	
 	/** Slip detector **/
 	Eigen::Matrix <double,NUMAXIS,1> slipdetector; /** Rover slippage detector */
 
 	Eigen::Matrix<double, NUMAXIS, NUMAXIS> Hellinger; /** Hellinger coefficient **/
 	double Mahalanobis; /** Mahalanobis distance **/
-
-	/** For the attitude computation **/
-	Eigen::Matrix <double,NUMAXIS,1> gtilde; /** gravitation acceleration in world frame */
-	Eigen::Matrix <double,NUMAXIS,1> mtilde; /** Magnetic dip angle in world frame */
-	Eigen::Matrix <double,NUMAXIS,1> bghat; /** Estimated bias for gyroscope */
-	Eigen::Matrix <double,NUMAXIS,1> bahat; /** Estimated bias for accelerometer */
 	
-	/** Adaptive external acceleration variables **/
-	unsigned int r1count; /** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
-	double r2count; /** Variable used in the adaptive algorithm, to compute the final Qstart cov. matrix*/
-	
-// 	/** Vel model at k-1 **/
-// 	DataModel veloModelk_1, veloTruth;
-// 	DataModel increVeloError;
-	
-	/** MEASUREMENT GENERATION **/
     public:
-	/** Object of the measurement class **/
-	Measurement filtermeasurement;
+	
+	/** Objects of the measurement class **/
+	Measurement measurement; /** Proprioceptive measurement variable **/
 	
     public:
 
@@ -410,16 +406,27 @@ namespace localization
 		  Eigen::Matrix< double, NUMAXIS , 1  >& acc,Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off);
 	
 	
+	
+	/**
+	* @brief It perform the gyroscopes integration to compute the attitude
+	* 
+	* It computes the quaternion integration in discrete form.
+	* 
+	* @param[in] u vector with the angular velocity
+	* @param[in] v vector with the acceleration
+	* @param[in] dt delta time between samples
+	* 
+	*/
+	void attitudeMeasurement (Eigen::Matrix <double,NUMAXIS,1>  &u, Eigen::Matrix <double,NUMAXIS,1>  &v, double dt);
+	    
 	/**
 	* @brief It calls the measurement class to perform the proprioceptive measurement.
 	* 
 	* It computes the nav kinematics and slip kinematics
 	* 
 	*/
-	void measurementGeneration (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bnav,
-				    const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bslip,
-				    const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1> &slip_error,
-				    Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> &slip_errorCov, double dt);
+	void motionModel (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bnav,
+				    const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, double dt);
 	
 	/**
 	* @brief It calls the measurement class to perform the proprioceptive measurement.

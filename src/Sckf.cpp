@@ -340,7 +340,6 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     eposition<<0.00, 0.00, 0.00;
     
     /** Default initial velocity errors **/
-    evelstep = 1;
     evelocity<<0.00, 0.00, 0.00;
     evelocity_cov.setZero();
     filtered_evelocity.setZero();
@@ -403,6 +402,86 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
 }
 
 /**
+* @brief It perform the gyroscopes integration to compute the attitude
+*/
+void Sckf::attitudeMeasurement(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< double, NUMAXIS , 1  >& v, double dt)
+{
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> velo2product; /** Vec 2 product  matrix */
+    Eigen::Matrix <double,NUMAXIS,NUMAXIS> acc2product; /** Vec 2 product  matrix */
+    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
+    Eigen::Matrix <double,NUMAXIS,1> linacc; /** Linear acceleration */
+    Eigen::Matrix <double,NUMAXIS,1> gtilde_body; /** Gravitation in the body frame */
+    Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4; /** Quaternion integration matrix */
+    Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
+    
+    /** Compute the cross product matrix with the angular velocity **/
+    angvelo = u - bghat; /** Eliminate the Bias **/
+    
+    /** In cross product form **/
+    velo2product << 0, -angvelo(2), angvelo(1),
+		angvelo(2), 0, -angvelo(0),
+		-angvelo(1), angvelo(0), 0;
+		
+    /** Create the orientation matrix from the quaternion (q_body2world) **/
+    Quaternion2DCM (&q4, &Cq);
+    
+    /** Calculate the gravity vector in the body frame **/
+    gtilde_body = Cq * gtilde;
+		
+    /** Compute the cross product matrix with the linear acceleration **/
+    linacc = v - bahat - gtilde_body; /** Eliminate the Bias and the local gravity vector **/
+
+    omega4 << 0,-angvelo(0), -angvelo(1), -angvelo(2),
+	    angvelo(0), 0, angvelo(2), -angvelo(1),
+	    angvelo(1), -angvelo(2), 0, angvelo(0),
+	    angvelo(2), angvelo(1), -angvelo(0), 0;
+	    
+    /** Copy the quaternion in the previous one before performing the rotation given by the gyros **/
+    prev_q4 = q4;
+	    
+    /** copy in a vector form **/
+    quat(0) = q4.w();
+    quat(1) = q4.x();
+    quat(2) = q4.y();
+    quat(3) = q4.z();
+
+    /** Quaternion integration **/
+    quat = (Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() +(0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
+    ((1/6) * angvelo.squaredNorm() * pow(dt,2) *  Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
+    ((1/24) * omega4 * oldomega4 * pow(dt,2)) - ((1/48) * angvelo.squaredNorm() * omega4 * pow(dt,3))) * quat;
+
+    /** Store in a quaternion form **/
+    q4.w() = quat(0);
+    q4.x() = quat(1);
+    q4.y() = quat(2);
+    q4.z() = quat(3);
+    q4.normalize();
+
+    /** Copy omega **/
+    oldomega4 = omega4;
+    
+    /** Store the corrected values in the proprioceptive measurement object **/
+    measurement.setInertialValues(linacc, angvelo);
+    
+     #ifdef DEBUG_PRINTS
+    std::cout<<"[Attitude] Inputs u:\n"<<u<<"\nv:\n"<<v<<"\n";
+    std::cout<<"[Attitude] angevelo:\n"<<angvelo<<"\n";
+    std::cout<<"[Attitude] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
+    std::cout<<"[Attitude] g in body_frame:\n"<<gtilde_body<<"\n";
+    std::cout<<"[Attitude] g in body_frame(quat):\n"<<q4*gtilde<<"\n";
+    std::cout<<"[Attitude] g in body_frame(quat.inverse):\n"<<q4.inverse()*gtilde<<"\n";
+    std::cout<<"[Attitude] g in body_frame(Rot):\n"<<q4.toRotationMatrix()*gtilde<<"\n";
+    std::cout<<"[Attitude] g in body_frame(Rot.inverse):\n"<<q4.toRotationMatrix().inverse()*gtilde<<"\n";
+    std::cout<<"[Attitude] g in world_frame(Cq.inverse):\n"<<Cq.inverse() * gtilde_body<<"\n";
+    std::cout<<"[Attitude] linacc:\n"<<linacc<<"\n";
+    #endif
+
+    
+    return;
+}
+
+/**
 * @brief Performs the prediction step of the filter.
 */
 void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< double, NUMAXIS , 1  >& v, double dt)
@@ -413,20 +492,17 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
     Eigen::Matrix <double,NUMAXIS,1> linacc; /** Linear acceleration */
     Eigen::Matrix <double,NUMAXIS,1> gtilde_body; /** Gravitation in the body frame */
-    Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4; /** Quaternion integration matrix */
-    Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
     Eigen::Matrix <double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE> dFki; /** Discrete System matrix */
     Eigen::Matrix <double,X_STATE_VECTOR_SIZE,X_STATE_VECTOR_SIZE> Qdk; /** Discrete Qk matrix */
 
     /** Compute the cross product matrix with the angular velocity **/
-    angvelo = u - bghat; /** Eliminate the Bias **/
-    filtermeasurement.setAngularVelocities(angvelo); /** Save it in the global variable **/
+    angvelo = u;// - bghat; /** Eliminate the Bias **/
 
     /** In cross product form **/
     velo2product << 0, -angvelo(2), angvelo(1),
 		angvelo(2), 0, -angvelo(0),
 		-angvelo(1), angvelo(0), 0;
-
+		
     /** Create the orientation matrix from the quaternion (q_body2world) **/
     Quaternion2DCM (&q4, &Cq);
     
@@ -434,18 +510,12 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     gtilde_body = Cq * gtilde;
 		
     /** Compute the cross product matrix with the linear acceleration **/
-    linacc = v - bahat - gtilde_body; /** Eliminate the Bias and the local gravity vector **/
-    filtermeasurement.setLinearAcceleration(linacc); /** Save it in the measurement **/
+    linacc = v;// - bahat - gtilde_body; /** Eliminate the Bias and the local gravity vector **/
     
     #ifdef DEBUG_PRINTS
     std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
     std::cout<<"[Predict] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
     std::cout<<"[Predict] g in body_frame:\n"<<gtilde_body<<"\n";
-    std::cout<<"[Predict] g in body_frame(quat):\n"<<q4*gtilde<<"\n";
-    std::cout<<"[Predict] g in body_frame(quat.inverse):\n"<<q4.inverse()*gtilde<<"\n";
-    std::cout<<"[Predict] g in body_frame(Rot):\n"<<q4.toRotationMatrix()*gtilde<<"\n";
-    std::cout<<"[Predict] g in body_frame(Rot.inverse):\n"<<q4.toRotationMatrix().inverse()*gtilde<<"\n";
-    std::cout<<"[Predict] g in world_frame(Cq.inverse):\n"<<Cq.inverse() * gtilde_body<<"\n";
     std::cout<<"[Predict] linacc:\n"<<linacc<<"\n";
     #endif
 
@@ -478,14 +548,6 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     /** Propagate the vector through the system **/
     xki_k = dFki * xki_k;
     
-    #ifdef DEBUG_PRINTS
-    std::cout<< "[After Predict] xki_k:\n"<<xki_k<<"\n";
-    std::cout<< "[Predict] Fki is of size "<<Fki.rows()<<"x"<<Fki.cols()<<"\n";
-    std::cout<< "[Predict] Fki:\n"<<Fki<<"\n";
-    std::cout<< "[Predict] dFki is of size "<<dFki.rows()<<"x"<<dFki.cols()<<"\n";
-    std::cout<< "[Predict] dFki:\n"<<dFki<<"\n";
-    #endif
-    
     /** The process noise covariance matrix **/
     Qk.block <NUMAXIS, NUMAXIS> (0,0) = Cq.inverse() * Ra * dt;
     Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = /*Cq.inverse() */ this->Ra;
@@ -497,39 +559,16 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     Pki_k = dFki*Pki_k*dFki.transpose() + Qdk;
     
     #ifdef DEBUG_PRINTS
+    std::cout<< "[After Predict] xki_k:\n"<<xki_k<<"\n";
+    std::cout<< "[Predict] Fki is of size "<<Fki.rows()<<"x"<<Fki.cols()<<"\n";
+    std::cout<< "[Predict] Fki:\n"<<Fki<<"\n";
+    std::cout<< "[Predict] dFki is of size "<<dFki.rows()<<"x"<<dFki.cols()<<"\n";
+    std::cout<< "[Predict] dFki:\n"<<dFki<<"\n";
     std::cout<< "[Predict] Qdk is of size "<<Qdk.rows()<<"x"<<Qdk.cols()<<"\n";
     std::cout<< "[Predict] Qdk:\n"<<Qdk<<"\n";
     std::cout<< "[Predict] Pki_k:\n"<<Pki_k<<"\n";
     #endif
-        
-    omega4 << 0,-angvelo(0), -angvelo(1), -angvelo(2),
-	    angvelo(0), 0, angvelo(2), -angvelo(1),
-	    angvelo(1), -angvelo(2), 0, angvelo(0),
-	    angvelo(2), angvelo(1), -angvelo(0), 0;
-	    
-    /** Copy the quaternion in the previous one before performing the rotation given by the gyros **/
-    prev_q4 = q4;
-	    
-    /** copy in a vector form **/
-    quat(0) = q4.w();
-    quat(1) = q4.x();
-    quat(2) = q4.y();
-    quat(3) = q4.z();
-
-    /** Quaternion integration **/
-    quat = (Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() +(0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
-    ((1/6) * angvelo.squaredNorm() * pow(dt,2) *  Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
-    ((1/24) * omega4 * oldomega4 * pow(dt,2)) - ((1/48) * angvelo.squaredNorm() * omega4 * pow(dt,3))) * quat;
-
-    /** Store in a quaternion form **/
-    q4.w() = quat(0);
-    q4.x() = quat(1);
-    q4.y() = quat(2);
-    q4.z() = quat(3);
-    q4.normalize();
-
-    oldomega4 = omega4;
-
+    
     return;
 
 }
@@ -746,9 +785,6 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     double Tc = 1.0/5.0;
     filtered_evelocity.col(0) = filtered_evelocity.col(1) + (dt/Tc) * (evelocity - filtered_evelocity.col(1));    
     
-    /** Correct the velocity **/
-    velocity = filtermeasurement.getCurrentVeloModel() + evelocity;
-    
     /** Slip detector **/
     slipdetector = Eigen::Matrix<double,NUMAXIS,1>::Ones()*std::numeric_limits<double>::quiet_NaN();
     double cov = this->Pki_k(3,3);
@@ -793,113 +829,85 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
 
 }
 
-void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bnav,
-				 const Eigen::Matrix< double,Eigen::Dynamic, Eigen::Dynamic >& Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bslip,
-				 const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1> &slip_error,
-				 Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> &slip_errorCov, double dt)
+void Sckf::motionModel(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bnav, const Eigen::Matrix< double, Eigen::Dynamic, 1  >& vjoints, double dt)
 {
+    
     Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> R; /** Measurement Noise matrix of the observation vector of the LS **/
+    Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> W; /** Wheel-weighting matrix of the LS **/
     Eigen::Matrix <double, NUMAXIS+ENCODERS_VECTOR_SIZE, NUMAXIS+ENCODERS_VECTOR_SIZE> Rm1; /** Measurement Noise matrix of the measurement vector of the LS **/
-    Eigen::Matrix <double, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS> Rm2; /** Measurement Noise matrix of the measurement vector of the LS **/
     Eigen::Matrix <double, 2*NUMAXIS, 2*NUMAXIS> Ri; /** Measurement Noise matrix of the measurement vector of the LS **/
     Eigen::Matrix <double, NUMAXIS, NUMAXIS> Rv; /** Measurement Noise matrix of the linear velocity from IMU **/
     Eigen::Matrix< double, NUMAXIS , 1  > linvelo; /** Linear velocities from acc integration **/
+    Eigen::Matrix< double, NUMAXIS , 1  > nadir; /** The nadir vector (gravity /norm(gravity) **/
+    Eigen::Matrix< double, NUMAXIS , 1  > wheel_weighting; /** The nadir vector applied to teh actual attitude * q_weight distribution **/
+    Eigen::Quaternion <double> attitude; /** Pitch and roll **/
     
     R.resize(NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS));
-    R.setZero(); Rm1.setZero(); Rm2.setZero();
+    W.resize(NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS));
+    R.setZero(); Rm1.setZero(); W.setIdentity();
     
-    #ifdef DEBUG_PRINTS
-    std::cout<<"********** MEASUREMENT GENERATION *****************\n";
-    #endif
-	
+    /** Get the attitude with Yaw to Zero **/
+    Eigen::Vector3d e = Eigen::Matrix3d(q4).eulerAngles(2,1,0);
+    attitude = Eigen::Quaternion <double> (Eigen::AngleAxisd(0.00 * D2R, Eigen::Vector3d::UnitZ())*
+    Eigen::AngleAxisd(e[1] * D2R, Eigen::Vector3d::UnitY()) *
+    Eigen::AngleAxisd(e[0] * D2R, Eigen::Vector3d::UnitX()));
+    
+    nadir << 0.0, 0.0, 1.0; //!nadir in navigation frame
+    
     /** Form the noise matrix for the velocity model (navigationKinematics) **/
-    Rm1.block<NUMAXIS, NUMAXIS>(0,0) = this->Rg;
-    Rm1.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
+    Rm1.block<NUMAXIS, NUMAXIS>(0,0) = measurement.getRangvelo();
+    Rm1.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = measurement.getEncodersVelocityCovariance();
     
-//     R = Bnav.block<NUMBER_OF_WHEELS*(2*NUMAXIS),ENCODERS_VECTOR_SIZE>(0,NUMAXIS) * filtermeasurement.getEncodersVelocityCovariance() * Bnav.block<NUMBER_OF_WHEELS*(2*NUMAXIS),ENCODERS_VECTOR_SIZE>(0,NUMAXIS).transpose();
-    
-    Ri = Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS) * filtermeasurement.getEncodersVelocityCovariance() * Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS).transpose();
+    Ri = Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS) * measurement.getEncodersVelocityCovariance() * Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS).transpose();
     
     for (unsigned int i=0; i<NUMBER_OF_WHEELS; ++i)
-    {	
+    {    
 	R(i*(2*NUMAXIS),i*(2*NUMAXIS)) = Ri(0,0);
 	R(i*(2*NUMAXIS)+1,i*(2*NUMAXIS)+1) = Ri(0,0);
 	R(i*(2*NUMAXIS)+2,i*(2*NUMAXIS)+2) = Ri(0,0);
-// 	Ri.block<NUMAXIS, NUMAXIS>(0,0) = Rg;
 	R.block<NUMAXIS, NUMAXIS>(NUMAXIS+i*(2*NUMAXIS), NUMAXIS+i*(2*NUMAXIS)) = Rg;
-// 	std::cout<< "[Measurement] Bnav(model):\n"<<Bnav.block<2*NUMAXIS, NUMAXIS+ENCODERS_VECTOR_SIZE>(i*(2*NUMAXIS),0)<<"\n";
-//  	std::cout<< "[Measurement] Ri(model):\n"<<Ri<<"\n";
-	
-// 	typedef Eigen::Matrix <double, 2*NUMAXIS, 2*NUMAXIS> matrixRiType;
-// 	Eigen::FullPivLU<matrixRiType> lu_decompRi(Ri);
-// 	std::cout << "The rank of Ri is " << lu_decompRi.rank() << std::endl;
+    }
+    
+    /** Compute the determinant of the first block matrix of R **/
+    double idet = R.block<2*NUMAXIS, 2*NUMAXIS>(0,0).inverse().determinant();
+    
+    /** Compute the wheel-weithing factor **/
+    wheel_weighting = (attitude * measurement.getLevelWeightDistribution()) * nadir;
+    if (wheel_weighting[0] < 0.00)
+	wheel_weighting[0] = 1.0 + wheel_weighting[0];
+    
+    /** Wheel-weighting matrix **/
+    for (unsigned int i=0; i<NUMBER_OF_WHEELS; ++i)
+    {
+	if ((i==0)||(i==1)) //!Rear Wheels
+	    W.block<(2*NUMAXIS),(2*NUMAXIS)> (i*(2*NUMAXIS),i*(2*NUMAXIS)) = (idet*wheel_weighting[0]) * Eigen::Matrix<double, (2*NUMAXIS), (2*NUMAXIS)>::Identity();
+	else //!Front Wheels
+	    W.block<(2*NUMAXIS),(2*NUMAXIS)> (i*(2*NUMAXIS),i*(2*NUMAXIS)) = (idet*(1.0 - wheel_weighting[0])) * Eigen::Matrix<double, (2*NUMAXIS), (2*NUMAXIS)>::Identity();
     }
 
-    
-    
+    #ifdef DEBUG_PRINTS
     typedef Eigen::Matrix <double, NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS)> matrixRType;
     Eigen::FullPivLU<matrixRType> lu_decompR(R);
     std::cout << "The rank of R is " << lu_decompR.rank() << std::endl;
     
-    
-    
-//     R.setIdentity();
-
-    #ifdef DEBUG_PRINTS
+    std::cout<< "[Measurement] idet:\n"<<idet<<"\n";
+    std::cout<< "[Measurement] wheel_weighting:\n"<<wheel_weighting<<"\n";
     std::cout<< "[Measurement] Rm1 is of size "<<Rm1.rows()<<"x"<<Rm1.cols()<<"\n";
     std::cout<< "[Measurement] Rm1:\n"<<Rm1<<"\n";
     std::cout<< "[Measurement] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
     std::cout<< "[Measurement] R:\n"<<R<<"\n";
     std::cout<< "[Measurement] R.inverse():\n"<<R.inverse()<<"\n";
+    std::cout<< "[Measurement] W is of size "<<W.rows()<<"x"<<W.cols()<<"\n";
+    std::cout<< "[Measurement] W:\n"<<W<<"\n";
+    std::cout<< "[Measurement] W+R.inverse():\n"<<W*R.inverse()<<"\n";
+    std::cout<< "[Measurement] (W+R.inverse()).inverse():\n"<<(W*R.inverse()).inverse()<<"\n";
     #endif
     
     /** Set encoders velocity **/
-    filtermeasurement.setEncodersVelocity(vjoints);
+    measurement.setEncodersVelocity(vjoints);
     
-    /** Call the Navigation kinematics to know the velocity from odometry, and contact angles velocities **/
-//     filtermeasurement.navigationKinematics(Anav, Bnav, R);
-    
-    /** Integrate accelerometers to have velocity **/
-    linvelo = filtermeasurement.accIntegrationWindow(dt);
-    filtermeasurement.setLinearVelocities(linvelo);
-    
-    /** Form the Rv covariance matrix **/
-//     Rv = 0.003 * Eigen::Matrix <double,NUMAXIS, NUMAXIS>::Identity();//this->Ra * (dt * filtermeasurement.getIntegrationWindowSize()).asDiagonal();
-//     
-//     /** Form the noise matrix for the slip model (slipKinematics) **/
-//     Rm2.block<NUMAXIS, NUMAXIS> (0,0) = Rv;
-//     Rm2.block<NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Rg;
-//     Rm2.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE> (2*NUMAXIS,2*NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
-//     Rm2.block<NUMBER_OF_WHEELS, NUMBER_OF_WHEELS> (2*NUMAXIS+ENCODERS_VECTOR_SIZE,2*NUMAXIS+ENCODERS_VECTOR_SIZE) = filtermeasurement.getContactAnglesVelocityCovariance();
-//     
-//     R.setZero();
-//     
-//     for (unsigned int i=0; i<NUMBER_OF_WHEELS; ++i)
-//     {
-// 	Ri = Bslip.block<2*NUMAXIS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS>(i*(2*NUMAXIS),0) * Rm2 * Bslip.block<2*NUMAXIS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS>(i*(2*NUMAXIS),0).transpose();
-// 	R.block<2*NUMAXIS, 2*NUMAXIS>(i*(2*NUMAXIS), i*(2*NUMAXIS)) = Ri;
-// 	#ifdef DEBUG_PRINTS
-// 	std::cout<< "[Measurement] Ri(slip):\n"<<Ri<<"\n";
-// 	#endif
-//     }
-//     
-//     Eigen::FullPivLU<matrixRType> lu_decompRslip(R);
-//     std::cout << "The rank of R is " << lu_decompRslip.rank() << std::endl;
-//     
-//     #ifdef DEBUG_PRINTS
-//     std::cout<< "[Measurement] Rm2 is of size "<<Rm2.rows()<<"x"<<Rm2.cols()<<"\n";
-//     std::cout<< "[Measurement] Rm2:\n"<<Rm2<<"\n";
-//     std::cout<< "[Measurement] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
-//     std::cout<< "[Measurement] R:\n"<<R<<"\n";
-//     std::cout<< "[Measurement] R.inverse():\n"<<R.inverse()<<"\n";
-//     #endif
-//     
-//     /** Compute the Slip Kinematics **/
-//     filtermeasurement.slipKinematics(Aslip, Bslip, R);
-//     
-//     /** Get the estimated slip error vector and the covariance **/
-//     slip_error = filtermeasurement.getSlipErrorVector();
-//     slip_errorCov = filtermeasurement.getSlipErrorVectorCovariance();
+    /** Call the Navigation kinematics to know the velocity from odometry, slip vector and contact angles velocities **/
+    measurement.navigationKinematics(Anav, Bnav, R, W);
     
     return;
 }
@@ -937,9 +945,9 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
 	
     /** Form the noise matrix for the velocity model (navigationKinematics) **/
     Rm1.block<NUMAXIS, NUMAXIS>(0,0) = this->Rg;
-    Rm1.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
+    Rm1.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(NUMAXIS,NUMAXIS) = measurement.getEncodersVelocityCovariance();
     
-    Ri = Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS) * filtermeasurement.getEncodersVelocityCovariance() * Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS).transpose();
+    Ri = Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS) * measurement.getEncodersVelocityCovariance() * Bnav.block<2*NUMAXIS, ENCODERS_VECTOR_SIZE>(0,NUMAXIS).transpose();
     
     for (unsigned int i=0; i<NUMBER_OF_WHEELS; ++i)
     {    
@@ -953,7 +961,7 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     double idet = R.block<2*NUMAXIS, 2*NUMAXIS>(0,0).inverse().determinant();
     
     /** Compute the wheel-weithing factor **/
-    wheel_weighting = (attitude * filtermeasurement.getLevelWeightDistribution()) * nadir;
+    wheel_weighting = (attitude * measurement.getLevelWeightDistribution()) * nadir;
     if (wheel_weighting[0] < 0.00)
 	wheel_weighting[0] = 1.0 + wheel_weighting[0];
     
@@ -985,27 +993,27 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     #endif
     
     /** Set encoders velocity **/
-    filtermeasurement.setEncodersVelocity(vjoints);
+    measurement.setEncodersVelocity(vjoints);
     
     /** Call the Navigation kinematics to know the velocity from odometry, slip vector and contact angles velocities **/
-    filtermeasurement.navigationKinematics(Anav, Bnav, R, W);
+    measurement.navigationKinematics(Anav, Bnav, R, W);
     
     /** Integrate accelerometers to have velocity **/
-    linvelo = filtermeasurement.accIntegrationWindow(dt);
+//     linvelo = measurement.accIntegrationWindow(dt);
     
     /** Set the IMU velocity to the linear ones **/
-    filtermeasurement.setLinearVelocities(linvelo);
+//     measurement.setLinearVelocities(linvelo);
     
     /** Compute the velocity error **/
     DataModel veloModel;
     DataModel delta_VeloModel, delta_veloIMU;
     DataModel increVeloError;
     
-    veloModel.data = filtermeasurement.getCurrentVeloModel();
-    veloModel.Cov = filtermeasurement.getCurrentVeloModelCovariance();
-    delta_VeloModel.data = filtermeasurement.getIncrementalVeloModel();
-    delta_VeloModel.Cov = filtermeasurement.getIncrementalVeloModelCovariance();
-    delta_veloIMU.data  = filtermeasurement.getLinearVelocities();
+    veloModel.data = measurement.getCurrentVeloModel();
+    veloModel.Cov = measurement.getCurrentVeloModelCovariance();
+    delta_VeloModel.data = measurement.getIncrementalVeloModel();
+    delta_VeloModel.Cov = measurement.getIncrementalVeloModelCovariance();
+    delta_veloIMU.data  = measurement.getLinearVelocities();
     delta_veloIMU.Cov = (this->Ra * dt);
     
     for (register int i=0; i<veloModel.size();i++)
@@ -1027,18 +1035,18 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     increVeloError = delta_veloIMU - delta_VeloModel;
     
     /** Mahalanobis **/
-    Mahalanobis = filtermeasurement.mahalanobis(increVeloError);
+    Mahalanobis = measurement.mahalanobis(increVeloError);
     
     /** Compute the Bhattacharyya distance **/
     Eigen::Matrix<double, NUMAXIS, NUMAXIS> BC;
     
-    /*BC = filtermeasurement.bhattacharyya(delta_veloIMU, delta_VeloModel);
+    /*BC = measurement.bhattacharyya(delta_veloIMU, delta_VeloModel);
     std::cout<< "[Measurement] Bhattacharyya coeff IMU-Model(function):\n"<<M<<"\n";
     
     HellingerI_M = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;*/
     
     /** DANGER **/
-    BC = filtermeasurement.bhattacharyya(delta_veloIMU, increVeloError);
+    BC = measurement.bhattacharyya(delta_veloIMU, increVeloError);
     
     Hellinger = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;
     /** DANGER **/
@@ -1152,8 +1160,8 @@ void Sckf::computeSlipVector(const Eigen::Matrix< double, Eigen::Dynamic, Eigen:
     Eigen::Matrix <double, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS> Robs; /** Measurement Noise matrix of the measurement vector of the LS **/
     R.resize(NUMBER_OF_WHEELS*(2*NUMAXIS),NUMBER_OF_WHEELS*(2*NUMAXIS));
     
-    /** Set the linear velocity to the corrected one **/
-    filtermeasurement.setLinearVelocities(this->velocity);
+//     /** Set the linear velocity to the corrected one **/
+//     measurement.setLinearVelocities(this->velocity);
     
     /** Set the angular velocity to the corrected one **/
     Eigen::Matrix <double,NUMAXIS,1> angevelo;
@@ -1165,14 +1173,14 @@ void Sckf::computeSlipVector(const Eigen::Matrix< double, Eigen::Dynamic, Eigen:
     angevelo[0] = angevelo[2];
     angevelo[2] = aux;
     
-    filtermeasurement.setAngularVelocities(angevelo); //Roll Pitch and Yaw
+//     measurement.setAngularVelocities(angevelo); //Roll Pitch and Yaw
     
     /** Form the observation noise matrix **/
     Robs.setZero();
-    Robs.block<NUMAXIS, NUMAXIS>(0,0) = filtermeasurement.getCurrentVeloModelCovariance() + evelocity_cov; //!Linear Velo
+    Robs.block<NUMAXIS, NUMAXIS>(0,0) = measurement.getCurrentVeloModelCovariance() + evelocity_cov; //!Linear Velo
     Robs.block<NUMAXIS, NUMAXIS>(NUMAXIS,NUMAXIS) = Pki_k.block<NUMAXIS, NUMAXIS> (2*NUMAXIS,2*NUMAXIS);//!Angular velo
-    Robs.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(2*NUMAXIS,2*NUMAXIS) = filtermeasurement.getEncodersVelocityCovariance();
-    Robs.block<NUMBER_OF_WHEELS, NUMBER_OF_WHEELS>(2*NUMAXIS + ENCODERS_VECTOR_SIZE,2*NUMAXIS + ENCODERS_VECTOR_SIZE) = filtermeasurement.getContactAnglesVelocityCovariance();
+    Robs.block<ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE>(2*NUMAXIS,2*NUMAXIS) = measurement.getEncodersVelocityCovariance();
+    Robs.block<NUMBER_OF_WHEELS, NUMBER_OF_WHEELS>(2*NUMAXIS + ENCODERS_VECTOR_SIZE,2*NUMAXIS + ENCODERS_VECTOR_SIZE) = measurement.getContactAnglesVelocityCovariance();
     
     /** Form the Noise matrix **/
     Eigen::Matrix <double, 2*NUMAXIS + ENCODERS_VECTOR_SIZE + NUMBER_OF_WHEELS, 1> robs;
@@ -1196,11 +1204,11 @@ void Sckf::computeSlipVector(const Eigen::Matrix< double, Eigen::Dynamic, Eigen:
     #endif
     
     /** Computes the slip kinematics **/
-    filtermeasurement.slipKinematics(Aslip, Bslip, R);
+    measurement.slipKinematics(Aslip, Bslip, R);
     
     /** Get the estimated slip error vector and the covariance **/
-    slip_vector = filtermeasurement.getSlipVector();
-    slip_vectorCov = filtermeasurement.getSlipVectorCov();
+    slip_vector = measurement.getSlipVector();
+    slip_vectorCov = measurement.getSlipVectorCov();
     
     return;
 
@@ -1255,7 +1263,7 @@ Eigen::Matrix <double,NUMAXIS,1> Sckf::getVeloError()
 
 Eigen::Matrix <double,NUMAXIS,1> Sckf::getVelocity()
 {
-    return velocity;
+    return evelocity;
 }
 
 
