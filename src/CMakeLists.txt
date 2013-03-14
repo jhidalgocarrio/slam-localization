@@ -21,7 +21,6 @@ set (LOCALIZATION_HDRS
 rock_library(rover_localization
     SOURCES ${LOCALIZATION_SRCS}
     DEPS_PKGCONFIG base-types base-lib yaml-cpp envire
-    DEPS_CMAKE Boost
     HEADERS ${LOCALIZATION_HDRS})
 
 rock_executable(rover_localization_bin main.cpp
