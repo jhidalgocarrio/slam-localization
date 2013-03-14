@@ -6,18 +6,19 @@
 #define _MEASUREMENT_HPP_
 
 #include <iostream> /** IO C++ Standard library */
-#include <vector>
+#include <queue> /** FIFO queues **/
+#include <deque> /**  Dynamic-sized FIFO queues to have pop_back and other methods **/
 #include <algorithm> /** Algorithm C++ Standard library */
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
 #include <Eigen/Cholesky> /** For the Cholesky decomposition **/
 
-
 /** Localization library  headers **/
 #include "DataModel.hpp" /** For the quantities models **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 #include "DataTypes.hpp" /** Orogen compatible export data types **/
+
 
 
 namespace localization	
@@ -31,51 +32,44 @@ namespace localization
 	
     private:
 
-	/** Least squared error of the navigation kinematics **/
-	double leastSquaredNavigation;
-	
-	/** Least squared error of the slip kinematics **/
-	double leastSquaredSlip;
+	/** **/
+	/** MOTION MODEL VARIABLES (UPPER CASE MATRICES, LOWER CASE VECTORS) **/
+	int ibuffer_size; /** Size of the buffered velocities and inertial values **/
+	Eigen::Matrix <double, Eigen::Dynamic, 1> besselBCoeff, besselACoeff; /** IIR Bessel filter Coefficients **/
+	Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> arrayVelMM, arrayVelMMIIR; /** Array of past rover velocities from the motion model (for Bessel filter) **/
+	Eigen::Quaternion <double> q_weight_distribution; /** Offset quaternion to set the uneven weight distribution of the rover **/
+	std::deque <DataModel> velMM; /** Velocity model from navigation kinematics (already filtered by Bessel IIR) **/
+	DataModel increVelMM; /** Increment in velocity model from navigation kinematics (already filtered by Bessel IIR) **/
+	DataModel dcontactAngle; /** delta contact angle from the navigation kinematics **/
 	
 	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> Rencoders; /** Measurement noise convariance matrix for joint velocities */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rangvelo; /** Measurement noise convariance matrix for angular velocities */
 	
-	/** Linear and angular velocities (from IMU) **/
-	Eigen::Matrix <double, NUMAXIS, 1> linvelocity;
+	/** **/
+	/** PROPRIOCEPTIVE SENSORS VARIABLES **/
+	Eigen::Matrix <double, ENCODERS_VECTOR_SIZE, 1>encodersvelocity; /** Sensed encoders velocities **/
+	std::deque < Eigen::Vector3d, Eigen::aligned_allocator < std::pair < const int, Eigen::Vector3d > > > acc, angvelo; /** Vector of accelerations and angular velocities **/
 	
-	/** Sensed encoders velocities **/
-	Eigen::Matrix <double, ENCODERS_VECTOR_SIZE, 1>encodersvelocity;
+	/** **/
+	/** MOTION MODEL EXTRA VARIABLES (INFORMATION DEBUG) **/
+	double leastSquaredNavigation; /** Least squared error of the navigation kinematics **/
+	double leastSquaredSlip; /** Least squared error of the slip kinematics **/
 	
-	/** Offset quaternion to set the uneven weight distribution of the rover **/
-	Eigen::Quaternion <double> q_weight_distribution;
-	
+	/** **/
+	/** KK VARIABLES **/
 	/** For the slip kinematics (each column is a wheel defined by a wheel_idx) **/
 	Eigen::Matrix <double,NUMAXIS,NUMBER_OF_WHEELS> slipMatrix;
 	
 	/** Translation distances for the accelerometers w.r.t to rover body **/
 	Eigen::Matrix <double,NUMAXIS,1> eccx, eccy, eccz; /** Accelerometers excentricity with respect to the body center of the robot **/
 	
-	/** Vector of accelerations for integral method **/
-	Eigen::Matrix <double,NUMAXIS,1> cbAcc, cbAngvelo;
-	
-	/** IIR Bessel filter Coefficients **/
-	Eigen::Matrix <double, Eigen::Dynamic, 1> besselBCoeff, besselACoeff;
-	
-	/** Array of past rover velocity model **/
-	Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> cbVelModel, cbIIRVelModel;
-	
-	/** Velocity model from navigation kinematics **/
-	DataModel velModel, prevVelModel;
-	
-	/** Increment in velocity model from navigation kinematics **/
-	DataModel increVelModel;
-	
-	/** For the contact angle **/
-	DataModel acontact;
+	/** Linear and angular velocities (from IMU) **/
+	Eigen::Matrix <double, NUMAXIS, 1> linvelocity;
 	
 	/** Slip vector **/
 	DataModel slipModel, slipVector, slipError;
 	
-	
+
     public:
 	
 	/** Measurement contructor
@@ -99,8 +93,8 @@ namespace localization
 	* 
 	*/
 	void Init ( Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
-		    Eigen::Matrix< double, NUMBER_OF_WHEELS , NUMBER_OF_WHEELS  >& Rcont,
-		    Eigen::Quaternion <double> q_weight);
+		    Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rangvelo,
+		    Eigen::Quaternion <double> q_weight, int buffer_size);
 	
 	/**
 	* @brief This function set the Accelerometers excentricity
@@ -120,14 +114,52 @@ namespace localization
 	void setEccentricity (Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz);
 	
 	/**
-	* @brief Set the current linear velocities
+	* @brief Set the current encoders velocities
+	* 
+	* Set the encoders velocities for the kinematics
+	* 
+	* @param[in] vjoints the vector of joints encoders velocities
+	* 
+	*/
+	void setEncodersVelocity(const Eigen::Matrix<double, Eigen::Dynamic, 1> &vjoints);
+	
+	
+	/**
+	* @brief Set the current inertial values (acc and gyros)
+	* 
+	* Set the current corrected inertial values
+	* 
+	* @param[in] acc current acceleration
+	* @param[in] angvelo current angular velocity
+	* 
+	*/
+	void setInertialValues(const Eigen::Matrix <double,NUMAXIS,1>  &acceleration, const Eigen::Matrix <double,NUMAXIS,1>  &angular_velocity);;
+	
+	/**
+	* @brief Gets Inertial Values (acc and angvelo)
 	* 
 	* @author Javier Hidalgo Carrio.
 	*
+	* @param[out] acc current acceleration
+	* @param[out] angvelo current angular velocity
+	* 
 	* @return void
 	*
 	*/
-	void setLinearVelocities(Eigen::Matrix <double,NUMAXIS,1> &linvelo);
+	void getInertialValues(Eigen::Matrix <double,NUMAXIS,1> &acc, Eigen::Matrix <double,NUMAXIS,1> &angvelo);
+	
+	/**
+	* @brief Gets Average of Inertial Values (acc and angvelo)
+	* 
+	* @author Javier Hidalgo Carrio.
+	*
+	* @param[out] acc current acceleration
+	* @param[out] angvelo current angular velocity
+	* 
+	* @return void
+	*
+	*/
+	void getAvgInertialValues(Eigen::Matrix <double,NUMAXIS,1> &acc, Eigen::Matrix <double,NUMAXIS,1> &angvelo);
 	
 	/**
 	* @brief Gets Linear velocities
@@ -138,46 +170,6 @@ namespace localization
 	*
 	*/
 	Eigen::Matrix <double,NUMAXIS,1> getLinearVelocities();
-	
-	/**
-	* @brief Set the current angular velocity
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return void
-	*
-	*/
-	void setAngularVelocities(Eigen::Matrix <double,NUMAXIS,1> &angvelo);
-	
-	/**
-	* @brief Gets Angular velocities
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return angular velocity
-	*
-	*/
-	Eigen::Matrix <double,NUMAXIS,1> getAngularVelocities();
-	
-	/**
-	* @brief Set the linear Acceleration
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return Linear acceleration
-	*
-	*/
-	void setLinearAcceleration(Eigen::Matrix <double,NUMAXIS,1> &linacc);
-	
-	/**
-	* @brief Gets Linear Acceleration
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return Linear acceleration
-	*
-	*/
-	Eigen::Matrix <double,NUMAXIS,1> getLinearAcceleration();
 	
 	/**
 	* @brief Gets 3x1 slip vector
@@ -238,17 +230,6 @@ namespace localization
 	Eigen::Matrix <double,SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> getSlipErrorVectorCovariance();
 	
 	/**
-	* @brief Set the current contact angles
-	* 
-	* Set the contact angle for the current wheel/foot point in contact
-	* 
-	* @param[in] contact_angles the vector of contact angles
-	* 
-	*/
-	void setContactAnglesVelocity(Eigen::Matrix<double, NUMBER_OF_WHEELS, 1> &contact_angles,
-				      Eigen::Matrix<double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS> &Cov);
-	
-	/**
 	* @brief Gets contact angle vector
 	*
 	* @author Javier Hidalgo Carrio.
@@ -256,17 +237,7 @@ namespace localization
 	* @return the contact angles
 	*
 	*/
-	Eigen::Matrix <double,Eigen::Dynamic,1> getContactAnglesVelocity();
-	
-	/**
-	* @brief Set the current encoders velocities
-	* 
-	* Set the encoders velocities for the kinematics
-	* 
-	* @param[in] vjoints the vector of joints encoders velocities
-	* 
-	*/
-	void setEncodersVelocity(const Eigen::Matrix<double, Eigen::Dynamic, 1> &vjoints);
+	Eigen::Matrix <double,Eigen::Dynamic,1> getContactAnglesVelocity();	
 	
 	/**
 	* @brief Get the velocity from the odometry model
@@ -287,16 +258,6 @@ namespace localization
 	* 
 	*/
 	Eigen::Matrix<double, NUMAXIS, NUMAXIS > getCurrentVeloModelCovariance();
-	
-	/**
-	* @brief Set the current velocity
-	* 
-	* It stores the current rover velocity from the odometry model
-	* 
-	* @param[in] velocity  current rover velocity
-	* 
-	*/
-	void setCurrentVeloModel(Eigen::Matrix<double, NUMAXIS, 1> &velocity);
 	
 	
 	/**
@@ -352,20 +313,40 @@ namespace localization
 	*/
 	inline double simpsonsIntegral (double fa, double fm, double fb, double delta_ab);
 	
-	/**
-	* @brief Perform the accelerometers integration
-	* 
-	* Integration of accelerometers for the window defined
-	* in INTEGRATION_WINDOWS_SIZE
-	*/
-	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
-	
+// 	/**
+// 	* @brief Perform the accelerometers integration
+// 	* 
+// 	* Integration of accelerometers for the window defined
+// 	* in INTEGRATION_WINDOWS_SIZE
+// 	*/
+// 	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
+// 	
 	/**
 	* @brief Return the buffer size for x,y and z
 	* 
 	* Integration size of the windows for each coordinates
 	*/
 	Eigen::Matrix< double, NUMAXIS , 1  > getIntegrationWindowSize();
+	
+	/**
+	* @brief Get angular velocity covariance matrix
+	* 
+	* Covariance matrix of the estimated quantity
+	* 
+	* @return the covariance matrix
+	* 
+	*/
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> getRangvelo ();
+	
+	/**
+	* @brief Get joints encoders velocity covariance matrix
+	* 
+	* Covariance matrix of the estimated quantity
+	* 
+	* @return the covariance matrix
+	* 
+	*/
+	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE> getRencoders ();
 	
 	/**
 	* @brief Least-Squares navigation kinematics solution
