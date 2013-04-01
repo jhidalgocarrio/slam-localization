@@ -92,6 +92,15 @@ Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > Sckf::getKalmanGain()
 }
 
 /**
+* @brief Get linear velocity covariance from IMU
+*/
+Eigen::Matrix< double, NUMAXIS, NUMAXIS > Sckf::getLinearCovarianceVelocities(double dt)
+{
+   return (this->Raup * dt);
+}
+
+
+/**
 * @brief Return the K associated to the attitude
 */
 Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > Sckf::getAttitudeKalmanGain()
@@ -235,7 +244,8 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qbg,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba, 
-		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rapr,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Raup,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rat,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rm,
 		double g, double alpha)
@@ -283,7 +293,7 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     
     /** Process noise **/
     Qk = Matrix <double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Zero();
-    Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Ra;
+    Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Rapr;
     Qk.block <NUMAXIS, NUMAXIS> (2*NUMAXIS,2*NUMAXIS) = 0.25 * Rg;
     Qk.block <NUMAXIS, NUMAXIS> ((2*NUMAXIS)+NUMAXIS,(2*NUMAXIS)+NUMAXIS) = Qbg;
     Qk.block <NUMAXIS, NUMAXIS> ((4*NUMAXIS),(4*NUMAXIS)) = Qba;
@@ -302,7 +312,8 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     
     /** Fill noise measurement matrices Rg, Ra, Rat, Rm , etc.. **/
     this->Rg = Rg;
-    this->Ra = Ra;
+    this->Rapr = Rapr;
+    this->Raup = Raup;
     this->Rat = Rat;
     this->Rm = Rm;
     
@@ -359,126 +370,48 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
         
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
-    std::cout<< "xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
-    std::cout<< "xki_k:\n"<<xki_k<<"\n";
-    std::cout<< "xk_k is of size "<<xk_k.rows()<<"x"<<xk_k.cols()<<"\n";
-    std::cout<< "xk_k:\n"<<xk_k<<"\n";
-    std::cout<< "A is of size "<<A.rows()<<"x"<<A.cols()<<"\n";
-    std::cout<< "A:\n"<<A<<"\n";
-    std::cout<< "Fki is of size "<<Fki.rows()<<"x"<<Fki.cols()<<"\n";
-    std::cout<< "Fki:\n"<<Fki<<"\n";
-    std::cout<< "Pk+i|k is of size "<<Pki_k.rows()<<"x"<<Pki_k.cols()<<"\n";
-    std::cout<< "Pk+i|k:\n"<<Pki_k<<"\n";
-    std::cout<< "Pk|k is of size "<<Pk_k.rows()<<"x"<<Pk_k.cols()<<"\n";
-    std::cout<< "Pk|k:\n"<<Pk_k<<"\n";
-    std::cout<< "Qk|k is of size "<<Qk.rows()<<"x"<<Qk.cols()<<"\n";
-    std::cout<< "Qk|k:\n"<<Qk<<"\n";
-    std::cout<< "H1a is of size "<<H1a.rows()<<"x"<<H1a.cols()<<"\n";
-    std::cout<< "H1a:\n"<<H1a<<"\n";
-    std::cout<< "H2a is of size "<<H2a.rows()<<"x"<<H2a.cols()<<"\n";
-    std::cout<< "H2a:\n"<<H2a<<"\n";
-    std::cout<< "zki is of size "<<zki.rows()<<"x"<<zki.cols()<<"\n";
-    std::cout<< "zki:\n"<<zki<<"\n";
-    std::cout<< "RHist is of size "<<RHist.rows()<<"x"<<RHist.cols()<<"\n";
-    std::cout<< "RHist:\n"<<RHist<<"\n";
-    std::cout<< "Rg is of size "<<Rg.rows()<<"x"<<Rg.cols()<<"\n";
-    std::cout<< "Rg:\n"<<Rg<<"\n";
-    std::cout<< "Ra is of size "<<Ra.rows()<<"x"<<Ra.cols()<<"\n";
-    std::cout<< "Ra:\n"<<Ra<<"\n";
-    std::cout<< "Rat is of size "<<Rat.rows()<<"x"<<Rat.cols()<<"\n";
-    std::cout<< "Rat:\n"<<Rat<<"\n";
-    std::cout<< "Rm is of size "<<Rm.rows()<<"x"<<Rm.cols()<<"\n";
-    std::cout<< "Rm:\n"<<Rm<<"\n";
-    std::cout<< "mtilde is of size "<<mtilde.rows()<<"x"<<mtilde.cols()<<"\n";
-    std::cout<< "mtilde:\n"<<mtilde<<"\n";
-    std::cout<< "gtilde is of size "<<gtilde.rows()<<"x"<<gtilde.cols()<<"\n";
-    std::cout<< "gtilde:\n"<<gtilde<<"\n";
-    std::cout<< "bghat is of size "<<bghat.rows()<<"x"<<bghat.cols()<<"\n";
-    std::cout<< "bghat:\n"<<bghat<<"\n";
-    std::cout<< "bahat is of size "<<bahat.rows()<<"x"<<bahat.cols()<<"\n";
-    std::cout<< "bahat:\n"<<bahat<<"\n";
+    std::cout<< "[FILTER_INIT] xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] xki_k:\n"<<xki_k<<"\n";
+    std::cout<< "[FILTER_INIT] xk_k is of size "<<xk_k.rows()<<"x"<<xk_k.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] xk_k:\n"<<xk_k<<"\n";
+    std::cout<< "[FILTER_INIT] A is of size "<<A.rows()<<"x"<<A.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] A:\n"<<A<<"\n";
+    std::cout<< "[FILTER_INIT] Fki is of size "<<Fki.rows()<<"x"<<Fki.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Fki:\n"<<Fki<<"\n";
+    std::cout<< "[FILTER_INIT] Pk+i|k is of size "<<Pki_k.rows()<<"x"<<Pki_k.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Pk+i|k:\n"<<Pki_k<<"\n";
+    std::cout<< "[FILTER_INIT] Pk|k is of size "<<Pk_k.rows()<<"x"<<Pk_k.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Pk|k:\n"<<Pk_k<<"\n";
+    std::cout<< "[FILTER_INIT] Qk|k is of size "<<Qk.rows()<<"x"<<Qk.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Qk|k:\n"<<Qk<<"\n";
+    std::cout<< "[FILTER_INIT] H1a is of size "<<H1a.rows()<<"x"<<H1a.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] H1a:\n"<<H1a<<"\n";
+    std::cout<< "[FILTER_INIT] H2a is of size "<<H2a.rows()<<"x"<<H2a.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] H2a:\n"<<H2a<<"\n";
+    std::cout<< "[FILTER_INIT] zki is of size "<<zki.rows()<<"x"<<zki.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] zki:\n"<<zki<<"\n";
+    std::cout<< "[FILTER_INIT] RHist is of size "<<RHist.rows()<<"x"<<RHist.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] RHist:\n"<<RHist<<"\n";
+    std::cout<< "[FILTER_INIT] Rg is of size "<<Rg.rows()<<"x"<<Rg.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Rg:\n"<<Rg<<"\n";
+    std::cout<< "[FILTER_INIT] Rapr is of size "<<Rapr.rows()<<"x"<<Rapr.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Rapr:\n"<<Rapr<<"\n";
+    std::cout<< "[FILTER_INIT] Raup is of size "<<Raup.rows()<<"x"<<Raup.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Raup:\n"<<Raup<<"\n";
+    std::cout<< "[FILTER_INIT] Rat is of size "<<Rat.rows()<<"x"<<Rat.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Rat:\n"<<Rat<<"\n";
+    std::cout<< "[FILTER_INIT] Rm is of size "<<Rm.rows()<<"x"<<Rm.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] Rm:\n"<<Rm<<"\n";
+    std::cout<< "[FILTER_INIT] mtilde is of size "<<mtilde.rows()<<"x"<<mtilde.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] mtilde:\n"<<mtilde<<"\n";
+    std::cout<< "[FILTER_INIT] gtilde is of size "<<gtilde.rows()<<"x"<<gtilde.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] gtilde:\n"<<gtilde<<"\n";
+    std::cout<< "[FILTER_INIT] bghat is of size "<<bghat.rows()<<"x"<<bghat.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] bghat:\n"<<bghat<<"\n";
+    std::cout<< "[FILTER_INIT] bahat is of size "<<bahat.rows()<<"x"<<bahat.cols()<<"\n";
+    std::cout<< "[FILTER_INIT] bahat:\n"<<bahat<<"\n";
     #endif
 
-}
-
-/**
-* @brief It perform the gyroscopes integration to compute the attitude
-*/
-void Sckf::attitudeMeasurement(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< double, NUMAXIS , 1  >& v, double dt)
-{
-    Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
-    Eigen::Matrix <double,NUMAXIS,NUMAXIS> velo2product; /** Vec 2 product  matrix */
-    Eigen::Matrix <double,NUMAXIS,NUMAXIS> acc2product; /** Vec 2 product  matrix */
-    Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
-    Eigen::Matrix <double,NUMAXIS,1> linacc; /** Linear acceleration */
-    Eigen::Matrix <double,NUMAXIS,1> gtilde_body; /** Gravitation in the body frame */
-    Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4; /** Quaternion integration matrix */
-    Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
-    
-    /** Compute the cross product matrix with the angular velocity **/
-    angvelo = u - bghat; /** Eliminate the Bias **/
-    
-    /** In cross product form **/
-    velo2product << 0, -angvelo(2), angvelo(1),
-		angvelo(2), 0, -angvelo(0),
-		-angvelo(1), angvelo(0), 0;
-		
-    /** Create the orientation matrix from the quaternion (q_body2world) **/
-    Quaternion2DCM (&q4, &Cq);
-    
-    /** Calculate the gravity vector in the body frame **/
-    gtilde_body = Cq * gtilde;
-		
-    /** Compute the cross product matrix with the linear acceleration **/
-    linacc = v - bahat - gtilde_body; /** Eliminate the Bias and the local gravity vector **/
-
-    omega4 << 0,-angvelo(0), -angvelo(1), -angvelo(2),
-	    angvelo(0), 0, angvelo(2), -angvelo(1),
-	    angvelo(1), -angvelo(2), 0, angvelo(0),
-	    angvelo(2), angvelo(1), -angvelo(0), 0;
-	    
-    /** Copy the quaternion in the previous one before performing the rotation given by the gyros **/
-    prev_q4 = q4;
-	    
-    /** copy in a vector form **/
-    quat(0) = q4.w();
-    quat(1) = q4.x();
-    quat(2) = q4.y();
-    quat(3) = q4.z();
-
-    /** Quaternion integration **/
-    quat = (Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() +(0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
-    ((1/6) * angvelo.squaredNorm() * pow(dt,2) *  Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
-    ((1/24) * omega4 * oldomega4 * pow(dt,2)) - ((1/48) * angvelo.squaredNorm() * omega4 * pow(dt,3))) * quat;
-
-    /** Store in a quaternion form **/
-    q4.w() = quat(0);
-    q4.x() = quat(1);
-    q4.y() = quat(2);
-    q4.z() = quat(3);
-    q4.normalize();
-
-    /** Copy omega **/
-    oldomega4 = omega4;
-    
-    /** Store the corrected values in the proprioceptive measurement object **/
-    measurement.setInertialValues(linacc, angvelo);
-    
-     #ifdef DEBUG_PRINTS
-    std::cout<<"[Attitude] Inputs u:\n"<<u<<"\nv:\n"<<v<<"\n";
-    std::cout<<"[Attitude] angevelo:\n"<<angvelo<<"\n";
-    std::cout<<"[Attitude] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
-    std::cout<<"[Attitude] g in body_frame:\n"<<gtilde_body<<"\n";
-    std::cout<<"[Attitude] g in body_frame(quat):\n"<<q4*gtilde<<"\n";
-    std::cout<<"[Attitude] g in body_frame(quat.inverse):\n"<<q4.inverse()*gtilde<<"\n";
-    std::cout<<"[Attitude] g in body_frame(Rot):\n"<<q4.toRotationMatrix()*gtilde<<"\n";
-    std::cout<<"[Attitude] g in body_frame(Rot.inverse):\n"<<q4.toRotationMatrix().inverse()*gtilde<<"\n";
-    std::cout<<"[Attitude] g in world_frame(Cq.inverse):\n"<<Cq.inverse() * gtilde_body<<"\n";
-    std::cout<<"[Attitude] linacc:\n"<<linacc<<"\n";
-    #endif
-
-    
-    return;
 }
 
 /**
@@ -492,11 +425,13 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     Eigen::Matrix <double,NUMAXIS,1> angvelo; /** Angular velocity */
     Eigen::Matrix <double,NUMAXIS,1> linacc; /** Linear acceleration */
     Eigen::Matrix <double,NUMAXIS,1> gtilde_body; /** Gravitation in the body frame */
+    Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4; /** Quaternion integration matrix */
+    Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
     Eigen::Matrix <double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE> dFki; /** Discrete System matrix */
     Eigen::Matrix <double,X_STATE_VECTOR_SIZE,X_STATE_VECTOR_SIZE> Qdk; /** Discrete Qk matrix */
 
     /** Compute the cross product matrix with the angular velocity **/
-    angvelo = u;// - bghat; /** Eliminate the Bias **/
+    angvelo = u - bghat; /** Eliminate the Bias **/
 
     /** In cross product form **/
     velo2product << 0, -angvelo(2), angvelo(1),
@@ -510,7 +445,7 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     gtilde_body = Cq * gtilde;
 		
     /** Compute the cross product matrix with the linear acceleration **/
-    linacc = v;// - bahat - gtilde_body; /** Eliminate the Bias and the local gravity vector **/
+    linacc = v - bahat - gtilde_body; /** Eliminate the Bias and the local gravity vector **/
     
     #ifdef DEBUG_PRINTS
     std::cout<<"[Predict] angevelo:\n"<<angvelo<<"\n";
@@ -549,14 +484,48 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     xki_k = dFki * xki_k;
     
     /** The process noise covariance matrix **/
-    Qk.block <NUMAXIS, NUMAXIS> (0,0) = Cq.inverse() * Ra * dt;
-    Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = /*Cq.inverse() */ this->Ra;
+    Qk.block <NUMAXIS, NUMAXIS> (0,0) = Cq.inverse() * Rapr * dt;
+    Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = /*Cq.inverse() */ this->Rapr;
     
     /** Form the system noise matrix (discretization) **/
     Qdk = Qk*dt + 0.5*dt*dt*Fki*Qk + 0.5*dt*dt*Qk*Fki.transpose();
     Qdk = 0.5*(Qdk + Qdk.transpose());
     
+    /** Propagate the P covariance matrix **/
     Pki_k = dFki*Pki_k*dFki.transpose() + Qdk;
+    
+    /** Discrete quaternion integration of the angular velocity **/
+    omega4 << 0,-angvelo(0), -angvelo(1), -angvelo(2),
+	    angvelo(0), 0, angvelo(2), -angvelo(1),
+	    angvelo(1), -angvelo(2), 0, angvelo(0),
+	    angvelo(2), angvelo(1), -angvelo(0), 0;
+	    
+    /** Copy the quaternion in the previous one before performing the rotation given by the gyros **/
+    prev_q4 = q4;
+	    
+    /** Copy in a vector form **/
+    quat(0) = q4.w();
+    quat(1) = q4.x();
+    quat(2) = q4.y();
+    quat(3) = q4.z();
+
+    /** Quaternion integration **/
+    quat = (Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() +(0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
+    ((1/6) * angvelo.squaredNorm() * pow(dt,2) *  Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
+    ((1/24) * omega4 * oldomega4 * pow(dt,2)) - ((1/48) * angvelo.squaredNorm() * omega4 * pow(dt,3))) * quat;
+
+    /** Store in a quaternion form **/
+    q4.w() = quat(0);
+    q4.x() = quat(1);
+    q4.y() = quat(2);
+    q4.z() = quat(3);
+    q4.normalize();
+
+    /** Copy omega **/
+    oldomega4 = omega4;
+    
+    /** Store the corrected values in the proprioceptive measurement object **/
+    measurement.setInertialValues(linacc, angvelo);
     
     #ifdef DEBUG_PRINTS
     std::cout<< "[After Predict] xki_k:\n"<<xki_k<<"\n";
@@ -569,6 +538,19 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     std::cout<< "[Predict] Pki_k:\n"<<Pki_k<<"\n";
     #endif
     
+    #ifdef DEBUG_PRINTS
+    std::cout<<"[Attitude] Inputs u(angular_velocity):\n"<<u<<"\nv(acc):\n"<<v<<"\n";
+    std::cout<<"[Attitude] angevelo:\n"<<angvelo<<"\n";
+    std::cout<<"[Attitude] gtilde_body of size "<<gtilde_body.rows()<<"x"<<gtilde_body.cols()<<"\n";
+    std::cout<<"[Attitude] g in body_frame:\n"<<gtilde_body<<"\n";
+    std::cout<<"[Attitude] g in body_frame(quat):\n"<<q4*gtilde<<"\n";
+    std::cout<<"[Attitude] g in body_frame(quat.inverse):\n"<<q4.inverse()*gtilde<<"\n";
+    std::cout<<"[Attitude] g in body_frame(Rot):\n"<<q4.toRotationMatrix()*gtilde<<"\n";
+    std::cout<<"[Attitude] g in body_frame(Rot.inverse):\n"<<q4.toRotationMatrix().inverse()*gtilde<<"\n";
+    std::cout<<"[Attitude] g in world_frame(Cq.inverse):\n"<<Cq.inverse() * gtilde_body<<"\n";
+    std::cout<<"[Attitude] linacc:\n"<<linacc<<"\n";
+    #endif
+    
     return;
 
 }
@@ -578,7 +560,6 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
 		  Eigen::Matrix< double, NUMAXIS, 1  >& slip_error,
 		  Eigen::Matrix< double, NUMAXIS , 1  >& acc,Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off)
 {
-    register int j;
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> Cq; /** Rotational matrix */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> gtilde2product; /** Vec 2 product  matrix for the gravity vector in body frame */
     Eigen::Matrix <double,NUMAXIS,NUMAXIS> fooR2; /**  Measurement noise matrix from accelerometers matrix Ra */
@@ -632,7 +613,7 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     H1a.block<NUMAXIS, NUMAXIS> (0,0) = 2*gtilde2product;
     
     /** Form the measurement vector z1a for the attitude (the real acceleration value) **/
-    z1a = acc - bahat - gtilde_body;
+    z1a = acc;// - bahat - gtilde_body;
     
     /** The adaptive algorithm for the attitude, the Uk matrix and SVD part **/
     R1a = (z1a - H1a*xa_k) * (z1a - H1a*xa_k).transpose();
@@ -643,14 +624,14 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
 
     /** Starting the Uk is R **/
     Uk = R1a;
-    for (j=0; j<M1; j++)
+    for (register int j=1; j<M1; j++)
     {
 	Uk = Uk + RHist.block <NUMAXIS, NUMAXIS> (0,NUMAXIS*j);
     }
     
     Uk = Uk/static_cast<double>(M1);
     
-    fooR2 = H1a*P1a*H1a.transpose() + Ra;
+    fooR2 = H1a*P1a*H1a.transpose() + Raup;
     
     /**
     * Single Value Decomposition
@@ -662,9 +643,12 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     
     lambda << s(0), s(1), s(2);
     
-    mu(0) = (u.transpose().row(0) * fooR2).dot(u.col(0));
-    mu(1) = (u.transpose().row(1) * fooR2).dot(u.col(1));
-    mu(2) = (u.transpose().row(2) * fooR2).dot(u.col(2));
+//     mu(0) = (u.transpose().row(0) * fooR2).dot(u.col(0));
+//     mu(1) = (u.transpose().row(1) * fooR2).dot(u.col(1));
+//     mu(2) = (u.transpose().row(2) * fooR2).dot(u.col(2));
+    mu(0) = u.col(0).transpose() * fooR2 * u.col(0);
+    mu(0) = u.col(1).transpose() * fooR2 * u.col(1);
+    mu(0) = u.col(2).transpose() * fooR2 * u.col(2);
     
     if ((lambda - mu).maxCoeff() > GAMMA)
     {
@@ -734,6 +718,10 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
     
     #ifdef DEBUG_PRINTS
+    std::cout<< "[Update] Uk is of size "<<Uk.rows()<<"x"<<Uk.cols()<<"\n";
+    std::cout<< "[Update] Uk:\n"<<Uk<<"\n";
+    std::cout<< "[Update] fooR2 is of size "<<fooR2.rows()<<"x"<<fooR2.cols()<<"\n";
+    std::cout<< "[Update] fooR2:\n"<<fooR2<<"\n";
     std::cout<< "[Update] Qstar is of size "<<Qstar.rows()<<"x"<<Qstar.cols()<<"\n";
     std::cout<< "[Update] Qstar:\n"<<Qstar<<"\n";
     std::cout<< "[Update] R1a is of size "<<R1a.rows()<<"x"<<R1a.cols()<<"\n";
@@ -890,17 +878,17 @@ void Sckf::motionModel(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynam
     Eigen::FullPivLU<matrixRType> lu_decompR(R);
     std::cout << "The rank of R is " << lu_decompR.rank() << std::endl;
     
-    std::cout<< "[Measurement] idet:\n"<<idet<<"\n";
-    std::cout<< "[Measurement] wheel_weighting:\n"<<wheel_weighting<<"\n";
-    std::cout<< "[Measurement] Rm1 is of size "<<Rm1.rows()<<"x"<<Rm1.cols()<<"\n";
-    std::cout<< "[Measurement] Rm1:\n"<<Rm1<<"\n";
-    std::cout<< "[Measurement] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
-    std::cout<< "[Measurement] R:\n"<<R<<"\n";
-    std::cout<< "[Measurement] R.inverse():\n"<<R.inverse()<<"\n";
-    std::cout<< "[Measurement] W is of size "<<W.rows()<<"x"<<W.cols()<<"\n";
-    std::cout<< "[Measurement] W:\n"<<W<<"\n";
-    std::cout<< "[Measurement] W+R.inverse():\n"<<W*R.inverse()<<"\n";
-    std::cout<< "[Measurement] (W+R.inverse()).inverse():\n"<<(W*R.inverse()).inverse()<<"\n";
+    std::cout<< "[MotionModel] idet:\n"<<idet<<"\n";
+    std::cout<< "[MotionModel] wheel_weighting:\n"<<wheel_weighting<<"\n";
+    std::cout<< "[MotionModel] Rm1 is of size "<<Rm1.rows()<<"x"<<Rm1.cols()<<"\n";
+    std::cout<< "[MotionModel] Rm1:\n"<<Rm1<<"\n";
+    std::cout<< "[MotionModel] R is of size "<<R.rows()<<"x"<<R.cols()<<"\n";
+    std::cout<< "[MotionModel] R:\n"<<R<<"\n";
+    std::cout<< "[MotionModel] R.inverse():\n"<<R.inverse()<<"\n";
+    std::cout<< "[MotionModel] W is of size "<<W.rows()<<"x"<<W.cols()<<"\n";
+    std::cout<< "[MotionModel] W:\n"<<W<<"\n";
+    std::cout<< "[MotionModel] W+R.inverse():\n"<<W*R.inverse()<<"\n";
+    std::cout<< "[MotionModel] (W+R.inverse()).inverse():\n"<<(W*R.inverse()).inverse()<<"\n";
     #endif
     
     /** Set encoders velocity **/
@@ -908,6 +896,64 @@ void Sckf::motionModel(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynam
     
     /** Call the Navigation kinematics to know the velocity from odometry, slip vector and contact angles velocities **/
     measurement.navigationKinematics(Anav, Bnav, R, W);
+    
+    return;
+}
+
+void Sckf::velocityError(Eigen::Matrix< double, NUMAXIS, 1  >& velo_error, Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& vel_errorCov, double dt)
+{
+    DataModel delta_VeloModel, delta_veloIMU;
+    DataModel increVeloError;
+       
+    /** Increment in velocity from the Motion Model **/
+    delta_VeloModel.data = measurement.getIncrementalVeloModel();
+    delta_VeloModel.Cov = measurement.getIncrementalVeloModelCovariance();
+    
+    /** Increment in velocity from the IMU **/
+    delta_veloIMU.data = measurement.getLinearVelocities(dt);
+    delta_veloIMU.Cov = (this->Raup * dt);
+    
+    
+    /** Check to not have negative uncertainty values in the covariance matrices **/
+    for (register int i=0; i<delta_VeloModel.size();i++)
+    {
+	for (register int j=0; j<delta_VeloModel.size();j++)
+	{
+	    if (delta_VeloModel.Cov(i,j) < 0.00)
+		delta_VeloModel.Cov(i,j) = 0.00;
+	    if (delta_veloIMU.Cov(i,j) < 0.00)
+		delta_veloIMU.Cov(i,j) = 0.00;
+	}
+	
+    }
+    
+    /** Compute the error in the incremental velocity **/
+    increVeloError = delta_veloIMU - delta_VeloModel;
+    
+    /** Compute the Bhattacharyya distance **/
+    Eigen::Matrix<double, NUMAXIS, NUMAXIS> BC;
+    
+    /** There is only error in velocity if there is enough statistical evidence **/
+    BC = measurement.bhattacharyya(delta_veloIMU, increVeloError);
+    
+    Hellinger = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() - BC;
+    
+    /** Store the value in the argument variables **/
+    velo_error = Hellinger * increVeloError.data;
+    vel_errorCov =  increVeloError.Cov;
+    
+    velo_error[2] = 0.00; //!No error in Z axis
+        
+    #ifdef DEBUG_PRINTS
+    std::cout<< "[Measurement] incre_vel_model:\n"<<delta_VeloModel.data<<"\n";
+    std::cout<< "[Measurement] incre_vel_model_cov:\n"<<delta_VeloModel.Cov<<"\n";
+    std::cout<< "[Measurement] incre_vel_imu:\n"<<delta_veloIMU.data<<"\n";
+    std::cout<< "[Measurement] incre_vel_imu_cov:\n"<<delta_veloIMU.Cov<<"\n";
+    std::cout<< "[Measurement] Squared Hellinger distance:\n"<<Hellinger<<"\n";
+    std::cout<< "[Measurement] vel_error:\n"<<velo_error<<"\n";
+    std::cout<< "[Measurement] vel_error_cov(Rme):\n"<<vel_errorCov<<"\n";
+    #endif
+    
     
     return;
 }
@@ -1013,8 +1059,8 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
     veloModel.Cov = measurement.getCurrentVeloModelCovariance();
     delta_VeloModel.data = measurement.getIncrementalVeloModel();
     delta_VeloModel.Cov = measurement.getIncrementalVeloModelCovariance();
-    delta_veloIMU.data  = measurement.getLinearVelocities();
-    delta_veloIMU.Cov = (this->Ra * dt);
+    delta_veloIMU.data  = measurement.getLinearVelocities(dt);
+    delta_veloIMU.Cov = (this->Raup * dt);
     
     for (register int i=0; i<veloModel.size();i++)
     {

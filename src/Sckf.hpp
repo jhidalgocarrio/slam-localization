@@ -70,7 +70,8 @@ namespace localization
 	/** Error measurement matrices **/
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS*M1> RHist; /** History of M1 measurement noise convariance matrix (for the adaptive algorithm) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement and system noise convariance matrix for gyros (gyros are used in both: predict and update) */
-	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Ra; /** Measurement noise convariance matrix for acc */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rapr; /** Measurement noise convariance matrix for acc */
+	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Raup; /** Measurement noise convariance matrix for acc */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rat; /** Measurement noise convariance matrix for the attitude (the estimation of the gravity vector) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rm; /** Measurement noise convariance matrix for mag */
 	Eigen::Matrix <double,Eigen::Dynamic,Eigen::Dynamic> Rk; /** Measurement noise convariance matrix for the measurement vector of proprioceptive sensors */
@@ -196,8 +197,10 @@ namespace localization
 	*/
 	Eigen::Matrix <double,Eigen::Dynamic, Eigen::Dynamic> getKalmanGain();
 	
+	Eigen::Matrix <double, NUMAXIS, NUMAXIS> getLinearCovarianceVelocities(double dt);
+	
 	/**
-	* @brief Return the Kalman Gain of the attityde part 
+	* @brief Return the Kalman Gain of the attitude part 
 	*
 	* @author Javier Hidalgo Carrio.
 	*
@@ -219,12 +222,12 @@ namespace localization
 	/**
 	* @brief Gets the delta orientation in Quaternion
 	* 
-	* Delta quaternion is the ortation difference between
+	* Delta quaternion is the orientation difference between
 	* the previous attitude and the curret one.
 	* 
 	* @author Javier Hidalgo Carrio.
 	*
-	* @return Quaternion with the delta orientation (q(k-1) to q(k)) .
+	* @return Quaternion with the delta orientation (from q(k-1) to q(k)) .
 	*
 	*/
 	Eigen::Quaternion <double> deltaQuaternion();
@@ -350,8 +353,9 @@ namespace localization
 	void Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rg,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qbg,
-		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba,
-		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Ra,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Qba, 
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rapr,
+		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Raup,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rat,
 		Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rm,
 		double g, double alpha);
@@ -406,27 +410,22 @@ namespace localization
 		  Eigen::Matrix< double, NUMAXIS , 1  >& acc,Eigen::Matrix< double, NUMAXIS , 1  >& mag, double dt, bool magn_on_off);
 	
 	
-	
 	/**
-	* @brief It perform the gyroscopes integration to compute the attitude
+	* @brief It computes the motion model (nav kinematics).
 	* 
-	* It computes the quaternion integration in discrete form.
-	* 
-	* @param[in] u vector with the angular velocity
-	* @param[in] v vector with the acceleration
-	* @param[in] dt delta time between samples
-	* 
-	*/
-	void attitudeMeasurement (Eigen::Matrix <double,NUMAXIS,1>  &u, Eigen::Matrix <double,NUMAXIS,1>  &v, double dt);
-	    
-	/**
-	* @brief It calls the measurement class to perform the proprioceptive measurement.
-	* 
-	* It computes the nav kinematics and slip kinematics
+	*  Navigation kinematics with the probabilistic uncertainty computation.
 	* 
 	*/
 	void motionModel (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Anav, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bnav,
 				    const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints, double dt);
+	
+	/**
+	* @brief Lineal velocity error
+	* 
+	* It computes the error in incremental velocity during the filter step.
+	* 
+	*/
+	void velocityError (Eigen::Matrix< double, NUMAXIS, 1> &velo_error, Eigen::Matrix< double, NUMAXIS, NUMAXIS> &vel_errorCov, double dt);
 	
 	/**
 	* @brief It calls the measurement class to perform the proprioceptive measurement.
