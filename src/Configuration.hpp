@@ -59,7 +59,7 @@ namespace localization
     
     /** Variables for the attitude estimation inside the algorithm **/
     #define M1 1 /** Parameter for adaptive algorithm */
-    #define M2 10 /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
+    #define M2 2 /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
     #define GAMMA 0.015 /** Parameter for adaptive algorithm (only entering when Qstart is greater than RHR'+Ra) (0.5 gives good acc estimation when bumping a lot) */
     #define R2COUNT 100 /** Parameter for adaptive algorithm */
 
