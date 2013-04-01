@@ -34,12 +34,12 @@ namespace localization
 
 	/** **/
 	/** MOTION MODEL VARIABLES (UPPER CASE MATRICES, LOWER CASE VECTORS) **/
-	int ibuffer_size; /** Size of the buffered velocities and inertial values **/
+	unsigned int ibuffer_size; /** Size of the buffered velocities and inertial values **/
 	Eigen::Matrix <double, Eigen::Dynamic, 1> besselBCoeff, besselACoeff; /** IIR Bessel filter Coefficients **/
 	Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> arrayVelMM, arrayVelMMIIR; /** Array of past rover velocities from the motion model (for Bessel filter) **/
 	Eigen::Quaternion <double> q_weight_distribution; /** Offset quaternion to set the uneven weight distribution of the rover **/
 	std::deque <DataModel> velMM; /** Velocity model from navigation kinematics (already filtered by Bessel IIR) **/
-	DataModel increVelMM; /** Increment in velocity model from navigation kinematics (already filtered by Bessel IIR) **/
+	std::deque <DataModel> increVelMM; /** Increment in velocity model from navigation kinematics (already filtered by Bessel IIR) **/
 	DataModel dcontactAngle; /** delta contact angle from the navigation kinematics **/
 	
 	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> Rencoders; /** Measurement noise convariance matrix for joint velocities */
@@ -62,10 +62,7 @@ namespace localization
 	
 	/** Translation distances for the accelerometers w.r.t to rover body **/
 	Eigen::Matrix <double,NUMAXIS,1> eccx, eccy, eccz; /** Accelerometers excentricity with respect to the body center of the robot **/
-	
-	/** Linear and angular velocities (from IMU) **/
-	Eigen::Matrix <double, NUMAXIS, 1> linvelocity;
-	
+		
 	/** Slip vector **/
 	DataModel slipModel, slipVector, slipError;
 	
@@ -159,17 +156,19 @@ namespace localization
 	* @return void
 	*
 	*/
-	void getAvgInertialValues(Eigen::Matrix <double,NUMAXIS,1> &acc, Eigen::Matrix <double,NUMAXIS,1> &angvelo);
+	void getStepInertialValues(Eigen::Matrix <double,NUMAXIS,1> &acc, Eigen::Matrix <double,NUMAXIS,1> &angvelo);
 	
 	/**
-	* @brief Gets Linear velocities
+	* @brief Gets increment in linear velocities
 	* 
 	* @author Javier Hidalgo Carrio.
 	*
+	* @param[out] dt the delta time (step size)
+	* 
 	* @return the linear velocities
 	*
 	*/
-	Eigen::Matrix <double,NUMAXIS,1> getLinearVelocities();
+	Eigen::Matrix <double,NUMAXIS,1> getLinearVelocities(double dt);
 	
 	/**
 	* @brief Gets 3x1 slip vector
@@ -321,12 +320,6 @@ namespace localization
 // 	*/
 // 	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
 // 	
-	/**
-	* @brief Return the buffer size for x,y and z
-	* 
-	* Integration size of the windows for each coordinates
-	*/
-	Eigen::Matrix< double, NUMAXIS , 1  > getIntegrationWindowSize();
 	
 	/**
 	* @brief Get angular velocity covariance matrix

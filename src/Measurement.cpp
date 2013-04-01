@@ -114,21 +114,21 @@ void Measurement::getInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, 
 /**
 * @brief Gets Avg Inertial Values (acc and angvelo)
 */
-void Measurement::getAvgInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, Eigen::Matrix< double, NUMAXIS , 1  >& angvelo)
+void Measurement::getStepInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, Eigen::Matrix< double, NUMAXIS , 1  >& angvelo)
 {
     Eigen::Matrix< double, NUMAXIS , 1  > a, g;
     int queue_size = std::min<int>(this->acc.size(), this->angvelo.size());
     a.setZero(); g.setZero();
 
     /** Get the mean of the stores values **/
-    for (register unsigned int i=0; i<queue_size; i++)
+    for (register int i=0; i<queue_size; i++)
     {
 	a += this->acc[i];
 	g += this->angvelo[i];
     }
     
-    acc = a/queue_size;
-    angvelo = g/queue_size;
+    acc = (a/queue_size);
+    angvelo = (g/queue_size);
     
     #ifdef DEBUG_PRINTS
     std::cout << "[GETAVGIN] Number of elements:\n" << queue_size<< std::endl;
@@ -139,15 +139,70 @@ void Measurement::getAvgInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& ac
     return;
 }
 
-
 /**
-* @brief Return linear velocities
+* @brief Return increment in linear velocities
 */
-Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearVelocities()
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearVelocities(double dt)
 {
-    return this->linvelocity;
+    Eigen::Matrix< double, NUMAXIS , 1  > a;
+    int queue_size = this->acc.size();
+    a.setZero();
+
+    /** Get the mean of the stores values **/
+    for (register int i=0; i<queue_size; i++)
+	a += this->acc[i];
+    
+    return (a/queue_size)*dt;
 }
 
+/**
+* @brief Return the current velocity from odometry model
+*/
+Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
+{
+    
+    return this->velMM.front().data;
+}
+
+/**
+* @brief Get the covariance of the velocity from the odometry model
+*/
+Eigen::Matrix< double, NUMAXIS , NUMAXIS> Measurement::getCurrentVeloModelCovariance()
+{
+    return velMM.front().Cov;
+}
+
+/**
+* @brief Get the Step increment in velocity
+*/
+Eigen::Matrix< double, NUMAXIS, 1  > Measurement::getIncrementalVeloModel()
+{
+    Eigen::Matrix< double, NUMAXIS , 1  > iVelo;
+    int queue_size = this->increVelMM.size();
+    iVelo.setZero();
+
+    /** Get the mean of the stores values **/
+    for (register int i=0; i<queue_size; i++)
+	iVelo += this->increVelMM[i].data;
+    
+    return iVelo;
+}
+
+/**
+* @brief Get the covariance of the step increment in velocity
+*/
+Eigen::Matrix< double, NUMAXIS, NUMAXIS> Measurement::getIncrementalVeloModelCovariance()
+{
+    Eigen::Matrix< double, NUMAXIS , NUMAXIS  > iVeloCov;
+    int queue_size = this->increVelMM.size();
+    iVeloCov.setZero();
+
+    /** Get the mean of the stores values **/
+    for (register int i=0; i<queue_size; i++)
+	iVeloCov += this->increVelMM[i].Cov;
+    
+    return iVeloCov;
+}
 
 /**
 * @brief Return complete slip vector 
@@ -202,41 +257,6 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > Measurement::getContactAnglesVelocit
     return this->dcontactAngle.data;
 }
 
-
-/**
-* @brief Return the current velocity from odometry model
-*/
-Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
-{
-    
-    return this->velMM.front().data;
-}
-
-/**
-* @brief Get the covariance of the velocity from the odometry model
-*/
-Eigen::Matrix< double, NUMAXIS , NUMAXIS> Measurement::getCurrentVeloModelCovariance()
-{
-    return velMM.front().Cov;
-}
-
-/**
-* @brief Get the increment in velocity
-*/
-Eigen::Matrix< double, NUMAXIS, 1  > Measurement::getIncrementalVeloModel()
-{
-    
-    return Eigen::Matrix<double,NUMAXIS,1>::Zero();
-}
-
-/**
-* @brief Get the covariance of the increment in velocity
-*/
-Eigen::Matrix< double, NUMAXIS, NUMAXIS> Measurement::getIncrementalVeloModelCovariance()
-{
-    return Eigen::Matrix<double,NUMAXIS,NUMAXIS>::Zero();
-}
-
 /**
 * @brief Returns the covariance noise matrix
 */
@@ -262,6 +282,22 @@ Eigen::Quaternion< double > Measurement::getLevelWeightDistribution()
     return q_weight_distribution;
 }
 
+/**
+* @brief Get angular velocity covariance matrix
+*/
+Eigen::Matrix< double, NUMAXIS , NUMAXIS  > Measurement::getRangvelo()
+{
+    return this->Rangvelo;
+}
+
+/**
+* @brief Get joints encoders velocity covariance matrix
+*/
+Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  > Measurement::getRencoders()
+{
+    return this->Rencoders;
+}
+
 
 /**
 * @brief Initialization method
@@ -270,10 +306,7 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
 		       Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rangvelo,
 		       Eigen::Quaternion <double> q_weight, int buffer_size)
 {
-    
-    /** Incremental velocity model from navigation kinematics **/
-    increVelMM = DataModel(NUMAXIS);
-    
+        
     /** Initial contact angle **/
     dcontactAngle = DataModel(NUMBER_OF_WHEELS);
     
@@ -336,10 +369,6 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
     /** Initial slip matrix **/
     slipMatrix = Eigen::Matrix <double, NUMAXIS, NUMBER_OF_WHEELS>::Zero();
     
-    /** Velocities for the filter (acceleration and bias substracted correctly) **/
-    linvelocity = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
-    
-    
     /** Print filter information **/
     #ifdef DEBUG_PRINTS
     std::cout<< "[MEASU_INIT] ibuffer_size "<<ibuffer_size<<"\n";
@@ -357,98 +386,12 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
 }
 
 
-
-
-
-/**
-* @brief This perform simpson rule for integration
-*/
-double Measurement::simpsonsIntegral(double fa, double fm, double fb, double delta_ab)
-{
-    return delta_ab/6.0 * (fa + (4.0*fm) + fb);
-}
-
-// /**
-// * @brief To obtain the linear velocity 
-// */
-// Eigen::Matrix< double, NUMAXIS , 1  > Measurement::accIntegrationWindow(double dt)
-// {
-//     Eigen::Matrix <double, NUMAXIS, 1> localvelocity;
-//     Eigen::Matrix <double,NUMAXIS,NUMAXIS> gyros2product; /** Vec 2 product  matrix for the gyroscopes (angular velocity) */
-//     
-//     localvelocity.setZero();
-//     
-//     #ifdef DEBUG_PRINTS
-//     std::cout<< "IMU Velocity\n";
-//     #endif
-//     
-//     gyros2product << 0, -cbAngvelo[2], cbAngvelo[1],
-// 	cbAngvelo[2], 0, -cbAngvelo[0],
-// 	-cbAngvelo[1], cbAngvelo[0], 0;
-// 		
-//     localvelocity[0] += (cbAcc[0] * dt);// - (gyros2product.row(0) * eccx);
-//     
-// //     localvelocity[0] += arrayVelMM[0];
-//     
-//     #ifdef DEBUG_PRINTS
-//     std::cout<< "localvelocity[0] "<<localvelocity[0]<<"\n";
-//     #endif
-//     
-//     	
-//     localvelocity[1] += (cbAcc[1] * dt);// - (gyros2product.row(1) * eccy);
-//     
-// //     localvelocity[1] += arrayVelMM[1];
-//     
-//     #ifdef DEBUG_PRINTS
-//     std::cout<< "localvelocity[1] "<<localvelocity[1]<<"\n";
-//     #endif
-//     
-//     localvelocity[2] += (cbAcc[2] * dt);// - (gyros2product.row(2) * eccz);
-//     
-// //     localvelocity[2] += arrayVelMM[2];
-//     
-//     #ifdef DEBUG_PRINTS
-//     std::cout<< "localvelocity[2] "<<localvelocity[2]<<"\n";
-//     #endif
-//     
-//     return localvelocity;
-// }
-
-/**
-* @brief Return the buffer size for x,y and z
-*/
-Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getIntegrationWindowSize()
-{
-    Eigen::Matrix< double, NUMAXIS , 1  > windowsSize;
-    
-//     windowsSize << cbAccX.size(), cbAccY.size(), cbAccZ.size();
-    windowsSize.setIdentity();
-    
-    return windowsSize;
-}
-
-/**
-* @brief Get angular velocity covariance matrix
-*/
-Eigen::Matrix< double, NUMAXIS , NUMAXIS  > Measurement::getRangvelo()
-{
-    return this->Rangvelo;
-}
-
-/**
-* @brief Get joints encoders velocity covariance matrix
-*/
-Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  > Measurement::getRencoders()
-{
-    return this->Rencoders;
-}
-
-
 double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
 					const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &W)
 {
     double leastSquaresError = std::numeric_limits<double>::quiet_NaN();
     DataModel velM = DataModel(NUMAXIS);
+    DataModel ivelM = DataModel(NUMAXIS);
     Eigen::Matrix< double, NUMAXIS , 1  > velocity;
     Eigen::Matrix <double, SLIP_VECTOR_SIZE, 1> slip;
     Eigen::Matrix <double, NUMAXIS+(2*NUMBER_OF_WHEELS), NUMAXIS+(2*NUMBER_OF_WHEELS)> Iinverse;
@@ -537,17 +480,34 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     /** Get the current velocity model from the LS solution **/
     velocity = x.block<NUMAXIS,1>(0,0);
     
+    /** FILTERING THE VELOCITY **/
     /** Copy to the array for filtering **/
     arrayVelMM.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,0) = arrayVelMM.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,1);
     arrayVelMM.col(localization::NORDER_BESSEL_FILTER) = velocity;
     
     /** IIR Low-pass Bessel Filter **/
     velocity = Measurement::iirFilter(localization::NORDER_BESSEL_FILTER, besselBCoeff, besselACoeff, arrayVelMM, arrayVelMMIIR);
-   
+    /** END OF FILTERING THE VELOCITY **/
+    
     /** Store in a DataModel variable **/
     velM.data = velocity;
     velM.Cov = pow(leastSquaresError,2) * Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Identity() +  Iinverse.block<NUMAXIS, NUMAXIS> (0,0);
     
+    /** INCREMENT IN VELOCITY **/
+    /** Check the buffer size of the nav. kinematics velocities **/
+    if (increVelMM.size() >= this->ibuffer_size)
+	increVelMM.pop_back();
+    
+    /** Store the previous velocity in the local variable **/
+    if (velMM.empty())
+	ivelM = velM; //! If empty the increment is the actual velocity
+    else
+	ivelM = velM - velMM.front();
+    
+    /** Push the increment in velocities in the array of increments vel. Model **/
+    increVelMM.push_front(ivelM);
+    
+    /** VELOCITY ARRAY **/
     /** Check the buffer size of the nav. kinematics velocities **/
     if (velMM.size() >= this->ibuffer_size)
 	velMM.pop_back();
@@ -555,20 +515,11 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     /** Push the DataModel in the array of velocities **/
     velMM.push_front(velM);
     
+    /** FILTER ARRANGEMENT FOR NEXT ITERATION **/
     /** Move back one column for the next bessel filter iteration **/
     arrayVelMMIIR.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,0) = arrayVelMMIIR.block<NUMAXIS, NORDER_BESSEL_FILTER>(0,1);
-    
-    #ifdef DEBUG_PRINTS
-    std::cout << "[NK] velMM has size "<<velMM.size()<<"\n";
-    std::cout << "[NK] velModel.data:\n" << velM.data << std::endl;
-    std::cout << "[NK] velModel.Cov:\n" << velM.Cov << std::endl;
-    std::cout << "[NK] arrayVelMM is of size "<< arrayVelMM.rows()<<"x"<<arrayVelMM.cols()<<"\n";
-    std::cout << "[NK] The arrayVelMM is:\n" << arrayVelMM << std::endl;
-    std::cout << "[NK] arrayVelMMIIR is of size "<< arrayVelMMIIR.rows()<<"x"<<arrayVelMMIIR.cols()<<"\n";
-    std::cout << "[NK] The arrayVelMMIIR is:\n" << arrayVelMMIIR << std::endl;
-    #endif
-    
-    
+   
+    /** SLIP VECTOR (Z COMPONENT) **/
     /** Save the z-axis slip vector results **/
     slip.setZero();
     slip(2) = x(3); slip(5) = x(4); slip(8) = x(5); slip(11) = x(6);
@@ -578,11 +529,28 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     slipModel.Cov(8,8) = Iinverse(5,5);
     slipModel.Cov(11,11) = Iinverse(6,6);
     
-    /** Store the dcontactAngle variable **/
+    
+    /** DELTA CHANGE OF THE CONTACT ANGLE **/
+    /** Store in the dcontactAngle variable **/
     dcontactAngle.data = x.block<NUMBER_OF_WHEELS,1>(NUMAXIS+NUMBER_OF_WHEELS,0);
     dcontactAngle.Cov = Iinverse.bottomRightCorner<NUMBER_OF_WHEELS,NUMBER_OF_WHEELS>();
     
+    /** Error in the least-Squares **/
     this->leastSquaredNavigation = leastSquaresError;
+    
+     #ifdef DEBUG_PRINTS
+    std::cout << "[NK] velMM has size "<<velMM.size()<<"\n";
+    std::cout << "[NK] velModel.data:\n" << velM.data << std::endl;
+    std::cout << "[NK] velModel.Cov:\n" << velM.Cov << std::endl;
+    std::cout << "[NK] increVelMM has size "<<increVelMM.size()<<"\n";
+    std::cout << "[NK] increVelModel.data:\n" << increVelMM.front().data << std::endl;
+    std::cout << "[NK] increVelModel.Cov:\n" << increVelMM.front().Cov << std::endl;
+    std::cout << "[NK] ** IIR Filter Variables **"<< std::endl;
+    std::cout << "[NK] arrayVelMM is of size "<< arrayVelMM.rows()<<"x"<<arrayVelMM.cols()<<"\n";
+    std::cout << "[NK] The arrayVelMM is:\n" << arrayVelMM << std::endl;
+    std::cout << "[NK] arrayVelMMIIR is of size "<< arrayVelMMIIR.rows()<<"x"<<arrayVelMMIIR.cols()<<"\n";
+    std::cout << "[NK] The arrayVelMMIIR is:\n" << arrayVelMMIIR << std::endl;
+    #endif
     
     return leastSquaresError;
 }
@@ -605,7 +573,7 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     
     
     /** Form the sensed vector **/
-    y.block<NUMAXIS, 1> (0,0) = linvelocity;
+//     y.block<NUMAXIS, 1> (0,0) = linvelocity;
     y.block<NUMAXIS, 1> (NUMAXIS,0) = this->angvelo.front();
     y.block<ENCODERS_VECTOR_SIZE, 1> (2*NUMAXIS,0) = encodersvelocity;
     y.block<NUMBER_OF_WHEELS, 1> ((2*NUMAXIS) + ENCODERS_VECTOR_SIZE,0) = dcontactAngle.data;
@@ -679,6 +647,15 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     return leastSquaresError;
 
 }
+
+/**
+* @brief This perform simpson rule for integration
+*/
+double Measurement::simpsonsIntegral(double fa, double fm, double fb, double delta_ab)
+{
+    return delta_ab/6.0 * (fa + (4.0*fm) + fb);
+}
+
 
 /**
 * @brief Save slip info to the Orogen-compatible DataType
