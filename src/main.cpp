@@ -98,7 +98,7 @@ int main(int argc, char** argv)
 	
     
 	/** Initialization of the filter **/
-	mysckf.Init(P_0, Rg, Qbg, Qba, Ra, Rat, Rm, theoretical_g, 0.12);
+	mysckf.Init(P_0, Rg, Qbg, Qba, Ra, Ra, Rat, Rm, theoretical_g, 0.12);
 	
 // 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> angle2product;
 // 	
