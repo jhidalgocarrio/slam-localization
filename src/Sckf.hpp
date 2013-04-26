@@ -7,6 +7,7 @@
 
 #include <iostream> /** IO C++ Standard library */
 #include <algorithm> /** Algorithm C++ Standard library */
+#include <Eigen/StdVector> /** For STL container with Eigen types **/
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
@@ -68,7 +69,7 @@ namespace localization
 	Eigen::Matrix <double,Eigen::Dynamic,1> zki; /** Measurement vector assodicate at time k+i **/
 	
 	/** Error measurement matrices **/
-	Eigen::Matrix <double,NUMAXIS,NUMAXIS*M1> RHist; /** History of M1 measurement noise convariance matrix (for the adaptive algorithm) */
+	std::vector < Eigen::Matrix <double, NUMAXIS, NUMAXIS> , Eigen::aligned_allocator < Eigen::Matrix <double, NUMAXIS, NUMAXIS> > > RHist; /** History of M1 measurement noise convariance matrix (for the adaptive algorithm) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rg; /** Measurement and system noise convariance matrix for gyros (gyros are used in both: predict and update) */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rapr; /** Measurement noise convariance matrix for acc */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Raup; /** Measurement noise convariance matrix for acc */
@@ -443,7 +444,7 @@ namespace localization
 	* Computes the slip vector
 	* 
 	*/
-	void computeSlipVector (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bslip,
+	void computeSlipVector (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Aslip, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &Bslip, const Eigen::Matrix< double, NUMAXIS, 1 >& linvelo,
 				Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1> &slip_vector, Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> &slip_vectorCov, double dt);
 	
 	/**

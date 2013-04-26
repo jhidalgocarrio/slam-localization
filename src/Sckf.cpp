@@ -308,7 +308,7 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     H1a(0,6) = 1; H1a(1,7) = 1; H1a(2,8) = 1;
 
     /** Set the history of noise for the attitude **/
-    RHist = Eigen::Matrix <double,NUMAXIS,NUMAXIS*M1>::Zero();
+    RHist.resize(M1);
     
     /** Fill noise measurement matrices Rg, Ra, Rat, Rm , etc.. **/
     this->Rg = Rg;
@@ -390,8 +390,7 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     std::cout<< "[FILTER_INIT] H2a:\n"<<H2a<<"\n";
     std::cout<< "[FILTER_INIT] zki is of size "<<zki.rows()<<"x"<<zki.cols()<<"\n";
     std::cout<< "[FILTER_INIT] zki:\n"<<zki<<"\n";
-    std::cout<< "[FILTER_INIT] RHist is of size "<<RHist.rows()<<"x"<<RHist.cols()<<"\n";
-    std::cout<< "[FILTER_INIT] RHist:\n"<<RHist<<"\n";
+    std::cout<< "[FILTER_INIT] RHist is of size "<<RHist.size()<<"\n";
     std::cout<< "[FILTER_INIT] Rg is of size "<<Rg.rows()<<"x"<<Rg.cols()<<"\n";
     std::cout<< "[FILTER_INIT] Rg:\n"<<Rg<<"\n";
     std::cout<< "[FILTER_INIT] Rapr is of size "<<Rapr.rows()<<"x"<<Rapr.cols()<<"\n";
@@ -488,7 +487,7 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = /*Cq.inverse() */ this->Rapr;
     
     /** Form the system noise matrix (discretization) **/
-    Qdk = Qk*dt + 0.5*dt*dt*Fki*Qk + 0.5*dt*dt*Qk*Fki.transpose();
+    Qdk = Qk*dt + 0.5*dt*Fki*Qk + 0.5*dt*Qk*Fki.transpose();
     Qdk = 0.5*(Qdk + Qdk.transpose());
     
     /** Propagate the P covariance matrix **/
@@ -617,16 +616,16 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     
     /** The adaptive algorithm for the attitude, the Uk matrix and SVD part **/
     R1a = (z1a - H1a*xa_k) * (z1a - H1a*xa_k).transpose();
-    RHist.block <NUMAXIS, NUMAXIS> (0, (r1count*(M1-1))%M1) = R1a;
+    RHist[r1count] = R1a;
     
     /** r1count + 1 modulus the number of history M1 **/
-    r1count++; 
+    r1count = (r1count+1)%(M1); 
 
+    Uk.setZero();
     /** Starting the Uk is R **/
-    Uk = R1a;
-    for (register int j=1; j<M1; j++)
+    for (register int j=0; j<M1; j++)
     {
-	Uk = Uk + RHist.block <NUMAXIS, NUMAXIS> (0,NUMAXIS*j);
+	Uk += RHist[j];
     }
     
     Uk = Uk/static_cast<double>(M1);
@@ -636,42 +635,50 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     /**
     * Single Value Decomposition
     */
-    JacobiSVD <MatrixXd > svdOfR1a(Uk, ComputeThinU);
+    JacobiSVD <MatrixXd > svdOfUk(Uk, ComputeThinU);
 
-    s = svdOfR1a.singularValues();
-    u = svdOfR1a.matrixU();
+    s = svdOfUk.singularValues(); //!eigenvalues
+    u = svdOfUk.matrixU();//!eigenvectors
     
     lambda << s(0), s(1), s(2);
     
-//     mu(0) = (u.transpose().row(0) * fooR2).dot(u.col(0));
-//     mu(1) = (u.transpose().row(1) * fooR2).dot(u.col(1));
-//     mu(2) = (u.transpose().row(2) * fooR2).dot(u.col(2));
     mu(0) = u.col(0).transpose() * fooR2 * u.col(0);
-    mu(0) = u.col(1).transpose() * fooR2 * u.col(1);
-    mu(0) = u.col(2).transpose() * fooR2 * u.col(2);
+    mu(1) = u.col(1).transpose() * fooR2 * u.col(1);
+    mu(2) = u.col(2).transpose() * fooR2 * u.col(2);
+    
+    #ifdef DEBUG_PRINTS
+    std::cout<<"[Update] (lambda - mu) is: "<<(lambda - mu)<<"\n";
+    #endif
     
     if ((lambda - mu).maxCoeff() > GAMMA)
     {
-	#ifdef DEBUG_PRINTS
-	std::cout<<"[Update] "<<(lambda - mu).maxCoeff()<<" Bigger than GAMMA\n";
-	#endif
 	
+	#ifdef DEBUG_PRINTS
+	std::cout<<"[Update] Bigger than GAMMA("<<GAMMA<<")\n";
+	#endif
+    
 	r2count = 0;
-	auxvector(0) = std::max(lambda(0)-mu(0),(double)0.00);
-	auxvector(1) = std::max(lambda(1)-mu(1),(double)0.00);
-	auxvector(2) = std::max(lambda(2)-mu(2),(double)0.00);
+	auxvector(0) = std::max(lambda(0)-mu(0),static_cast<double>(0.00));
+	auxvector(1) = std::max(lambda(1)-mu(1),static_cast<double>(0.00));
+	auxvector(2) = std::max(lambda(2)-mu(2),static_cast<double>(0.00));
 	
 	Qstar = auxvector(0) * u.col(0) * u.col(0).transpose() + auxvector(1) * u.col(1) * u.col(1).transpose() + auxvector(2) * u.col(2) * u.col(2).transpose();
     }
     else
     {
 	#ifdef DEBUG_PRINTS
-	std::cout<<"[Update] r2count: "<<r2count<<"\n";
+	std::cout<<"[Update] Lower than GAMMA("<<GAMMA<<") r2count: "<<r2count<<"\n";
 	#endif
 	
 	r2count ++;
 	if (r2count < M2)
+	{
+	    auxvector(0) = std::max(lambda(0)-mu(0),static_cast<double>(0.00));
+	    auxvector(1) = std::max(lambda(1)-mu(1),static_cast<double>(0.00));
+	    auxvector(2) = std::max(lambda(2)-mu(2),static_cast<double>(0.00));
+	    
 	    Qstar = auxvector(0) * u.col(0) * u.col(0).transpose() + auxvector(1) * u.col(1) * u.col(1).transpose() + auxvector(2) * u.col(2) * u.col(2).transpose();
+	}
 	else
 	    Qstar = Matrix<double, NUMAXIS, NUMAXIS>::Zero();
     }
@@ -718,6 +725,7 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
     
     #ifdef DEBUG_PRINTS
+    std::cout<< "[Update] RHist is of size "<<RHist.size()<<"r1count is: "<<r1count<<"\n";
     std::cout<< "[Update] Uk is of size "<<Uk.rows()<<"x"<<Uk.cols()<<"\n";
     std::cout<< "[Update] Uk:\n"<<Uk<<"\n";
     std::cout<< "[Update] fooR2 is of size "<<fooR2.rows()<<"x"<<fooR2.cols()<<"\n";
@@ -859,7 +867,7 @@ void Sckf::motionModel(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynam
     /** Compute the determinant of the first block matrix of R **/
     double idet = R.block<2*NUMAXIS, 2*NUMAXIS>(0,0).inverse().determinant();
     
-    /** Compute the wheel-weithing factor **/
+    /** Compute the wheel-weighting factor **/
     wheel_weighting = (attitude * measurement.getLevelWeightDistribution()) * nadir;
     if (wheel_weighting[0] < 0.00)
 	wheel_weighting[0] = 1.0 + wheel_weighting[0];
@@ -1199,6 +1207,7 @@ void Sckf::measurementGeneration(const Eigen::Matrix< double, Eigen::Dynamic, Ei
 
 void Sckf::computeSlipVector(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Aslip,
 			     const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& Bslip,
+			     const Eigen::Matrix< double, NUMAXIS, 1 >& linvelo,
 			     Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  >& slip_vector,
 			     Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE >& slip_vectorCov, double dt)
 {
@@ -1250,7 +1259,7 @@ void Sckf::computeSlipVector(const Eigen::Matrix< double, Eigen::Dynamic, Eigen:
     #endif
     
     /** Computes the slip kinematics **/
-    measurement.slipKinematics(Aslip, Bslip, R);
+    measurement.slipKinematics(Aslip, Bslip, R, linvelo);
     
     /** Get the estimated slip error vector and the covariance **/
     slip_vector = measurement.getSlipVector();
