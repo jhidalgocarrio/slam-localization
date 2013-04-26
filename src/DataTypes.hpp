@@ -45,7 +45,8 @@ namespace localization
     {
 	base::Time time;
 	base::VectorXd slip_vector;
-	base::MatrixXd Cov;
+	base::MatrixXd slip_vectorCov;
+	base::MatrixXd contactPoints;
     };
 
 }
