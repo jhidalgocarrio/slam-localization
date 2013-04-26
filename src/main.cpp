@@ -2,6 +2,23 @@
 #include <rover_localization/Sckf.hpp>
 #include <rover_localization/Lesma.hpp>
 
+// returns false when you've seen all of the possible values for this vector
+bool increment(std::vector<int> & vector, int k)
+{
+  for (unsigned int i = 0; i < vector.size(); ++i)
+  {
+    int j = vector[i] + 1;
+    if (j <= k) {
+      vector[i] = j;
+      return true; 
+    }
+    else vector[i] = 0;
+    // and carry a 1 by looping back again
+  }
+  return false;
+}
+
+
 int main(int argc, char** argv)
 {
 	localization::Sckf mysckf;
@@ -100,6 +117,45 @@ int main(int argc, char** argv)
 	/** Initialization of the filter **/
 	mysckf.Init(P_0, Rg, Qbg, Qba, Ra, Ra, Rat, Rm, theoretical_g, 0.12);
 	
+	double n[] = {0,0,0,0};
+	int k = 1;
+	
+	do{
+	    for(int i = 0; i < k; i++)
+	    {
+		std::cout << n[i];
+	    }
+	    std::cout << '\n';
+	} while (std::next_permutation(n, n + k));
+	
+// 	int myints[] = {0,0,0,0};
+// 	std::vector<int> fifth (myints, myints + sizeof(myints) / sizeof(int) );
+	std::vector<int> fifth (4, 0);
+	
+	
+	std::cout<<"fifth size: "<<fifth.size()<<"\n";
+	for (int l=0; l<16; ++l)
+	{
+	    
+	    for( std::vector<int>::const_iterator i = fifth.begin(); i != fifth.end(); ++i)
+		std::cout << *i << ' ';
+	    
+	    bool value = increment(fifth,k);
+	    std::cout<<"\n bool: "<<value<<"\n";
+	    
+	}
+	
+	fifth = std::vector<int>(4, 0);
+	
+	std::cout<<"Incrementing in 5\n";
+	for (int l=0; l<1; ++l)
+	    increment(fifth,1);
+	    
+	for( std::vector<int>::const_iterator i = fifth.begin(); i != fifth.end(); ++i)
+	    std::cout << *i << ' ';
+	    
+	std::cout<<"\n";
+	
 // 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> angle2product;
 // 	
 // 	v1 << 0.0, 0.0, 1.0;
@@ -115,3 +171,4 @@ int main(int argc, char** argv)
 
 	return 0;
 }
+
