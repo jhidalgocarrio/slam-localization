@@ -58,9 +58,9 @@ namespace localization
     #endif
     
     /** Variables for the attitude estimation inside the algorithm **/
-    #define M1 1 /** Parameter for adaptive algorithm */
-    #define M2 2 /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
-    #define GAMMA 0.015 /** Parameter for adaptive algorithm (only entering when Qstart is greater than RHR'+Ra) (0.5 gives good acc estimation when bumping a lot) */
+    #define M1 1 /** Parameter for adaptive algorithm (to estimate Uk with is not directly observale) */
+    #define M2 5 /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
+    #define GAMMA 0.0005 /** Parameter for adaptive algorithm (only entering when Qstart is greater than RHR'+Ra) */
     #define R2COUNT 100 /** Parameter for adaptive algorithm */
 
     #ifndef D2R
