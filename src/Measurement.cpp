@@ -148,10 +148,10 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearVelocities(double dt
     int queue_size = this->acc.size();
     a.setZero();
 
-    /** Get the mean of the stores values **/
     for (register int i=0; i<queue_size; i++)
 	a += this->acc[i];
     
+    /** Get the mean of the stores values **/
     return (a/queue_size)*dt;
 }
 
@@ -181,7 +181,6 @@ Eigen::Matrix< double, NUMAXIS, 1  > Measurement::getIncrementalVeloModel()
     int queue_size = this->increVelMM.size();
     iVelo.setZero();
 
-    /** Get the mean of the stores values **/
     for (register int i=0; i<queue_size; i++)
 	iVelo += this->increVelMM[i].data;
     
@@ -197,7 +196,7 @@ Eigen::Matrix< double, NUMAXIS, NUMAXIS> Measurement::getIncrementalVeloModelCov
     int queue_size = this->increVelMM.size();
     iVeloCov.setZero();
 
-    /** Get the mean of the stores values **/
+
     for (register int i=0; i<queue_size; i++)
 	iVeloCov += this->increVelMM[i].Cov;
     
@@ -556,7 +555,7 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
 }
 
 double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
-				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R)
+				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, NUMAXIS, 1> &linvelo)
 {
     double leastSquaresError = std::numeric_limits<double>::quiet_NaN();
     
@@ -573,7 +572,7 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
     
     
     /** Form the sensed vector **/
-//     y.block<NUMAXIS, 1> (0,0) = linvelocity;
+    y.block<NUMAXIS, 1> (0,0) = linvelo;
     y.block<NUMAXIS, 1> (NUMAXIS,0) = this->angvelo.front();
     y.block<ENCODERS_VECTOR_SIZE, 1> (2*NUMAXIS,0) = encodersvelocity;
     y.block<NUMBER_OF_WHEELS, 1> ((2*NUMAXIS) + ENCODERS_VECTOR_SIZE,0) = dcontactAngle.data;
@@ -664,7 +663,7 @@ void Measurement::toSlipInfo(localization::SlipInfo &sinfo)
 {
 
     sinfo.slip_vector = slipVector.data;
-    sinfo.Cov = slipVector.Cov;
+    sinfo.slip_vectorCov = slipVector.Cov;
     
     return;
 }

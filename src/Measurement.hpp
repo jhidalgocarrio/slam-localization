@@ -367,13 +367,12 @@ namespace localization
 	* @param[in] A the matrix with the non-sensed values
 	* @param[in] B the matrix with the sensed values
 	* @param[in] R covariance matrix of the sensed values.
-	* @param[in] dt delta integration step for the acc
 	* 
 	* @return relative least-squares error
 	* 
 	*/
 	double slipKinematics (const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
-				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R);
+				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, NUMAXIS, 1> &linvelo);
 	
 	
 	/**
