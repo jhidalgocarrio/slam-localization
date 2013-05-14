@@ -18,7 +18,7 @@ bool increment(std::vector<int> & vector, int k)
   return false;
 }
 
-
+//Main function of the test program
 int main(int argc, char** argv)
 {
 	localization::Sckf mysckf;
