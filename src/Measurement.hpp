@@ -513,7 +513,7 @@ namespace localization
 	* @return OK is everything all right. ERROR on other cases.
 	*
 	*/
-	static int CorrectMagneticDeclination (Eigen::Quaternion <double> *quat, double magnetic_declination,  int mode)
+	static bool CorrectMagneticDeclination (Eigen::Quaternion <double> *quat, double magnetic_declination,  int mode)
 	{
 	    Eigen::Matrix <double, NUMAXIS, 1> euler;
 	
@@ -540,14 +540,14 @@ namespace localization
 		#ifdef DEBUG_PRINTS
 		std::cerr << "[ERROR] In the correction of the magnetic declination\n";
 		#endif
-		return ERROR_OUT;
+		return false;
 	    }
 	    
 	    *quat = Eigen::Quaternion <double> (Eigen::AngleAxisd(euler[0], Eigen::Vector3d::UnitX())*
 				Eigen::AngleAxisd(euler[1], Eigen::Vector3d::UnitY()) *
 				Eigen::AngleAxisd(euler[2], Eigen::Vector3d::UnitZ()));
 	    
-	    return OK_LOCALIZATION;
+	    return true;
 	};
 	
 	/**

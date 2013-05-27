@@ -18,7 +18,6 @@
 #define DEBUG_PRINTS 1
 
 using namespace localization;
-using namespace Eigen;
 
 /**
 * @brief Default constructor

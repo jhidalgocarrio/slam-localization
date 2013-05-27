@@ -8,95 +8,58 @@
 namespace localization	
 {
 
-    /** General defines **/
-    #ifndef OK_LOCALIZATION
-    #define OK_LOCALIZATION 0  /** Integer value in order to return when everything is all right. */
-    #endif
-    #ifndef ERROR_OUT
-    #define ERROR_OUT -1  /** Integer value in order to return when an error occured. */
-    #endif
-    
-    #ifndef QUATERSIZE
-    #define QUATERSIZE 4 /** Number of parameters of a quaternion **/
-    #endif
-    
-    
-    /** WGS-84 ellipsoid constants (Nominal Gravity Model and Earth angular velocity) **/
-    #ifndef Re
-    #define Re	6378137 /** Equatorial radius in meters **/
-    #endif
-    #ifndef Rp
-    #define Rp	6378137 /** Polar radius in meters **/
-    #endif
-    #ifndef ECC
-    #define ECC  0.0818191908426 /** First eccentricity **/
-    #endif
-    #ifndef GRAVITY
-    #define GRAVITY 9.79766542 /** Mean value of gravity value in m/s^2 **/
-    #endif
-    #ifndef GWGS0
-    #define GWGS0 9.7803267714 /** Gravity value at the equator in m/s^2 **/
-    #endif
-    #ifndef GWGS1
-    #define GWGS1 0.00193185138639 /** Gravity formula constant **/
-    #endif
-    #ifndef EARTHW
-    #define EARTHW  7.292115e-05 /** Earth angular velocity in rad/s **/
-    #endif
-    
-    #ifndef EAST
-    #define EAST 1 /** EAST is 1 and means positive magnetic declination **/
-    #endif
-    
-    #ifndef WEST
-    #define WEST 2 /** WEST is 2 and means negative magnetic declination **/
-    #endif
-    
-    /** Inertial Sensors constant parameters **/
-    #ifndef NUMAXIS
-    #define NUMAXIS 3 /** Number of axis sensed by the IMU **/
-    #endif
-    
-    /** Variables for the attitude estimation inside the algorithm **/
-    #define M1 1 /** Parameter for adaptive algorithm (to estimate Uk with is not directly observale) */
-    #define M2 5 /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
-    #define GAMMA 0.0005 /** Parameter for adaptive algorithm (only entering when Qstart is greater than RHR'+Ra) */
-    #define R2COUNT 100 /** Parameter for adaptive algorithm */
+    /** General constants values **/
+    static const int QUATERSIZE = 4; /** Number of parameters of a quaternion **/
+    static const int NUMAXIS = 3; /** Number of axis sensed by the IMU **/
 
-    #ifndef D2R
-    #define D2R M_PI/180.00 /** Convert degree to radian **/
-    #endif
-    
-    #ifndef R2D
-    #define R2D 180.00/M_PI /** Convert radian to degree **/
-    #endif
-    
-    #ifndef ZERO_UNCERTAINTY
-    #define ZERO_UNCERTAINTY 1.0e-10 /** Set as default zero uncertainty **/
-    #endif
-    
-    
+    /** WGS-84 ellipsoid constants (Nominal Gravity Model and Earth angular velocity) **/
+    static const int Re = 6378137; /** Equatorial radius in meters **/
+    static const int Rp = 6378137; /** Polar radius in meters **/
+    static const double ECC = 0.0818191908426; /** First eccentricity **/
+    static const double GRAVITY = 9.79766542; /** Mean value of gravity value in m/s^2 **/
+    static const double GWGS0 = 9.7803267714; /** Gravity value at the equator in m/s^2 **/
+    static const double GWGS1 = 0.00193185138639; /** Gravity formula constant **/
+    static const double EARTHW = 7.292115e-05; /** Earth angular velocity in rad/s **/
+
+    /** Magnetic declination **/
+    enum DECLINATION_CONSTS {
+         EAST = 1, /** EAST is 1 and means positive magnetic declination **/
+         WEST = 2 /** WEST is 2 and means negative magnetic declination **/
+    };
+
+    /** Variables for the attitude estimation inside the algorithm **/
+    static const int M1 = 1; /** Parameter for adaptive algorithm (to estimate Uk with is not directly observale) */
+    static const int M2 = 5; /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
+    static const double GAMMA = 0.0005; /** Parameter for adaptive algorithm (only entering when Qstart is greater than RHR'+Ra) */
+    static const int R2COUNT = 100; /** Parameter for adaptive algorithm */
+
+    static const double D2R = M_PI/180.00; /** Convert degree to radian **/
+    static const double R2D = 180.00/M_PI; /** Convert radian to degree **/
+
+    static const double ZERO_UNCERTAINTY = 1.0e-10; /** Set as default zero uncertainty **/
+
+
     /** Integration of the delayed windows **/
     static const int INTEGRATION_XAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
-    
+
     static const int INTEGRATION_YAXIS_WINDOW_SIZE = 1;//100; /** Windows size of the delay integration **/
-    
+
     static const int INTEGRATION_ZAXIS_WINDOW_SIZE = 1;//10; /** Windows size of the delay integration **/
-    
+
     static const int ANGVELO_WINDOW_SIZE = INTEGRATION_XAXIS_WINDOW_SIZE; /** Windows size of the delay integration **/
 	
     static const unsigned int NUMBER_OF_WHEELS = 4; /** Rover number of wheels **/
-    
+
     static const unsigned int NUMBER_OF_PASSIVE_JOINTS = 1; /** Rover chassis number of passive joints **/
-    
+
     static const unsigned int NUMBER_OF_ACTIVE_JOINTS = 0; /** Rover chassis number of actuated joints **/
-    
+
     static const unsigned int ENCODERS_VECTOR_SIZE = NUMBER_OF_ACTIVE_JOINTS+NUMBER_OF_PASSIVE_JOINTS+NUMBER_OF_WHEELS; /** Vector of rover sensed joints with encoders **/
-    
+
     static const unsigned int SLIP_VECTOR_SIZE = NUMAXIS * NUMBER_OF_WHEELS; /** Size of slip vector of the mobil robot **/
-    
+
     static const unsigned int NORDER_BESSEL_FILTER = 8; /** Order of the IIR Bessel filter **/
-    
+
 }
 
-#endif // 
+#endif //

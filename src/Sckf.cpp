@@ -14,7 +14,6 @@
 #define DEBUG_PRINTS 1
 
 using namespace localization;
-using namespace Eigen;
 
 void Sckf::welcome()
 {
@@ -128,13 +127,13 @@ Eigen::Quaternion< double > Sckf::deltaQuaternion()
 /**
 * @brief This function Initialize Attitude
 */
-int Sckf::setAttitude(Eigen::Quaternion< double >& initq)
+bool Sckf::setAttitude(Eigen::Quaternion< double >& initq)
 {
     /** Initial orientation **/
     q4 = initq;
     prev_q4 = initq;
 	
-    return OK_LOCALIZATION;
+    return true;
     
 }
 
@@ -152,7 +151,7 @@ void Sckf::setGravity(double g)
 /**
 * @brief This function set the initial Omega matrix
 */
-int Sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
+bool Sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
 {
     if (&u != NULL)
     {
@@ -162,10 +161,10 @@ int Sckf::setOmega(Eigen::Matrix< double, NUMAXIS , 1  >& u)
 	    u(1), -u(2), 0, u(0),
 	    u(2), u(1), -u(0), 0;
 	
-	return OK_LOCALIZATION;
+	return true;
     }
 
-    return ERROR_OUT;
+    return false;
 
 }
 
@@ -281,18 +280,18 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     mtilde(2) = -sin(alpha);
 
     /** Kalman filter state, system matrix, error covariance and process noise covariance **/
-    xki_k = Matrix <double,Sckf::X_STATE_VECTOR_SIZE,1>::Zero();
+    xki_k = Eigen::Matrix <double,Sckf::X_STATE_VECTOR_SIZE,1>::Zero();
     xk_k = xki_k;
     
     /** System matrix F **/
-    Fki = Matrix <double,Sckf::X_STATE_VECTOR_SIZE, Sckf::X_STATE_VECTOR_SIZE>::Zero();
+    Fki = Eigen::Matrix <double,Sckf::X_STATE_VECTOR_SIZE, Sckf::X_STATE_VECTOR_SIZE>::Zero();
     
     /** System matrix A **/
-    A = Matrix <double,Sckf::A_STATE_VECTOR_SIZE, Sckf::A_STATE_VECTOR_SIZE>::Zero();      
+    A = Eigen::Matrix <double,Sckf::A_STATE_VECTOR_SIZE, Sckf::A_STATE_VECTOR_SIZE>::Zero();
     A(0,3) = -0.5;A(1,4) = -0.5;A(2,5) = -0.5;
     
     /** Process noise **/
-    Qk = Matrix <double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Zero();
+    Qk = Eigen::Matrix <double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Zero();
     Qk.block <NUMAXIS, NUMAXIS> (NUMAXIS,NUMAXIS) = Rapr;
     Qk.block <NUMAXIS, NUMAXIS> (2*NUMAXIS,2*NUMAXIS) = 0.25 * Rg;
     Qk.block <NUMAXIS, NUMAXIS> ((2*NUMAXIS)+NUMAXIS,(2*NUMAXIS)+NUMAXIS) = Qbg;
@@ -303,8 +302,8 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     Pk_k = Pki_k;
     
     /** Assign the initial value for the measurement matrix of the attitude **/
-    H1a = Matrix <double,NUMAXIS,Sckf::A_STATE_VECTOR_SIZE>::Zero();
-    H2a = Matrix <double,NUMAXIS,Sckf::A_STATE_VECTOR_SIZE>::Zero();
+    H1a = Eigen::Matrix <double,NUMAXIS,Sckf::A_STATE_VECTOR_SIZE>::Zero();
+    H2a = Eigen::Matrix <double,NUMAXIS,Sckf::A_STATE_VECTOR_SIZE>::Zero();
     H1a(0,6) = 1; H1a(1,7) = 1; H1a(2,8) = 1;
 
     /** Set the history of noise for the attitude **/
@@ -329,8 +328,8 @@ void Sckf::Init(Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic >& P_0,
     innovation.setZero();
     
     /** Initial bias **/
-    bghat = Matrix <double,NUMAXIS,1>::Zero();
-    bahat = Matrix <double,NUMAXIS,1>::Zero();
+    bghat = Eigen::Matrix <double,NUMAXIS,1>::Zero();
+    bahat = Eigen::Matrix <double,NUMAXIS,1>::Zero();
         
     /** Default omega matrix **/
     oldomega4 << 0 , 0 , 0 , 0,
@@ -509,8 +508,8 @@ void Sckf::predict(Eigen::Matrix< double, NUMAXIS , 1  >& u, Eigen::Matrix< doub
     quat(3) = q4.z();
 
     /** Quaternion integration **/
-    quat = (Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() +(0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
-    ((1/6) * angvelo.squaredNorm() * pow(dt,2) *  Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
+    quat = (Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() +(0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
+    ((1/6) * angvelo.squaredNorm() * pow(dt,2) *  Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
     ((1/24) * omega4 * oldomega4 * pow(dt,2)) - ((1/48) * angvelo.squaredNorm() * omega4 * pow(dt,3))) * quat;
 
     /** Store in a quaternion form **/
@@ -635,7 +634,7 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     /**
     * Single Value Decomposition
     */
-    JacobiSVD <MatrixXd > svdOfUk(Uk, ComputeThinU);
+    Eigen::JacobiSVD <Eigen::MatrixXd > svdOfUk(Uk, Eigen::ComputeThinU);
 
     s = svdOfUk.singularValues(); //!eigenvalues
     u = svdOfUk.matrixU();//!eigenvectors
@@ -680,7 +679,7 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
 	    Qstar = auxvector(0) * u.col(0) * u.col(0).transpose() + auxvector(1) * u.col(1) * u.col(1).transpose() + auxvector(2) * u.col(2) * u.col(2).transpose();
 	}
 	else
-	    Qstar = Matrix<double, NUMAXIS, NUMAXIS>::Zero();
+	    Qstar = Eigen::Matrix<double, NUMAXIS, NUMAXIS>::Zero();
     }
     
     /** Measurement vector **/
@@ -718,10 +717,10 @@ void Sckf::update(Eigen::Matrix <double,NUMAXIS,NUMAXIS> &Hme, Eigen::Matrix <do
     Eigen::Matrix<double, 2*NUMAXIS, 2*NUMAXIS> S = Hk * Pki_k * Hk.transpose() + Rk;
 //     K = Pki_k * Hk.transpose() * ((S.transpose() * S).inverse() * S.transpose()); //!Calculte K using the pseudoinverse of S
     K = Pki_k * Hk.transpose() * S.inverse(); //!Calculate K using the inverse of S
-      
+
     /** Update the state vector and the covariance matrix **/
-    xki_k = xki_k + K * (zki - Hk * xki_k);    
-    Pki_k = (Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
+    xki_k = xki_k + K * (zki - Hk * xki_k);
+    Pki_k = (Eigen::Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk)*Pki_k*(Eigen::Matrix<double,Sckf::X_STATE_VECTOR_SIZE,Sckf::X_STATE_VECTOR_SIZE>::Identity()-K*Hk).transpose() + K*Rk*K.transpose();
     Pki_k = 0.5 * (Pki_k + Pki_k.transpose());
     
     #ifdef DEBUG_PRINTS
@@ -1279,19 +1278,19 @@ void Sckf::resetStateVector()
     /**------------------------------ **/
     
     /** Reset the position part of the state **/
-    xki_k.block<NUMAXIS,1>(0,0) = Matrix<double, NUMAXIS, 1>::Zero();
+    xki_k.block<NUMAXIS,1>(0,0) = Eigen::Matrix<double, NUMAXIS, 1>::Zero();
     
     /** Reset the velocity part of the state **/
-    xki_k.block<NUMAXIS,1>(NUMAXIS,0) = Matrix<double, NUMAXIS, 1>::Zero();
+    xki_k.block<NUMAXIS,1>(NUMAXIS,0) = Eigen::Matrix<double, NUMAXIS, 1>::Zero();
     
     /** Reset the quaternion part of the state vector (the error quaternion) (q4 is corrected in the update step) **/
-    xki_k.block<NUMAXIS,1>(2*NUMAXIS,0) = Matrix<double, NUMAXIS, 1>::Zero();
+    xki_k.block<NUMAXIS,1>(2*NUMAXIS,0) = Eigen::Matrix<double, NUMAXIS, 1>::Zero();
     
     /** Reset the gyroscopes bias (there is a bghat variable) **/
-    xki_k.block<NUMAXIS, 1> ((3*NUMAXIS),0) = Matrix <double, NUMAXIS, 1>::Zero();
+    xki_k.block<NUMAXIS, 1> ((3*NUMAXIS),0) = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
     
     /** Reset the accelerometers bias (there is a bahat variable) **/
-    xki_k.block<NUMAXIS, 1> ((4*NUMAXIS),0) = Matrix <double, NUMAXIS, 1>::Zero();
+    xki_k.block<NUMAXIS, 1> ((4*NUMAXIS),0) = Eigen::Matrix <double, NUMAXIS, 1>::Zero();
     
     #ifdef DEBUG_PRINTS
     std::cout<< "[Update After Reset] xki_k is of size "<<xki_k.rows()<<"x"<<xki_k.cols()<<"\n";

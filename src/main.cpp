@@ -18,9 +18,17 @@ bool increment(std::vector<int> & vector, int k)
   return false;
 }
 
+enum JAVI_CONSTS {
+    HOLA = 1,
+    ADIOS = 2,
+    ESPANA = 3
+};
+
 //Main function of the test program
 int main(int argc, char** argv)
 {
+        using namespace localization;
+
 	localization::Sckf mysckf;
 	mysckf.welcome();
 	
@@ -168,6 +176,11 @@ int main(int argc, char** argv)
 // 	
 // 	std::cout<<"v1\n"<<v1<<"\n";
 // 	std::cout<<"v2\n"<<v2<<"\n";
+//
+
+        std::cout<<"HOLA is "<<HOLA<<"\n";
+        std::cout<<"ADIOS is "<<ADIOS<<"\n";
+        std::cout<<"ESPAÑA is "<<ESPANA<<"\n";
 
 	return 0;
 }

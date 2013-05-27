@@ -245,7 +245,7 @@ namespace localization
 	* @return OK is everything all right. ERROR on other cases.
 	*
 	*/
-	int setAttitude (Eigen::Quaternion <double> &initq);
+	bool setAttitude (Eigen::Quaternion <double> &initq);
 	
 	/**
 	* @brief Set gravity value
@@ -310,7 +310,7 @@ namespace localization
 	* @return OK is everything all right. ERROR on other cases.
 	*
 	*/
-	int setOmega (Eigen::Matrix <double,NUMAXIS,1>  &u);
+	bool setOmega (Eigen::Matrix <double,NUMAXIS,1>  &u);
 	
 	/**
 	* @brief Set Yaw angle
