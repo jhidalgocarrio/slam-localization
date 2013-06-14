@@ -14,7 +14,7 @@
 
 /** Localization library headers **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
-#include "Measurement.hpp" /** For the Measurement Generation module of the framework **/
+#include "MeasurementItem.hpp" /** For the Measurement Generation module of the framework **/
 
 namespace localization	
 {
@@ -115,7 +115,7 @@ namespace localization
     public:
 	
 	/** Objects of the measurement class **/
-	Measurement measurement; /** Proprioceptive measurement variable **/
+	MeasurementItem measurement; /** Proprioceptive measurement variable **/
 	
     public:
 

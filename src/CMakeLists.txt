@@ -2,7 +2,7 @@ rock_find_pkgconfig(Eigen3 eigen3 REQUIRED)
 
 set (LOCALIZATION_SRCS
     Sckf.cpp
-    Measurement.cpp
+    MeasurementItem.cpp
     Lesma.cpp
     DataModel.cpp
     DeadReckon.cpp
@@ -11,7 +11,7 @@ set (LOCALIZATION_SRCS
 set (LOCALIZATION_HDRS
     Configuration.hpp
     Sckf.hpp
-    Measurement.hpp
+    MeasurementItem.hpp
     Lesma.hpp
     DataModel.hpp
     DeadReckon.hpp
@@ -20,7 +20,7 @@ set (LOCALIZATION_HDRS
 
 rock_library(rover_localization
     SOURCES ${LOCALIZATION_SRCS}
-    DEPS_PKGCONFIG base-types base-lib yaml-cpp envire
+    DEPS_PKGCONFIG base-types base-lib yaml-cpp odometry envire
     HEADERS ${LOCALIZATION_HDRS})
 
 rock_executable(rover_localization_bin main.cpp

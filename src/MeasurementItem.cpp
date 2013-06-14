@@ -1,7 +1,7 @@
-/**\file Measurement.cpp
+/**\file MeasurementItem.cpp
  *
- * This class has the primitive methods for the Measurement Generation of the localization framework.
- * The class perform proprioceptive Measurements according to the kinematics jacobian
+ * This class has the primitive methods for the MeasurementItem Generation of the localization framework.
+ * The class perform proprioceptive MeasurementItems according to the kinematics jacobian
  * The Jacobian should externally being provided by the Navigation Kinematics implementation
  * which is particular of each mobile robot chassis.
  * 
@@ -13,7 +13,7 @@
  * @version 1.0.
  */
 
-#include "Measurement.hpp"
+#include "MeasurementItem.hpp"
 
 #define DEBUG_PRINTS 1
 
@@ -22,7 +22,7 @@ using namespace localization;
 /**
 * @brief Default constructor
 */
-Measurement::Measurement()
+MeasurementItem::MeasurementItem()
 {
     /** In constructor set the buffer size to NaN **/
     this->ibuffer_size = std::numeric_limits<double>::quiet_NaN();
@@ -32,21 +32,21 @@ Measurement::Measurement()
 /**
 * @brief Default desconstructor
 */
-Measurement::~Measurement()
+MeasurementItem::~MeasurementItem()
 {
 
 }
 
 
-void Measurement::welcome()
+void MeasurementItem::welcome()
 {
-	std::cout << "You successfully compiled and executed Measurement Generation. Welcome!" << std::endl;
+	std::cout << "You successfully compiled and executed MeasurementItem Generation. Welcome!" << std::endl;
 }
 
 /**
 * @brief This function set the Accelerometers excentricity
 */
-void Measurement::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz)
+void MeasurementItem::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz)
 {
     this->eccx = eccx;
     this->eccy = eccy;
@@ -65,7 +65,7 @@ void Measurement::setEccentricity(Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen
 /**
 * @brief Set the current encoders velocities
 */
-void Measurement::setEncodersVelocity(const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints)
+void MeasurementItem::setEncodersVelocity(const Eigen::Matrix< double, Eigen::Dynamic, 1  > &vjoints)
 {
     this->encodersvelocity = vjoints;
     
@@ -77,7 +77,7 @@ void Measurement::setEncodersVelocity(const Eigen::Matrix< double, Eigen::Dynami
 }
 
 
-void Measurement::setInertialValues(const Eigen::Matrix< double, NUMAXIS , 1  >& acceleration, const Eigen::Matrix< double, NUMAXIS , 1  >& angular_velocity)
+void MeasurementItem::setInertialValues(const Eigen::Matrix< double, NUMAXIS , 1  >& acceleration, const Eigen::Matrix< double, NUMAXIS , 1  >& angular_velocity)
 {
 
     /** Check if the buffer is full **/
@@ -102,7 +102,7 @@ void Measurement::setInertialValues(const Eigen::Matrix< double, NUMAXIS , 1  >&
 /**
 * @brief Gets Inertial Values (acc and angvelo)
 */
-void Measurement::getInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, Eigen::Matrix< double, NUMAXIS , 1  >& angvelo)
+void MeasurementItem::getInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, Eigen::Matrix< double, NUMAXIS , 1  >& angvelo)
 {
     acc = this->acc.front();
     angvelo = this->angvelo.front();
@@ -113,7 +113,7 @@ void Measurement::getInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, 
 /**
 * @brief Gets Avg Inertial Values (acc and angvelo)
 */
-void Measurement::getStepInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, Eigen::Matrix< double, NUMAXIS , 1  >& angvelo)
+void MeasurementItem::getStepInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& acc, Eigen::Matrix< double, NUMAXIS , 1  >& angvelo)
 {
     Eigen::Matrix< double, NUMAXIS , 1  > a, g;
     int queue_size = std::min<int>(this->acc.size(), this->angvelo.size());
@@ -141,7 +141,7 @@ void Measurement::getStepInertialValues(Eigen::Matrix< double, NUMAXIS , 1  >& a
 /**
 * @brief Return increment in linear velocities
 */
-Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearVelocities(double dt)
+Eigen::Matrix< double, NUMAXIS , 1  > MeasurementItem::getLinearVelocities(double dt)
 {
     Eigen::Matrix< double, NUMAXIS , 1  > a;
     int queue_size = this->acc.size();
@@ -157,7 +157,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getLinearVelocities(double dt
 /**
 * @brief Return the current velocity from odometry model
 */
-Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
+Eigen::Matrix< double, NUMAXIS , 1  > MeasurementItem::getCurrentVeloModel()
 {
     
     return this->velMM.front().data;
@@ -166,7 +166,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getCurrentVeloModel()
 /**
 * @brief Get the covariance of the velocity from the odometry model
 */
-Eigen::Matrix< double, NUMAXIS , NUMAXIS> Measurement::getCurrentVeloModelCovariance()
+Eigen::Matrix< double, NUMAXIS , NUMAXIS> MeasurementItem::getCurrentVeloModelCovariance()
 {
     return velMM.front().Cov;
 }
@@ -174,7 +174,7 @@ Eigen::Matrix< double, NUMAXIS , NUMAXIS> Measurement::getCurrentVeloModelCovari
 /**
 * @brief Get the Step increment in velocity
 */
-Eigen::Matrix< double, NUMAXIS, 1  > Measurement::getIncrementalVeloModel()
+Eigen::Matrix< double, NUMAXIS, 1  > MeasurementItem::getIncrementalVeloModel()
 {
     Eigen::Matrix< double, NUMAXIS , 1  > iVelo;
     int queue_size = this->increVelMM.size();
@@ -189,7 +189,7 @@ Eigen::Matrix< double, NUMAXIS, 1  > Measurement::getIncrementalVeloModel()
 /**
 * @brief Get the covariance of the step increment in velocity
 */
-Eigen::Matrix< double, NUMAXIS, NUMAXIS> Measurement::getIncrementalVeloModelCovariance()
+Eigen::Matrix< double, NUMAXIS, NUMAXIS> MeasurementItem::getIncrementalVeloModelCovariance()
 {
     Eigen::Matrix< double, NUMAXIS , NUMAXIS  > iVeloCov;
     int queue_size = this->increVelMM.size();
@@ -205,7 +205,7 @@ Eigen::Matrix< double, NUMAXIS, NUMAXIS> Measurement::getIncrementalVeloModelCov
 /**
 * @brief Return complete slip vector 
 */
-Eigen::Matrix< double, SLIP_VECTOR_SIZE , 1  > Measurement::getSlipVector()
+Eigen::Matrix< double, SLIP_VECTOR_SIZE , 1  > MeasurementItem::getSlipVector()
 {
     return slipVector.data;
 }
@@ -213,7 +213,7 @@ Eigen::Matrix< double, SLIP_VECTOR_SIZE , 1  > Measurement::getSlipVector()
 /**
 * @brief Return complete slip vector Covariance 
 */
-Eigen::Matrix< double, SLIP_VECTOR_SIZE , SLIP_VECTOR_SIZE  > Measurement::getSlipVectorCov()
+Eigen::Matrix< double, SLIP_VECTOR_SIZE , SLIP_VECTOR_SIZE  > MeasurementItem::getSlipVectorCov()
 {
     return slipVector.Cov;
 }
@@ -222,7 +222,7 @@ Eigen::Matrix< double, SLIP_VECTOR_SIZE , SLIP_VECTOR_SIZE  > Measurement::getSl
 /**
 * @brief Return slip vector for wheel_idx
 */
-Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getSlipVector(const unsigned int wheel_idx)
+Eigen::Matrix< double, NUMAXIS , 1  > MeasurementItem::getSlipVector(const unsigned int wheel_idx)
 {
     if (wheel_idx < NUMBER_OF_WHEELS)
 	return this->slipMatrix.col(wheel_idx);
@@ -233,7 +233,7 @@ Eigen::Matrix< double, NUMAXIS , 1  > Measurement::getSlipVector(const unsigned 
 /**
 * @brief Gets rover slip error vector
 */
-Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  > Measurement::getSlipErrorVector()
+Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  > MeasurementItem::getSlipErrorVector()
 {
     return slipError.data;
 }
@@ -241,7 +241,7 @@ Eigen::Matrix< double, SLIP_VECTOR_SIZE, 1  > Measurement::getSlipErrorVector()
 /**
 * @brief Gets rover slip error covariance
 */
-Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE > Measurement::getSlipErrorVectorCovariance()
+Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE > MeasurementItem::getSlipErrorVectorCovariance()
 {
     return slipError.Cov;
 }
@@ -250,7 +250,7 @@ Eigen::Matrix< double, SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE > Measurement::getSlip
 /**
 * @brief Return the contact angles
 */
-Eigen::Matrix< double, Eigen::Dynamic, 1  > Measurement::getContactAnglesVelocity()
+Eigen::Matrix< double, Eigen::Dynamic, 1  > MeasurementItem::getContactAnglesVelocity()
 {
     return this->dcontactAngle.data;
 }
@@ -258,7 +258,7 @@ Eigen::Matrix< double, Eigen::Dynamic, 1  > Measurement::getContactAnglesVelocit
 /**
 * @brief Returns the covariance noise matrix
 */
-Eigen::Matrix< double, ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE > Measurement::getEncodersVelocityCovariance()
+Eigen::Matrix< double, ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE > MeasurementItem::getEncodersVelocityCovariance()
 {
     return Rencoders;
 }
@@ -266,7 +266,7 @@ Eigen::Matrix< double, ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE > Measurement:
 /**
 * @brief Returns the covariance noise matrix
 */
-Eigen::Matrix< double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS > Measurement::getContactAnglesVelocityCovariance()
+Eigen::Matrix< double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS > MeasurementItem::getContactAnglesVelocityCovariance()
 {
     return dcontactAngle.Cov;
 }
@@ -275,7 +275,7 @@ Eigen::Matrix< double, NUMBER_OF_WHEELS, NUMBER_OF_WHEELS > Measurement::getCont
 /**
 * @brief Returns the quaternion with the projection for the nadir vector
 */
-Eigen::Quaternion< double > Measurement::getLevelWeightDistribution()
+Eigen::Quaternion< double > MeasurementItem::getLevelWeightDistribution()
 {
     return q_weight_distribution;
 }
@@ -283,7 +283,7 @@ Eigen::Quaternion< double > Measurement::getLevelWeightDistribution()
 /**
 * @brief Get angular velocity covariance matrix
 */
-Eigen::Matrix< double, NUMAXIS , NUMAXIS  > Measurement::getRangvelo()
+Eigen::Matrix< double, NUMAXIS , NUMAXIS  > MeasurementItem::getRangvelo()
 {
     return this->Rangvelo;
 }
@@ -291,7 +291,7 @@ Eigen::Matrix< double, NUMAXIS , NUMAXIS  > Measurement::getRangvelo()
 /**
 * @brief Get joints encoders velocity covariance matrix
 */
-Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  > Measurement::getRencoders()
+Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  > MeasurementItem::getRencoders()
 {
     return this->Rencoders;
 }
@@ -300,7 +300,7 @@ Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  > Measuremen
 /**
 * @brief Initialization method
 */
-void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
+void MeasurementItem::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
 		       Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rangvelo,
 		       Eigen::Quaternion <double> q_weight, int buffer_size)
 {
@@ -384,7 +384,7 @@ void Measurement::Init(Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VE
 }
 
 
-double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
+double MeasurementItem::navigationKinematics(const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
 					const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &W)
 {
     double leastSquaresError = std::numeric_limits<double>::quiet_NaN();
@@ -484,7 +484,7 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     arrayVelMM.col(localization::NORDER_BESSEL_FILTER) = velocity;
     
     /** IIR Low-pass Bessel Filter **/
-    velocity = Measurement::iirFilter(localization::NORDER_BESSEL_FILTER, besselBCoeff, besselACoeff, arrayVelMM, arrayVelMMIIR);
+    velocity = MeasurementItem::iirFilter(localization::NORDER_BESSEL_FILTER, besselBCoeff, besselACoeff, arrayVelMM, arrayVelMMIIR);
     /** END OF FILTERING THE VELOCITY **/
     
     /** Store in a DataModel variable **/
@@ -553,7 +553,7 @@ double Measurement::navigationKinematics(const Eigen::Matrix< double, Eigen::Dyn
     return leastSquaresError;
 }
 
-double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
+double MeasurementItem::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
 				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, NUMAXIS, 1> &linvelo)
 {
     double leastSquaresError = std::numeric_limits<double>::quiet_NaN();
@@ -649,7 +649,7 @@ double Measurement::slipKinematics(const Eigen::Matrix<double, Eigen::Dynamic, E
 /**
 * @brief This perform simpson rule for integration
 */
-double Measurement::simpsonsIntegral(double fa, double fm, double fb, double delta_ab)
+double MeasurementItem::simpsonsIntegral(double fa, double fm, double fb, double delta_ab)
 {
     return delta_ab/6.0 * (fa + (4.0*fm) + fb);
 }
@@ -658,7 +658,7 @@ double Measurement::simpsonsIntegral(double fa, double fm, double fb, double del
 /**
 * @brief Save slip info to the Orogen-compatible DataType
 */
-void Measurement::toSlipInfo(localization::SlipInfo &sinfo)
+void MeasurementItem::toSlipInfo(localization::SlipInfo &sinfo)
 {
 
     sinfo.slip_vector = slipVector.data;
@@ -667,7 +667,7 @@ void Measurement::toSlipInfo(localization::SlipInfo &sinfo)
     return;
 }
 
-void Measurement::toMeasurementGenerationInfo(MeasurementGenerationInfo& measurementInfo)
+void MeasurementItem::toMeasurementItemGenerationInfo(MeasurementItemGenerationInfo& measurementInfo)
 {
     measurementInfo.wlsNavigation = this->leastSquaredNavigation;
     measurementInfo.wlsSlip = this->leastSquaredSlip;
@@ -680,7 +680,7 @@ void Measurement::toMeasurementGenerationInfo(MeasurementGenerationInfo& measure
 /**
 * @brief Computes the Bhattacharyya coefficient
 */
-Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Measurement::bhattacharyya(DataModel& data1, DataModel& data2)
+Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MeasurementItem::bhattacharyya(DataModel& data1, DataModel& data2)
 {
     double number_expo = std::numeric_limits<double>::quiet_NaN();
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Inv_half(data1.size(), data1.size());
@@ -723,7 +723,7 @@ Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Measurement::bhattacharyya
 /**
 * @brief Computes the Mahalanobis distance
 */
-double Measurement::mahalanobis(DataModel& data1)
+double MeasurementItem::mahalanobis(DataModel& data1)
 {
     Eigen::Matrix<double, 1, 1> result;
     
@@ -736,7 +736,7 @@ double Measurement::mahalanobis(DataModel& data1)
 /**
 * @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
 */
-double Measurement::getWaveLenghtFromValue (const double value, const double max, const double min)
+double MeasurementItem::getWaveLenghtFromValue (const double value, const double max, const double min)
 {
     const double minVisibleLength = 350.0;
     const double maxVisibleLength = 650.0;
@@ -761,7 +761,7 @@ int colorAdjust (const double colorvalue, const double factor)
 /**
 * @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
 */
-Eigen::Matrix<double, 3, 1> Measurement::waveLenghtToColor (const double wavelength)
+Eigen::Matrix<double, 3, 1> MeasurementItem::waveLenghtToColor (const double wavelength)
 {
     const double intensitymax = 255.0;
     
@@ -845,7 +845,7 @@ Eigen::Matrix<double, 3, 1> Measurement::waveLenghtToColor (const double wavelen
 /**
 * @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
 */
-Eigen::Matrix<double, 3, 1> Measurement::waveLenghtToColorv2 (const double wavelength)
+Eigen::Matrix<double, 3, 1> MeasurementItem::waveLenghtToColorv2 (const double wavelength)
 {
     const double intensitymax = 255.0;
     
@@ -910,7 +910,7 @@ Eigen::Matrix<double, 3, 1> Measurement::waveLenghtToColorv2 (const double wavel
 /**
 * @brief 
 */
-Eigen::Matrix<double, 3, 1> Measurement::valueToColor (const double value, const double max, const double min)
+Eigen::Matrix<double, 3, 1> MeasurementItem::valueToColor (const double value, const double max, const double min)
 {
     double wavelength;//! In nanometers
     

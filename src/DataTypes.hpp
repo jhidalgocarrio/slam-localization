@@ -33,14 +33,14 @@ namespace localization
 	base::Vector3d slipdetector;
 	double Mahalanobis;
     };
-    
-    struct MeasurementGenerationInfo
+
+    struct MeasurementItemGenerationInfo
     {
 	base::Time time;
 	double wlsNavigation;
 	double wlsSlip;
     };
-    
+
     struct SlipInfo
     {
 	base::Time time;

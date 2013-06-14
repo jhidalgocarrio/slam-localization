@@ -2,8 +2,8 @@
  * Header function file and defines
  */
 
-#ifndef _MEASUREMENT_HPP_
-#define _MEASUREMENT_HPP_
+#ifndef _MEASUREMENT_ITEM_HPP_
+#define _MEASUREMENT_ITEM_HPP_
 
 #include <iostream> /** IO C++ Standard library */
 #include <queue> /** FIFO queues **/
@@ -23,7 +23,7 @@
 
 namespace localization	
 {
-    class Measurement
+    class MeasurementItem
     {
 	
     public:
@@ -69,13 +69,13 @@ namespace localization
 
     public:
 	
-	/** Measurement contructor
+	/** MeasurementItem contructor
          */
-        Measurement();
+        MeasurementItem();
 	
-	/** Measurement default descontructor
+	/** MeasurementItem default descontructor
          */
-        ~Measurement();
+        ~MeasurementItem();
 	
 	/**
 	* Print a welcome to stdout
@@ -396,7 +396,7 @@ namespace localization
 	* @return void
 	* 
 	*/
-	void toMeasurementGenerationInfo (localization::MeasurementGenerationInfo &measurementInfo);
+	void toMeasurementItemGenerationInfo (localization::MeasurementItemGenerationInfo &measurementInfo);
 
 	
 	/**

@@ -1342,11 +1342,11 @@ void Sckf::toFilterInfo(localization::FilterInfo &finfo, double dt)
     finfo.bahat = this->bahat;
     Eigen::VectorXd aux(2);
     aux = filtered_evelocity.row(0);
-    finfo.eacceleration[0] = Measurement::finiteDifference(aux, dt);
+    finfo.eacceleration[0] = MeasurementItem::finiteDifference(aux, dt);
     aux = filtered_evelocity.row(1);
-    finfo.eacceleration[1] = Measurement::finiteDifference(aux, dt);
+    finfo.eacceleration[1] = MeasurementItem::finiteDifference(aux, dt);
     aux = filtered_evelocity.row(2);
-    finfo.eacceleration[2] = Measurement::finiteDifference(aux, dt);
+    finfo.eacceleration[2] = MeasurementItem::finiteDifference(aux, dt);
     finfo.Hellinger = this->Hellinger;
     finfo.Mahalanobis = this->Mahalanobis;
     finfo.slipdetector = this->slipdetector;
