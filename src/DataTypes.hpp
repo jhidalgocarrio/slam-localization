@@ -34,7 +34,7 @@ namespace localization
 	double Mahalanobis;
     };
 
-    struct MeasurementItemGenerationInfo
+    struct UtilInfo
     {
 	base::Time time;
 	double wlsNavigation;
