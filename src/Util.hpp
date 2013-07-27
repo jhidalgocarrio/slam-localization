@@ -19,11 +19,11 @@
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 #include "DataTypes.hpp" /** Orogen compatible export data types **/
 
-
+#define MEASUREMENT_ITEN_DEBUG_PRINTS 1
 
 namespace localization	
 {
-    class MeasurementItem
+    class Util
     {
 	
     public:
@@ -69,13 +69,13 @@ namespace localization
 
     public:
 	
-	/** MeasurementItem contructor
+	/** Util contructor
          */
-        MeasurementItem();
+        Util();
 	
-	/** MeasurementItem default descontructor
+	/** Util default descontructor
          */
-        ~MeasurementItem();
+        ~Util();
 	
 	/**
 	* Print a welcome to stdout
@@ -396,7 +396,7 @@ namespace localization
 	* @return void
 	* 
 	*/
-	void toMeasurementItemGenerationInfo (localization::MeasurementItemGenerationInfo &measurementInfo);
+	void toUtilInfo (localization::UtilInfo &measurementInfo);
 
 	
 	/**
@@ -457,7 +457,9 @@ namespace localization
 	    /** Gravity affects by the altitude (aprox the value r = Re **/
 	    g = g*pow(Re/(Re+altitude), 2);
 
-	    std::cout<<"Theoretical gravity for this location (WGS-84 ellipsoid model): "<< g<<" [m/s^2]\n";
+            #ifdef MEASUREMENT_ITEN_DEBUG_PRINTS
+	    std::cout<<"[MEASUREMENT_ITEM] Theoretical gravity for this location (WGS-84 ellipsoid model): "<< g<<" [m/s^2]\n";
+            #endif
 
 	    return g;
 	};
@@ -467,31 +469,31 @@ namespace localization
 	*
 	* This function computes the substraction of the rotation of the Earth (EARTHW)
 	* from the gyroscope values. This function uses quaternion of transformation from
-	* the body to the geographic frame and the latitude in radians.
+	* the geographici to body frame and the latitude in radians.
 	*
 	* @author Javier Hidalgo Carrio.
 	*
 	* @param[in, out] *u pointer to angular velocity
-	* @param[in] *qb_g quaternion from body frame to geographic frame
+	* @param[in] *q quaternion from geographic to body frame vb = qbg * vg (qbg is transf a vector  from g to b)
 	* @param[in] latitude location latitude angle in radians
 	*
 	* @return void
 	*
 	*/
-	static void SubstractEarthRotation(Eigen::Matrix <double, NUMAXIS, 1> *u, Eigen::Quaternion <double> *qb_g, double latitude)
+	static void SubstractEarthRotation(Eigen::Matrix <double, NUMAXIS, 1, Eigen::DontAlign> *u, Eigen::Quaternion <double, Eigen::DontAlign> *q, double latitude)
 	{
 	    Eigen::Matrix <double, NUMAXIS, 1> v (EARTHW*cos(latitude), 0, EARTHW*sin(latitude)); /** vector of earth rotation components expressed in the geografic frame according to the latitude **/
 
 	    /** Compute the v vector expressed in the body frame **/
-	    v = (*qb_g) * v;
-	    
+	    v = (*q) * v;
+
 	    #ifdef DEBUG_PRINTS
-	    std::cout<<"Earth Rotation:"<<v<<"\n";
+	    std::cout<<"[MEASUREMENT_ITEM] Earth Rotation:"<<v<<"\n";
 	    #endif
 
 	    /** Subtract the earth rotation to the vector of inputs (u = u-v**/
 	    (*u)  = (*u) - v;
-	    
+
 	    return;
 	};
 	
