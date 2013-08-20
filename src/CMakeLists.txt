@@ -1,5 +1,3 @@
-rock_find_pkgconfig(Eigen3 eigen3 REQUIRED)
-
 set (LOCALIZATION_SRCS
     Util.cpp
     Lesma.cpp
@@ -19,10 +17,13 @@ set (LOCALIZATION_HDRS
     filters/State.hpp
     filters/ProcessModels.hpp
     filters/MeasurementModels.hpp
+    filters/IIR.hpp
     )
+
 
 rock_library(rover_localization
     SOURCES ${LOCALIZATION_SRCS}
-    DEPS_PKGCONFIG base-types base-lib yaml-cpp odometry envire
+    DEPS_PKGCONFIG eigen3 base-types base-lib yaml-cpp odometry envire
+    DEPS_CMAKE LAPACK
     HEADERS ${LOCALIZATION_HDRS})
 
