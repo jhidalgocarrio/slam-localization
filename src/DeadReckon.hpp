@@ -12,7 +12,7 @@
 #include <envire/core/Transform.hpp> /** Envire module which has transformation with uncertainty **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 
-#define DEAD_RECKON_DEBUG_PRINTS 1
+//#define DEAD_RECKON_DEBUG_PRINTS 1
 
 namespace localization	
 {
@@ -58,11 +58,11 @@ namespace localization
             angularVelocities[1] = cartesianVelocities[1].block<NUMAXIS, 1> (NUMAXIS, 0);
             angularVelCov = cartesianVelCov.block<NUMAXIS, NUMAXIS> (NUMAXIS, NUMAXIS);
 
-            deltaPose.orientation.setIdentity();// = updateAttitude(delta_t, angularVelocities, angularVelCov, prevPose.orientation, postPose.orientation);
+            deltaPose.orientation = updateAttitude(delta_t, angularVelocities, angularVelCov, prevPose.orientation, postPose.orientation); //deltaPose.orientation.setIdentity();
 
             /** Set the uncertainty matrices **/
-            //deltaPose.cov_position = cartesianVelCov.block<NUMAXIS, NUMAXIS>(0, 0) * delta_t;
-            deltaPose.cov_orientation = cartesianVelCov.block<NUMAXIS, NUMAXIS>(NUMAXIS, NUMAXIS) * delta_t;
+            deltaPose.cov_position.setZero();// = cartesianVelCov.block<NUMAXIS, NUMAXIS>(0, 0) * delta_t;
+            deltaPose.cov_orientation.setZero();// = cartesianVelCov.block<NUMAXIS, NUMAXIS>(NUMAXIS, NUMAXIS) * delta_t;
 
             /** Create the transformation from the delta position and the actual position **/
             tfDeltaPose = deltaPose;
@@ -84,7 +84,7 @@ namespace localization
             tfPostPose.copyToRigidBodyState(postPose);
 
             /** Fill the instantaneous velocities in the rigid body state **/
-            postPose.velocity = cartesianVelocities[0].block<NUMAXIS, 1> (0,0);
+            postPose.velocity = cartesianVelocities[0].block<NUMAXIS, 1> (0,0); //!Velocity in body frame
             postPose.cov_velocity = cartesianVelCov.block<NUMAXIS, NUMAXIS> (0,0);
             postPose.angular_velocity = cartesianVelocities[0].block<NUMAXIS, 1> (NUMAXIS, 0);
             postPose.cov_angular_velocity = cartesianVelCov.block<NUMAXIS, NUMAXIS> (NUMAXIS, NUMAXIS);
@@ -115,6 +115,7 @@ namespace localization
             Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4, oldomega4; /** Angular velocity matrix */
             Eigen::Matrix <double,QUATERSIZE,1> quat; /** Quaternion integration matrix */
 
+            quat<< 1.00, 0.00, 0.00, 0.00; /**Identity quaternion */
 
             /** Discrete quaternion integration of the angular velocity **/
             omega4 << 0,-angularVelocities[0](0), -angularVelocities[0](1), -angularVelocities[0](2),
@@ -127,27 +128,21 @@ namespace localization
 	        angularVelocities[1](1), -angularVelocities[1](2), 0, angularVelocities[1](0),
 	        angularVelocities[1](2), angularVelocities[1](1), -angularVelocities[1](0), 0;
 
-            /** Copy in a vector form **/
-            quat(0) = prevq.w();
-            quat(1) = prevq.x();
-            quat(2) = prevq.y();
-            quat(3) = prevq.z();
-
 
             /** Quaternion integration (third order linearization) **/
-            quat = (Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() +(0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
+            quat = (Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() + (0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
             ((1/6) * angularVelocities[0].squaredNorm() * pow(dt,2) *  Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
             ((1/24) * omega4 * oldomega4 * pow(dt,2)) - ((1/48) * angularVelocities[0].squaredNorm() * omega4 * pow(dt,3))) * quat;
 
             /** Store in a quaternion form **/
-            postq.w() = quat(0);
-            postq.x() = quat(1);
-            postq.y() = quat(2);
-            postq.z() = quat(3);
-            postq.normalize();
+            deltaq.w() = quat(0);
+            deltaq.x() = quat(1);
+            deltaq.y() = quat(2);
+            deltaq.z() = quat(3);
+            deltaq.normalize();
 
-            /** Delta quaternion **/
-            deltaq = prevq.inverse() * postq;
+            /** Quaternion multiplication **/
+            postq = deltaq * prevq;
 
             #ifdef DEAD_RECKON_DEBUG_PRINTS
             std::cout <<"[DR] deltaq is "<<deltaq.w()<<" "<<deltaq.x()<<" "<<deltaq.y()<<" "<<deltaq.z()<<"\n";
