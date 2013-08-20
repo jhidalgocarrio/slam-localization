@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE( USCKF )
     for (register int i=0; i<1; ++i)
     {
         Eigen::Vector3d acc, gyro;
-        Eigen::Quaternion<double> orientq = filter.getCurrentOrientation();
+        Eigen::Quaternion<double> orientq = filter.muState().statek_i.orient;
         acc << 100.00, 0.00, 0.00;
         gyro << (100.00*localization::D2R), 0.00, 0.00;
         std::cout<<"IN_LOOP ["<<i<<"]\n";

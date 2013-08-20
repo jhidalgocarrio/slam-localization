@@ -45,6 +45,7 @@ state process_model ( const state &s, const Eigen::Matrix<double, 3, 1> &a , con
     Eigen::Vector3d scaled_axis = w * dt ;
     MTK::SO3 <double> rot = SO3::exp (scaled_axis);
     s2.orient = s.orient * rot;
+    // above is the same than s2.orient.boxplus(scaled_axis);
 
     // accelerate with gravity
     //Eigen::Matrix<double, 3, 1> gravity;
