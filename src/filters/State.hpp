@@ -96,7 +96,6 @@ namespace localization
             statek_i.boxminus(MTK::subvector(__res, &self::statek_i), __oth.statek_i);
         }
 
-
         friend std::ostream& operator<<(std::ostream& __os, const VectorState& __var)
         {
             __os << "\n" << __var.statek << "\n" << __var.statek_l << "\n" << __var.statek_i << "\n";

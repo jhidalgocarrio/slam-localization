@@ -28,6 +28,8 @@
 #include <mtk/build_manifold.hpp>
 
 
+#define USCKF_DEBUG_PRINTS 1
+
 namespace localization
 {
 	
@@ -48,7 +50,8 @@ namespace localization
 
 
             typedef typename _VectorState::scalar_type ScalarType;
-            typedef typename _VectorState::vectorized_type VectorizedState;
+            typedef typename _VectorState::vectorized_type VectorizedVectorState;
+            typedef typename _SingleState::vectorized_type VectorizedSingleState;
             typedef Eigen::Matrix<ScalarType, int(_VectorState::DOF), int(_VectorState::DOF)> VectorStateCovariance;
             typedef Eigen::Matrix<ScalarType, int(_SingleState::DOF), int(_SingleState::DOF)> SingleStateCovariance;
             typedef std::vector<_VectorState> VectorStateSigma;
@@ -69,6 +72,22 @@ namespace localization
             {
             }
 
+            /**@brief Propagate the state of the navigation quantities
+             */
+            void propagate(const _SingleState & delta_state)
+            {
+                mu_state.statek_i.pos += delta_state.pos; //! Increment in position
+                mu_state.statek_i.vel += delta_state.vel; //! Increment in velocity
+                mu_state.statek_i.orient = mu_state.statek_i.orient * delta_state.orient; //! Delta in orientation
+            }
+
+            /**@brief Set current State
+             */
+            void setStatek_i(const _SingleState & state)
+            {
+                mu_state.statek_i = state;
+            }
+
             /**@brief Filter prediction step
              */
             template<typename ProcessModel>
@@ -84,8 +103,10 @@ namespace localization
                 _SingleState statek_i = mu_error.statek_i;
                 SingleStateCovariance Pk = MTK::subblock (Pk_error, &_VectorState::statek_i);
 
-                std::cout<<"[PREDICT] statek_i(k|k):\n"<<statek_i<<"\n";
-                std::cout<<"[PREDICT] P(k|k):\n"<<Pk<<"\n";
+                #ifdef USCKF_DEBUG_PRINTS
+                std::cout<<"[USCKF_PREDICT] statek_i(k|k):\n"<<statek_i<<"\n";
+                std::cout<<"[USCKF_PREDICT] P(k|k):\n"<<Pk<<"\n";
+                #endif
 
                 /** Propagation only uses the current state (DOF_SINGLE_STATE dimension ) **/
                 SingleStateSigma X(2 * DOF_SINGLE_STATE + 1);
@@ -112,7 +133,10 @@ namespace localization
                 Pxy = crossCovSigmaPoints<_SingleState, _SingleState::DOF, SingleStateSigma,
                     _SingleState> (statek_i, mu_error.statek_i, XCopy, X);
                 SingleStateCovariance Fk = Pxy.transpose()*Pk.inverse();
-                std::cout<<"[PREDICT] Fk:\n"<< Fk << std::endl;
+
+                #ifdef USCKF_DEBUG_PRINTS
+                std::cout<<"[USCKF_PREDICT] Fk:\n"<< Fk << std::endl;
+                #endif
 
                 /*************************/
                 /** Discretization of Q **/
@@ -125,7 +149,9 @@ namespace localization
 
                 /** Just for debugging purpose print, this should be equal Pk **/
                 /** Because to Pyy =  Fk*Pk*Fk^T and  Pk = Pyy+Q **/
-                std::cout<<"[PREDICT] Fk*Pk*Fk^T + Qk:\n"<< Fk*Pk*Fk.transpose() + Qk<< std::endl;
+                #ifdef USCKF_DEBUG_PRINTS
+                std::cout<<"[USCKF_PREDICT] Fk*Pk*Fk^T + Qk:\n"<< Fk*Pk*Fk.transpose() + Qk<< std::endl;
+                #endif
 
                 /************************/
                 /** Covariance Matrix  **/
@@ -167,9 +193,11 @@ namespace localization
                 /**********/
                 /** TO-DO: cross-cov with the features (Dynamic size part of the filter) **/
 
-                std::cout << "[PREDICT] statek_i(k+1|k):" << std::endl << mu_error.statek_i << std::endl;
-                std::cout << "[PREDICT] Pk(k+1|k):"<< std::endl << Pk << std::endl;
-                std::cout << "[PREDICT] Process Noise Cov Q(k):"<< std::endl << Q() << std::endl;
+                #ifdef  USCKF_DEBUG_PRINTS
+                std::cout << "[USCKF_PREDICT] statek_i(k+1|k):" << std::endl << mu_error.statek_i << std::endl;
+                std::cout << "[USCKF_PREDICT] Pk(k+1|k):"<< std::endl << Pk << std::endl;
+                std::cout << "[USCKF_PREDICT] Process Noise Cov Q(k):"<< std::endl << Q() << std::endl;
+                #endif
             }
 
             template<typename Measurement, typename MeasurementModel, typename MeasurementNoiseCovariance>
@@ -224,8 +252,111 @@ namespace localization
                             mu_error = mu_error + K * innovation;
                     }
 
-                    std::cout << "innovation:" << std::endl << innovation << std::endl;
-                    std::cout << "mu_error':" << std::endl << mu_error << std::endl;
+                    #ifdef USCKF_DEBUG_PRINTS
+                    std::cout << "[USCKF_PREDICT] innovation:" << std::endl << innovation << std::endl;
+                    std::cout << "[USCKF_PREDICT] mu_error':" << std::endl << mu_error << std::endl;
+                    #endif
+            }
+
+            /** @brief Standard EKF Update of the state (TO-DO: improve this part using Manifold
+             * and Unscented tranform (UKF))
+             */
+            template<typename Measurement, typename MeasurementModel, typename MeasurementNoiseCovariance>
+            void ekfUpdate(VectorizedSingleState &xk_i, const Measurement &z, MeasurementModel H, MeasurementNoiseCovariance R)
+            {
+                const static int DOF_MEASUREMENT = ukfom::dof<Measurement>::value; /** Dimension of the measurement */
+
+                /** statek_i cov matrix **/
+                SingleStateCovariance Pk = MTK::subblock (Pk_error, &_VectorState::statek_i);
+
+                #ifdef USCKF_DEBUG_PRINTS
+                std::cout << "[USCKF_EKF_UPDATE] xk_i:\n" << xk_i <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] Pk(before):\n" << Pk <<std::endl;
+                #endif
+
+                /** Compute the Kalman Gain Matrix **/
+                Eigen::Matrix<ScalarType, DOF_MEASUREMENT, DOF_MEASUREMENT> S;
+                Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_MEASUREMENT> K;
+                S = H * Pk * H.transpose() + R; //!Calculate the cov of the innovation
+                K = Pk * H.transpose() * S.inverse(); //!Calculate K using the inverse of S
+
+                /** Update the state vector and the covariance matrix */
+                xk_i = xk_i + K * (z - H * xk_i);
+                Pk = (Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_SINGLE_STATE>::Identity()
+                        -K * H) * Pk *(Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_SINGLE_STATE>::Identity()
+                        -K * H).transpose() + K * R * K.transpose();
+                Pk = 0.5 * (Pk + Pk.transpose()); //! Guarantee symmetry
+
+                /** Store the subcovariance matrix for statek_i **/
+                MTK::subblock (Pk_error, &_VectorState::statek_i) = Pk;
+
+                #ifdef USCKF_DEBUG_PRINTS
+                std::cout << "[USCKF_EKF_UPDATE] xk_i:\n" << xk_i <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] Pk:\n" << Pk <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] K:\n" << K <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] S:\n" << S <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] z:\n" << z <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] H*xk_i:\n" << H*xk_i <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] innovation:\n" << (z - H * xk_i) <<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] R is of size:" <<R.rows()<<"x"<<R.cols()<<std::endl;
+                std::cout << "[USCKF_EKF_UPDATE] R:\n" << R <<std::endl;
+                #endif
+
+                /**************************/
+                /** Apply the Corrections */
+                /**************************/
+
+                /** Store the subcovariance matrix for statek_i **/
+                MTK::subblock (Pk_error, &_VectorState::statek_i) = Pk;
+                Eigen::Quaterniond qe;
+
+                /** Update the quaternion with the Indirect approach **/
+                qe.w() = 1;
+                qe.x() = xk_i(6);
+                qe.y() = xk_i(7);
+                qe.z() = xk_i(8);
+
+                /** Apply correction **/
+                mu_state.statek_i.pos += xk_i.template block<3, 1>(0,0);
+                mu_state.statek_i.vel += xk_i.template block<3, 1>(3,0);
+                mu_state.statek_i.orient = (mu_state.statek_i.orient * qe);
+                mu_state.statek_i.orient.normalize();
+                mu_state.statek_i.gbias += xk_i.template block<3, 1>(9, 0);
+                mu_state.statek_i.abias += xk_i.template block<3, 1>(12, 0);
+
+            }
+
+            void muErrorSingleReset()
+            {
+                mu_error.statek_i.pos.setZero();
+                mu_error.statek_i.vel.setZero();
+                mu_error.statek_i.orient.setIdentity();
+                mu_error.statek_i.gbias.setZero();
+                mu_error.statek_i.abias.setZero();
+            }
+
+            void clonning()
+            {
+                /** Vector state clonnning (error and magnitudes state) **/
+                mu_state.statek_l = mu_state.statek_i;
+                mu_state.statek = mu_state.statek_l;
+
+                mu_error.statek_l = mu_error.statek_i;
+                mu_error.statek = mu_error.statek_l;
+
+                /** Covariance  state clonnning **/
+                SingleStateCovariance Pk = MTK::subblock (Pk_error, &_VectorState::statek_i);
+                MTK::subblock (Pk_error, &_VectorState::statek, &_VectorState::statek) = Pk;
+                MTK::subblock (Pk_error, &_VectorState::statek_l, &_VectorState::statek_l) = Pk;
+                MTK::subblock (Pk_error, &_VectorState::statek_i, &_VectorState::statek_i) = Pk;
+
+                MTK::subblock (Pk_error, &_VectorState::statek, &_VectorState::statek_l) = Pk;
+                MTK::subblock (Pk_error, &_VectorState::statek, &_VectorState::statek_i) = Pk;
+                MTK::subblock (Pk_error, &_VectorState::statek_l, &_VectorState::statek) = Pk;
+                MTK::subblock (Pk_error, &_VectorState::statek_i, &_VectorState::statek) = Pk;
+                MTK::subblock (Pk_error, &_VectorState::statek_l, &_VectorState::statek_i) = Pk;
+                MTK::subblock (Pk_error, &_VectorState::statek_i, &_VectorState::statek_l) = Pk;
+
             }
 
             const _VectorState& muState() const
@@ -238,21 +369,17 @@ namespace localization
                 return mu_error;
             }
 
-            Eigen::Quaternion<double> getCurrentOrientation() const
-            {
-                return mu_state.statek_i.orient;
-            }
-
             const VectorStateCovariance &PkVectorState() const
             {
                 return Pk_error;
             }
 
+
     private:
 
             /**@brief Sigma Point Calculation for the complete Vector State
              */
-            void generateSigmaPoints(const _VectorState &mu, const VectorizedState &delta,
+            void generateSigmaPoints(const _VectorState &mu, const VectorizedVectorState &delta,
                                     const VectorStateCovariance &sigma, VectorStateSigma &X) const
             {
                     assert(X.size() == 2 * DOF_STATE + 1);
@@ -289,7 +416,7 @@ namespace localization
              */
             void generateSigmaPoints(const _VectorState &mu, const VectorStateCovariance &sigma, VectorStateSigma &X) const
             {
-                    generateSigmaPoints(mu, VectorizedState::Zero(), sigma, X);
+                    generateSigmaPoints(mu, VectorizedVectorState::Zero(), sigma, X);
             }
 
             /**@brief Sigma Point Calculation for the State (SingleState)
@@ -420,7 +547,7 @@ namespace localization
                     return 0.5 * c;
             }
 
-            void applyDelta(const VectorizedState &delta)
+            void applyDelta(const VectorizedVectorState &delta)
             {
                     SingleStateSigma X(2 * DOF_STATE + 1);
                     generateSigmaPoints(mu_error, delta, Pk_error, X);
