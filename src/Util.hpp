@@ -571,22 +571,22 @@ namespace localization
 	static double finiteDifference (Eigen::Matrix <double, Eigen::Dynamic, 1> &data, double delta_t)
 	{
 	    double result;
-	    
-	    std::cout << "[Difference] data.rows(): "<<data.rows()<<"\n";
-	    std::cout << "[Difference] data\n"<<data<<"\n";
-	    
+
+	    //std::cout << "[Difference] data.rows(): "<<data.rows()<<"\n";
+	    //std::cout << "[Difference] data\n"<<data<<"\n";
+
 	    if ((data.rows() < 4)&&(data.rows() > 1))
 		result = (data[0] - data[1])/delta_t;
 	    else if (data.rows() < 7)
-		result = - ((-11.0/6.0)*data[0] + 3.0*data[1] - (1.5)*data[2] + (1.0/3.0)*data[3])/(delta_t);
+		result = ((11.0/6.0)*data[0] - 3.0*data[1] + (1.5)*data[2] - (1.0/3.0)*data[3])/(delta_t);
 	    else if (data.rows() >= 7)
 		result = (2.45*data[0] - 6.0*data[1] + 7.5*data[2] - (20.0/3.0)*data[3]+ 3.75*data[4] - 1.2*data[5] + (1.0/6.0)*data[6])/delta_t;
 	    else
 		result = std::numeric_limits<double>::quiet_NaN();
-	    
-	    std::cout << "[Difference] result: "<<result<<"\n";
-	    if (result < 0.00)
-		std::cout << "[Difference] Negative velocity!!\n";
+
+	    //std::cout << "[Difference] result: "<<result<<"\n";
+	    //if (result < 0.00)
+	    //	std::cout << "[Difference] Negative velocity!!\n";
 
 	    return result;
 	};
