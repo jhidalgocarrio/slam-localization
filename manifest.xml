@@ -15,6 +15,7 @@
   -->
   <depend package="base/types" />
   <depend package="slam/odometry" />
+  <depend package="slam/mtk" />
   <depend package="slam/envire" />
 
 </package>
