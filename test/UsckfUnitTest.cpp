@@ -20,9 +20,9 @@ typedef std::vector< MTK::vect<3, double> > MTKintFeature;
 
 MTKintFeature adios(100, Eigen::Vector3d::Zero() );
 
-/** Wrap the VectorState **/
-typedef localization::MtkWrap<localization::VectorState> WVectorState;
-typedef localization::MtkWrap<localization::SingleState> WSingleState;
+/** Wrap the AugmentedState **/
+typedef localization::MtkWrap<localization::AugmentedState> WAugmentedState;
+typedef localization::MtkWrap<localization::State> WSingleState;
 
 //acc is acceleration without any perturbation
 //angvelo is angular velocity (gyros) without any perturbation
@@ -47,9 +47,10 @@ WSingleState processModel (const WSingleState &serror, const Eigen::Matrix<doubl
     s2.vel = serror.vel +  serror.orient * deltaVel - orientq.inverse() * (serror.abias * dt);
 
     /** Propagate the error quaternion **/
-    Eigen::Matrix <double,3, 1> deltaAngle = (angvelo - 0.5 * serror.gbias) * dt;
-    MTK::SO3 <double> rot = MTK::SO3<double>::exp (deltaAngle);
+    Eigen::Matrix <double,3, 1> scaled_axis = (angvelo - 0.5 * serror.gbias) * dt;
+    MTK::SO3 <double> rot = MTK::SO3<double>::exp (scaled_axis);
     s2.orient = (serror.orient * rot);
+    //s2.orient.boxplus(scaled_axis);
 
     /** The bias (gyros and acc) update **/
     s2.gbias = serror.gbias;
@@ -58,10 +59,10 @@ WSingleState processModel (const WSingleState &serror, const Eigen::Matrix<doubl
     return s2;
 }
 
-localization::Usckf <WVectorState, WSingleState>::SingleStateCovariance processNoiseCov (double dt)
+localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance processNoiseCov (double dt)
 {
-    localization::Usckf <WVectorState, WSingleState>::SingleStateCovariance cov =
-        localization::Usckf <WVectorState, WSingleState>::SingleStateCovariance::Zero();
+    localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance cov =
+        localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance::Zero();
     MTK::setDiagonal (cov, &WSingleState::pos, 0.1 * dt);
     MTK::setDiagonal (cov, &WSingleState::vel,  0.1 * dt);
     MTK::setDiagonal (cov, &WSingleState::orient, 0.1 * dt);
@@ -77,14 +78,15 @@ BOOST_AUTO_TEST_CASE( USCKF )
     localization::MTK_FEATURE_TYPE( vec3 ) featuresVO(24, 1.34*Eigen::Vector3d::Identity() );
     localization::MTK_FEATURE_TYPE( vec3 ) featuresICP(24, 3.45*Eigen::Vector3d::Identity() );
 
-    WVectorState vstate;
-    WVectorState verror;
+    WAugmentedState vstate;
+    WAugmentedState verror;
 
     std::cout<<"vstate::DOF is "<<vstate.DOF<<"\n";
     std::cout<<"vstate.statek is "<<vstate.statek<<"\n";
     std::cout<<"vstate.statek_l is "<<vstate.statek_l<<"\n";
     std::cout<<"vstate.statek_i is "<<vstate.statek_i<<"\n";
     std::cout<<"vstate: "<<vstate<<"\n";
+    std::cout<<"vectorized state: "<<vstate.getVectorizedState()<<"\n";
 
     //std::vector< Eigen::Matrix <double, 3, 1> , Eigen::aligned_allocator < Eigen::Matrix <double, 3, 1> > > featuresVO;
 
@@ -102,37 +104,58 @@ BOOST_AUTO_TEST_CASE( USCKF )
     const double dt = 0.01; /** 100Hz */
 
     /** Initial covariance matrix **/
-    localization::Usckf<WVectorState, WSingleState>::VectorStateCovariance P0;
-    MTK::subblock (P0, &WVectorState::statek, &WVectorState::statek) = 0.0025 * localization::Usckf<WVectorState, WSingleState>::SingleStateCovariance::Identity();
-    MTK::subblock (P0, &WVectorState::statek_l, &WVectorState::statek_l) = 0.0035 * localization::Usckf<WVectorState, WSingleState>::SingleStateCovariance::Identity();
-    MTK::subblock (P0, &WVectorState::statek_i, &WVectorState::statek_i) = 0.0045 * localization::Usckf<WVectorState, WSingleState>::SingleStateCovariance::Identity();
+    localization::Usckf<WAugmentedState, WSingleState>::AugmentedStateCovariance P0;
+    MTK::subblock (P0, &WAugmentedState::statek, &WAugmentedState::statek) = 0.0025 * localization::Usckf<WAugmentedState, WSingleState>::SingleStateCovariance::Identity();
+    MTK::subblock (P0, &WAugmentedState::statek_l, &WAugmentedState::statek_l) = 0.0035 * localization::Usckf<WAugmentedState, WSingleState>::SingleStateCovariance::Identity();
+    MTK::subblock (P0, &WAugmentedState::statek_i, &WAugmentedState::statek_i) = 0.0045 * localization::Usckf<WAugmentedState, WSingleState>::SingleStateCovariance::Identity();
 
-    MTK::subblock (P0, &WVectorState::statek, &WVectorState::statek_l) = 0.0011 * localization::Usckf<WVectorState, WSingleState>::SingleStateCovariance::Identity();
-    MTK::subblock (P0, &WVectorState::statek, &WVectorState::statek_i) = 0.0012 * localization::Usckf<WVectorState, WSingleState>::SingleStateCovariance::Identity();
-    MTK::subblock (P0, &WVectorState::statek_l, &WVectorState::statek) = MTK::subblock (P0, &WVectorState::statek, &WVectorState::statek_l);
-    MTK::subblock (P0, &WVectorState::statek_i, &WVectorState::statek) = MTK::subblock (P0, &WVectorState::statek, &WVectorState::statek_i);
+    MTK::subblock (P0, &WAugmentedState::statek, &WAugmentedState::statek_l) = 0.0011 * localization::Usckf<WAugmentedState, WSingleState>::SingleStateCovariance::Identity();
+    MTK::subblock (P0, &WAugmentedState::statek, &WAugmentedState::statek_i) = 0.0012 * localization::Usckf<WAugmentedState, WSingleState>::SingleStateCovariance::Identity();
+    MTK::subblock (P0, &WAugmentedState::statek_l, &WAugmentedState::statek) = MTK::subblock (P0, &WAugmentedState::statek, &WAugmentedState::statek_l);
+    MTK::subblock (P0, &WAugmentedState::statek_i, &WAugmentedState::statek) = MTK::subblock (P0, &WAugmentedState::statek, &WAugmentedState::statek_i);
 
-    MTK::subblock (P0, &WVectorState::statek_l, &WVectorState::statek_i) = 0.0021 * localization::Usckf<WVectorState, WSingleState>::SingleStateCovariance::Identity();
-    MTK::subblock (P0, &WVectorState::statek_i, &WVectorState::statek_l) = MTK::subblock (P0, &WVectorState::statek_l, &WVectorState::statek_i);
+    MTK::subblock (P0, &WAugmentedState::statek_l, &WAugmentedState::statek_i) = 0.0021 * localization::Usckf<WAugmentedState, WSingleState>::SingleStateCovariance::Identity();
+    MTK::subblock (P0, &WAugmentedState::statek_i, &WAugmentedState::statek_l) = MTK::subblock (P0, &WAugmentedState::statek_l, &WAugmentedState::statek_i);
 
     //std::cout<<"[INITIALIZATION] P0:\n"<<P0<<std::endl;
 
-    localization::Usckf<WVectorState, WSingleState> filter(static_cast<const WVectorState> (vstate),
-                                                        static_cast<const WVectorState> (verror),
-                                                        static_cast<const localization::Usckf<WVectorState,
-                                                        WSingleState>::VectorStateCovariance> (P0));
+    localization::Usckf<WAugmentedState, WSingleState> filter(static_cast<const WAugmentedState> (vstate),
+                                                        static_cast<const WAugmentedState> (verror),
+                                                        static_cast<const localization::Usckf<WAugmentedState,
+                                                        WSingleState>::AugmentedStateCovariance> (P0));
+    vstate = filter.muError();
+    Eigen::Matrix <double,localization::NUMAXIS,1> eulerinit; /** In euler angles **/
+    eulerinit[2] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+    eulerinit[1] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+    eulerinit[0] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+    std::cout<<"Init Roll: "<<eulerinit[0]*localization::R2D<<" Pitch: "<<eulerinit[1]*localization::R2D<<" Yaw: "<<eulerinit[2]*localization::R2D<<"\n";
 
     for (register int i=0; i<1; ++i)
     {
         Eigen::Vector3d acc, gyro;
         Eigen::Quaternion<double> orientq = filter.muState().statek_i.orient;
         acc << 100.00, 0.00, 0.00;
-        gyro << (100.00*localization::D2R), 0.00, 0.00;
+        gyro << (3000.00*localization::D2R), (3000.00*localization::D2R), (3000.00*localization::D2R);
         std::cout<<"IN_LOOP ["<<i<<"]\n";
-        localization::Usckf <WVectorState, WSingleState>::SingleStateCovariance myCov = processNoiseCov(dt);
+        localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance myCov = processNoiseCov(dt);
         filter.predict(boost::bind(processModel, _1 , acc , gyro, orientq, dt), myCov);
-        //std::cout<<"IN_LOOP Pk+i|k+l|k\n"<<filter.PkVectorState();
+        //std::cout<<"IN_LOOP Pk+i|k+l|k\n"<<filter.PkAugmentedState();
     }
+
+    vstate = filter.muError();
+    Eigen::Matrix <double,localization::NUMAXIS,1> euler; /** In euler angles **/
+    euler[2] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+    euler[1] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+    euler[0] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+    std::cout<<"Result Roll: "<<euler[0]*localization::R2D<<" Pitch: "<<euler[1]*localization::R2D<<" Yaw: "<<euler[2]*localization::R2D<<"\n";
+
+    Eigen::AngleAxisd angleAxis (vstate.statek_i.orient);
+    std::cout<<"The angle of rotation is: "<<angleAxis.angle()<<"\n";
+    std::cout<<"The angle of rotation is: "<<(angleAxis.axis() * angleAxis.angle()).norm()<<"\n";
+    std::cout<<"The angle of rotation is (degrees): "<<angleAxis.angle()*localization::R2D<<"\n";
+    std::cout<<"The axis of rotation is:\n"<<angleAxis.axis()<<"\n";
+
+    std::cout<<"vectorized state: "<<vstate.getVectorizedState()<<"\n";
 
 
     //std::cout<<"vstate.featuresk is "<<vstate.featuresk<<"\n";
