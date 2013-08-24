@@ -55,6 +55,7 @@ namespace  localization
     public:
             //typedef double scalar; // MTK only works with double
             typedef typename M::scalar scalar_type;
+            typedef typename M::VectorizedType VectorizedType;
 
             enum {
                     DOF = M::DOF
@@ -106,9 +107,14 @@ namespace  localization
                     return !(*this == other);
             }
 
+            vectorized_type getVectorizedState(const VectorizedType type = M::EULER_ANGLES)
+            {
+                return M::getVectorizedState(type);
+            }
+
     public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-};
+    };
 
 } // namespace localization
 #endif /* _MTKWRAP_HPP_ */

@@ -458,7 +458,7 @@ namespace localization
 	    g = g*pow(Re/(Re+altitude), 2);
 
             #ifdef MEASUREMENT_ITEN_DEBUG_PRINTS
-	    std::cout<<"[MEASUREMENT_ITEM] Theoretical gravity for this location (WGS-84 ellipsoid model): "<< g<<" [m/s^2]\n";
+	    std::cout<<"[UTIL_CLASS] Theoretical gravity for this location (WGS-84 ellipsoid model): "<< g<<" [m/s^2]\n";
             #endif
 
 	    return g;
@@ -488,7 +488,7 @@ namespace localization
 	    v = (*q) * v;
 
 	    #ifdef DEBUG_PRINTS
-	    std::cout<<"[MEASUREMENT_ITEM] Earth Rotation:"<<v<<"\n";
+	    std::cout<<"[UTIL_CLASS] Earth Rotation:"<<v<<"\n";
 	    #endif
 
 	    /** Subtract the earth rotation to the vector of inputs (u = u-v**/

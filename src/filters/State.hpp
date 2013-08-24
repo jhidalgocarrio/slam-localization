@@ -3,9 +3,9 @@
 
 /** MTK library **/
 #include <mtk/types/pose.hpp>
-#include <mtk/types/SOn.hpp>
 #include <mtk/src/SubManifold.hpp>
 
+#include <rover_localization/mtk/SOn.hpp>
 
 #ifndef PARSED_BY_DOXYGEN
 //////// internals //////
@@ -33,43 +33,135 @@
 namespace localization
 {
     // We can't use types having a comma inside AutoConstruct macros :(
-    typedef MTK::vect<3, double> vec3;
-    typedef MTK::SO3<double> SO3;
+    typedef ::MTK::vect<3, double> vec3;
+    typedef ::localization::MTK::SO3<double> SO3;
     typedef std::vector<vec3> featureType;
     MTK_DEFINE_FEATURE_TYPE(vec3)
 
-    MTK_BUILD_MANIFOLD ( SingleState ,
-    (( vec3, pos ))
-    (( vec3, vel ))
-    (( SO3, orient ))
-    (( vec3, gbias ))
-    (( vec3, abias ))
-    );
-
-    struct VectorState
+    struct State
     {
-        typedef VectorState self;
+        typedef State self;
 
-        MTK::SubManifold<SingleState, 0> statek; /** Oldest pose state(when first extereoceptive measurement was taken) */
-        MTK::SubManifold<SingleState, SingleState::DOF + 0> statek_l; /** Pose state (when second extereoceptive measurement was taken) */
-        MTK::SubManifold<SingleState, SingleState::DOF + SingleState::DOF + 0> statek_i; /** Current Pose state (update to the proprioceptive measurements) */
-        MTK::SubManifold<MTK_FEATURE_TYPE(vec3), SingleState::DOF + SingleState::DOF + SingleState::DOF + 0> featuresk; /** Features of the measurement took at t=k */
-        MTK::SubManifold<MTK_FEATURE_TYPE(vec3), SingleState::DOF + SingleState::DOF + SingleState::DOF + 0> featuresk_l; /** Features of the measurement took at t=k+l */
+        ::MTK::SubManifold<vec3, 0> pos;
+        ::MTK::SubManifold<vec3, vec3::DOF + 0> vel;
+        ::MTK::SubManifold<SO3, vec3::DOF + vec3::DOF + 0> orient;
+        ::MTK::SubManifold<vec3, SO3::DOF + vec3::DOF + vec3::DOF + 0> gbias;
+        ::MTK::SubManifold<vec3, vec3::DOF + SO3::DOF + vec3::DOF + vec3::DOF + 0> abias;
 
         enum
         {
-            DOF = SingleState::DOF + SingleState::DOF + SingleState::DOF + 0
+            DOF = vec3::DOF + vec3::DOF + SO3::DOF + vec3::DOF + vec3::DOF + 0
+        };
+
+        enum VectorizedType
+        {
+            EULER_ANGLES = 0,
+            ERROR_QUATERNION = 1
         };
 
         typedef vec3::scalar scalar;
+        typedef Eigen::Matrix<scalar, DOF, 1> vectorized_type;
 
-        VectorState ( const SingleState& statek = SingleState(),
-                const SingleState& statek_l = SingleState(),
-                const SingleState& statek_i = SingleState(),
+        State ( const vec3& pos = vec3(), const vec3& vel = vec3(), const SO3& orient = SO3(), const vec3& gbias = vec3(), const vec3& abias = vec3() )
+            : pos(pos), vel(vel), orient(orient), gbias(gbias), abias(abias)
+        {}
+
+        int getDOF() const
+        {
+            return DOF;
+        }
+
+        void boxplus(const ::MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 )
+        {
+            pos.boxplus(::MTK::subvector(__vec, &self::pos), __scale);
+            vel.boxplus(::MTK::subvector(__vec, &self::vel), __scale);
+            orient.boxplus(::MTK::subvector(__vec, &self::orient), __scale);
+            gbias.boxplus(::MTK::subvector(__vec, &self::gbias), __scale);
+            abias.boxplus(::MTK::subvector(__vec, &self::abias), __scale);
+        }
+
+        void boxminus(::MTK::vectview<scalar,DOF> __res, const State& __oth) const
+        {
+            pos.boxminus(::MTK::subvector(__res, &self::pos), __oth.pos);
+            vel.boxminus(::MTK::subvector(__res, &self::vel), __oth.vel);
+            orient.boxminus(::MTK::subvector(__res, &self::orient), __oth.orient);
+            gbias.boxminus(::MTK::subvector(__res, &self::gbias), __oth.gbias);
+            abias.boxminus(::MTK::subvector(__res, &self::abias), __oth.abias);
+        }
+
+        friend std::ostream& operator<<(std::ostream& __os, const State& __var)
+        {
+            return __os << __var.pos << " " << __var.vel << " " << __var.orient << " " << __var.gbias << " " << __var.abias << " " ;
+        }
+
+        friend std::istream& operator>>(std::istream& __is, State& __var)
+        {
+            return __is >> __var.pos >> __var.vel >> __var.orient >> __var.gbias >> __var.abias ;
+        }
+
+        vectorized_type getVectorizedState (const VectorizedType type = EULER_ANGLES)
+        {
+
+            State::vectorized_type vstate;
+
+            vstate.block<vec3::DOF, 1>(0,0) = pos; //! Position
+            vstate.block<vec3::DOF, 1>(vec3::DOF,0) = vel; //! Velocity
+            Eigen::Matrix<double, SO3::DOF, 1> orientation; //! Orientation
+
+            if (type == EULER_ANGLES)
+            {
+                orientation[2] = orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+                orientation[1] = orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+                orientation[0] = orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+            }
+            else
+            {
+                orientation << orient.x(), orient.y(), orient.z();
+            }
+
+            vstate.block<SO3::DOF, 1>(2*vec3::DOF, 0) = orientation;
+            vstate.block<localization::vec3::DOF, 1>(2*vec3::DOF + SO3::DOF, 0) = gbias; //! Gyros bias
+            vstate.block<localization::vec3::DOF, 1>(3*vec3::DOF + SO3::DOF, 0) = abias; //! Acc bias
+
+            return vstate;
+        }
+
+    };
+
+
+    struct AugmentedState
+    {
+        typedef AugmentedState self;
+
+        ::MTK::SubManifold<State, 0> statek; /** Oldest pose state(when first extereoceptive measurement was taken) */
+        ::MTK::SubManifold<State, State::DOF + 0> statek_l; /** Pose state (when second extereoceptive measurement was taken) */
+        ::MTK::SubManifold<State, State::DOF + State::DOF + 0> statek_i; /** Current Pose state (update to the proprioceptive measurements) */
+        ::MTK::SubManifold<MTK_FEATURE_TYPE(vec3), State::DOF + State::DOF + State::DOF + 0> featuresk; /** Features of the measurement took at t=k */
+        ::MTK::SubManifold<MTK_FEATURE_TYPE(vec3), State::DOF + State::DOF + State::DOF + 0> featuresk_l; /** Features of the measurement took at t=k+l */
+
+        enum
+        {
+            DOF = State::DOF + State::DOF + State::DOF + 0
+        };
+
+        enum VectorizedType
+        {
+            EULER_ANGLES = 0,
+            ERROR_QUATERNION = 1
+        };
+
+
+        typedef vec3::scalar scalar;
+        typedef Eigen::Matrix<scalar, DOF, 1> vectorized_type;
+
+        AugmentedState ( const State& statek = State(),
+                const State& statek_l = State(),
+                const State& statek_i = State(),
                 const MTK_FEATURE_TYPE(vec3)& featuresk = MTK_FEATURE_TYPE(vec3)(),
                 const MTK_FEATURE_TYPE(vec3)& featuresk_l = MTK_FEATURE_TYPE(vec3)()
                 )
-            : statek(statek), statek_l(statek_l), statek_i(statek_i), featuresk(featuresk), featuresk_l(featuresk_l) {}
+            : statek(statek), statek_l(statek_l), statek_i(statek_i), featuresk(featuresk), featuresk_l(featuresk_l)
+            {}
 
         int getDOF() const
         {
@@ -81,22 +173,22 @@ namespace localization
             return DOF+featuresk.size()+featuresk_l.size();
         }
 
-        void boxplus(const MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 )
+        void boxplus(const ::MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 )
         {
-            statek.boxplus(MTK::subvector(__vec, &self::statek), __scale);
-            statek_l.boxplus(MTK::subvector(__vec, &self::statek_l), __scale);
-            statek_i.boxplus(MTK::subvector(__vec, &self::statek_i), __scale);
+            statek.boxplus(::MTK::subvector(__vec, &self::statek), __scale);
+            statek_l.boxplus(::MTK::subvector(__vec, &self::statek_l), __scale);
+            statek_i.boxplus(::MTK::subvector(__vec, &self::statek_i), __scale);
 
         }
 
-        void boxminus(MTK::vectview<scalar,DOF> __res, const VectorState& __oth) const
+        void boxminus(::MTK::vectview<scalar,DOF> __res, const AugmentedState& __oth) const
         {
-            statek.boxminus(MTK::subvector(__res, &self::statek), __oth.statek);
-            statek_l.boxminus(MTK::subvector(__res, &self::statek_l), __oth.statek_l);
-            statek_i.boxminus(MTK::subvector(__res, &self::statek_i), __oth.statek_i);
+            statek.boxminus(::MTK::subvector(__res, &self::statek), __oth.statek);
+            statek_l.boxminus(::MTK::subvector(__res, &self::statek_l), __oth.statek_l);
+            statek_i.boxminus(::MTK::subvector(__res, &self::statek_i), __oth.statek_i);
         }
 
-        friend std::ostream& operator<<(std::ostream& __os, const VectorState& __var)
+        friend std::ostream& operator<<(std::ostream& __os, const AugmentedState& __var)
         {
             __os << "\n" << __var.statek << "\n" << __var.statek_l << "\n" << __var.statek_i << "\n";
             __os << "[";
@@ -114,10 +206,76 @@ namespace localization
 
             return __os;
         }
-        friend std::istream& operator>>(std::istream& __is, VectorState& __var)
+        friend std::istream& operator>>(std::istream& __is, AugmentedState& __var)
         {
             return __is >> __var.statek >> __var.statek_l >> __var.statek_i;
         }
+
+        vectorized_type getVectorizedState (const VectorizedType type = EULER_ANGLES)
+        {
+            AugmentedState::vectorized_type vstate;
+            Eigen::Matrix<double, SO3::DOF, 1> orientation; //! Orientation
+
+            /** statek **/
+            vstate.block<vec3::DOF, 1>(0,0) = statek.pos; //! Position
+            vstate.block<vec3::DOF, 1>(vec3::DOF,0) = statek.vel; //! Velocity
+
+            if (type == EULER_ANGLES)
+            {
+                orientation[2] = statek.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+                orientation[1] = statek.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+                orientation[0] = statek.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+            }
+            else
+            {
+                orientation << statek.orient.x(), statek.orient.y(), statek.orient.z();
+            }
+
+            vstate.block<SO3::DOF, 1>(2*vec3::DOF, 0) = orientation;
+            vstate.block<localization::vec3::DOF, 1>(2*vec3::DOF + SO3::DOF, 0) = statek.gbias; //! Gyros bias
+            vstate.block<localization::vec3::DOF, 1>(3*vec3::DOF + SO3::DOF, 0) = statek.abias; //! Acc bias
+
+            /** statek_l **/
+            vstate.block<vec3::DOF, 1>(State::DOF,0) = statek_l.pos; //! Position
+            vstate.block<vec3::DOF, 1>(State::DOF+vec3::DOF,0) = statek_l.vel; //! Velocity
+
+            if (type == EULER_ANGLES)
+            {
+                orientation[2] = statek_l.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+                orientation[1] = statek_l.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+                orientation[0] = statek_l.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+            }
+            else
+            {
+                orientation << statek_l.orient.x(), statek_l.orient.y(), statek_l.orient.z();
+            }
+
+            vstate.block<SO3::DOF, 1>(State::DOF+(2*vec3::DOF), 0) = orientation;
+            vstate.block<localization::vec3::DOF, 1>(State::DOF+(2*vec3::DOF) + SO3::DOF, 0) = statek_l.gbias; //! Gyros bias
+            vstate.block<localization::vec3::DOF, 1>(State::DOF+(3*vec3::DOF) + SO3::DOF, 0) = statek_l.abias; //! Acc bias
+
+            /** statek_i **/
+            vstate.block<vec3::DOF, 1>(2*State::DOF,0) = statek_i.pos; //! Position
+            vstate.block<vec3::DOF, 1>(2*State::DOF+vec3::DOF,0) = statek_i.vel; //! Velocity
+
+            if (type == EULER_ANGLES)
+            {
+                orientation[2] = statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+                orientation[1] = statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+                orientation[0] = statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+            }
+            else
+            {
+                orientation << statek_i.orient.x(), statek_i.orient.y(), statek_i.orient.z();
+            }
+
+            vstate.block<SO3::DOF, 1>(2*State::DOF+(2*vec3::DOF), 0) = orientation;
+            vstate.block<localization::vec3::DOF, 1>(2*State::DOF+(2*vec3::DOF) + SO3::DOF, 0) = statek_i.gbias; //! Gyros bias
+            vstate.block<localization::vec3::DOF, 1>(2*State::DOF+(3*vec3::DOF) + SO3::DOF, 0) = statek_i.abias; //! Acc bias
+
+            return vstate;
+        }
+
     };
 
 }

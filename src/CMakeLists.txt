@@ -18,6 +18,7 @@ set (LOCALIZATION_HDRS
     filters/ProcessModels.hpp
     filters/MeasurementModels.hpp
     filters/IIR.hpp
+    mtk/SOn.hpp
     )
 
 

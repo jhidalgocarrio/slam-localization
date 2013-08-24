@@ -41,7 +41,7 @@ namespace localization
 
     /**@brief ProcessModel assuming corrected values
      */
-    template<typename _SingleState>
+    template <typename _SingleState>
     _SingleState processModel (const _SingleState &serror, const Eigen::Matrix<double, 3, 1> &deltaVel, const Eigen::Quaterniond &delta_orient,
                             const Eigen::Quaterniond &orient, double dt)
     {
@@ -58,10 +58,10 @@ namespace localization
         s2.pos = serror.pos + dFki * serror.vel; //!Position (error velocity comes in world frame)
 
         /** Propagate the error velocity (discretization approx) **/
-        s2.vel = serror.vel +  serror.orient * deltaVel; //! Error velocity in world frame
+        s2.vel = serror.vel; // serror orient is zero +  serror.orient * deltaVel; //! Error velocity in world frame
 
         /** Propagate the error quaternion **/
-        s2.orient = (serror.orient * delta_orient);
+        //s2.orient = (serror.orient * delta_orient);
 
         /** The bias (gyros and acc) update **/
         s2.gbias = serror.gbias;
@@ -85,7 +85,7 @@ namespace localization
         _SingleStateCovariance cov = _SingleStateCovariance::Zero();
 
         /** Noise for error in position **/
-        MTK::subblock (cov, &_SingleState::pos) = Eigen::Matrix3d::Zero();
+        ::MTK::subblock (cov, &_SingleState::pos) = Eigen::Matrix3d::Zero();
 
         /** Noise for error in velocity **/
         Eigen::Matrix3d Qa;
@@ -93,7 +93,7 @@ namespace localization
         Qa(0,0) = pow(accrw[0]/sqrtdelta_t,2);
         Qa(1,1) = pow(accrw[1]/sqrtdelta_t,2);
         Qa(2,2) = pow(accrw[2]/sqrtdelta_t,2);
-        MTK::subblock (cov, &_SingleState::vel) = /*Cq.inverse */ Qa;
+        ::MTK::subblock (cov, &_SingleState::vel) = /*Cq.inverse */ Qa;
 
         /** Noise for error in orientation **/
         Eigen::Matrix3d Qg;
@@ -101,7 +101,7 @@ namespace localization
         Qg(0,0) = pow(gyrorw[0]/sqrtdelta_t,2);
         Qg(1,1) = pow(gyrorw[1]/sqrtdelta_t,2);
         Qg(2,2) = pow(gyrorw[2]/sqrtdelta_t,2);
-        MTK::subblock (cov, &_SingleState::orient) = 0.25 * Qg;
+        ::MTK::subblock (cov, &_SingleState::orient) = 0.25 * Qg;
 
         /** Noise for error in gyros bias instability **/
         Eigen::Matrix3d Qgbias;
@@ -109,7 +109,7 @@ namespace localization
         Qgbias(0,0) = pow(gbiasins[0],2);
         Qgbias(1,1) = pow(gbiasins[1],2);
         Qgbias(2,2) = pow(gbiasins[2],2);
-        MTK::subblock (cov, &_SingleState::gbias) = Qgbias;
+        ::MTK::subblock (cov, &_SingleState::gbias) = Qgbias;
 
         /** Noise for error in acc bias instability **/
         Eigen::Matrix3d Qabias;
@@ -117,7 +117,7 @@ namespace localization
         Qabias(0,0) = pow(abiasins[0],2);
         Qabias(1,1) = pow(abiasins[1],2);
         Qabias(2,2) = pow(abiasins[2],2);
-        MTK::subblock (cov, &_SingleState::abias) = Qabias;
+        ::MTK::subblock (cov, &_SingleState::abias) = Qabias;
 
         return cov ;
     }

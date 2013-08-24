@@ -47,10 +47,9 @@ WSingleState processModel (const WSingleState &serror, const Eigen::Matrix<doubl
     s2.vel = serror.vel +  serror.orient * deltaVel - orientq.inverse() * (serror.abias * dt);
 
     /** Propagate the error quaternion **/
-    Eigen::Matrix <double,3, 1> scaled_axis = (angvelo - 0.5 * serror.gbias) * dt;
-    MTK::SO3 <double> rot = MTK::SO3<double>::exp (scaled_axis);
-    s2.orient = (serror.orient * rot);
-    //s2.orient.boxplus(scaled_axis);
+    Eigen::Matrix <double,3, 1> deltaAngle = (angvelo - 0.5 * serror.gbias) * dt;
+    s2.orient = serror.orient;
+    s2.orient.boxplus(deltaAngle);
 
     /** The bias (gyros and acc) update **/
     s2.gbias = serror.gbias;
@@ -135,7 +134,7 @@ BOOST_AUTO_TEST_CASE( USCKF )
         Eigen::Vector3d acc, gyro;
         Eigen::Quaternion<double> orientq = filter.muState().statek_i.orient;
         acc << 100.00, 0.00, 0.00;
-        gyro << (3000.00*localization::D2R), (3000.00*localization::D2R), (3000.00*localization::D2R);
+        gyro << (1000.00*localization::D2R), (1000.00*localization::D2R), (1000.00*localization::D2R);
         std::cout<<"IN_LOOP ["<<i<<"]\n";
         localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance myCov = processNoiseCov(dt);
         filter.predict(boost::bind(processModel, _1 , acc , gyro, orientq, dt), myCov);
@@ -154,6 +153,26 @@ BOOST_AUTO_TEST_CASE( USCKF )
     std::cout<<"The angle of rotation is: "<<(angleAxis.axis() * angleAxis.angle()).norm()<<"\n";
     std::cout<<"The angle of rotation is (degrees): "<<angleAxis.angle()*localization::R2D<<"\n";
     std::cout<<"The axis of rotation is:\n"<<angleAxis.axis()<<"\n";
+
+    euler[2] = 0.00 * localization::D2R;
+    euler[1] = 0.00 * localization::D2R;
+    euler[0] = 0.30 * localization::D2R;
+
+    vstate.statek_i.orient.boxplus(euler);
+    euler[2] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+    euler[1] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+    euler[0] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+    std::cout<<"Result(Euler) Roll: "<<euler[0]*localization::R2D<<" Pitch: "<<euler[1]*localization::R2D<<" Yaw: "<<euler[2]*localization::R2D<<"\n";
+
+    euler[2] = 0.05 * localization::D2R;
+    euler[1] = 0.05 * localization::D2R;
+    euler[0] = 0.05 * localization::D2R;
+
+    vstate.statek_i.orient.boxplus(euler);
+    euler[2] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+    euler[1] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+    euler[0] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+    std::cout<<"Result(Euler2) Roll: "<<euler[0]*localization::R2D<<" Pitch: "<<euler[1]*localization::R2D<<" Yaw: "<<euler[2]*localization::R2D<<"\n";
 
     std::cout<<"vectorized state: "<<vstate.getVectorizedState()<<"\n";
 
