@@ -66,6 +66,29 @@ namespace localization
             : pos(pos), vel(vel), orient(orient), gbias(gbias), abias(abias)
         {}
 
+        /** @brief set the State from a vectorized type State
+         */
+        void set (const vectorized_type &vstate, const VectorizedType type = EULER_ANGLES)
+        {
+            pos = vstate.block<vec3::DOF, 1>(0,0); //! Position
+            vel = vstate.block<vec3::DOF, 1>(vec3::DOF,0); //! Velocity
+            Eigen::Matrix<scalar, SO3::DOF, 1> orientation =  vstate.block<SO3::DOF, 1>(2*vec3::DOF, 0); //! Orientation
+
+            if (type == EULER_ANGLES)
+            {
+                orient = Eigen::Quaternion<scalar> (Eigen::AngleAxisd(orientation[2], Eigen::Vector3d::UnitZ())*
+                                Eigen::AngleAxisd(orientation[1], Eigen::Vector3d::UnitY()) *
+                                Eigen::AngleAxisd(orientation[0], Eigen::Vector3d::UnitX()));
+            }
+            else
+            {
+                orient = Eigen::Quaternion<scalar> (1.0, orientation[0], orientation[1], orientation[2]);
+            }
+
+            gbias = vstate.block<localization::vec3::DOF, 1>(2*vec3::DOF + SO3::DOF, 0); //! Gyros bias
+            abias = vstate.block<localization::vec3::DOF, 1>(3*vec3::DOF + SO3::DOF, 0); //! Acc bias
+        }
+
         int getDOF() const
         {
             return DOF;
@@ -106,7 +129,7 @@ namespace localization
 
             vstate.block<vec3::DOF, 1>(0,0) = pos; //! Position
             vstate.block<vec3::DOF, 1>(vec3::DOF,0) = vel; //! Velocity
-            Eigen::Matrix<double, SO3::DOF, 1> orientation; //! Orientation
+            Eigen::Matrix<scalar, SO3::DOF, 1> orientation; //! Orientation
 
             if (type == EULER_ANGLES)
             {
@@ -214,64 +237,15 @@ namespace localization
         vectorized_type getVectorizedState (const VectorizedType type = EULER_ANGLES)
         {
             AugmentedState::vectorized_type vstate;
-            Eigen::Matrix<double, SO3::DOF, 1> orientation; //! Orientation
 
             /** statek **/
-            vstate.block<vec3::DOF, 1>(0,0) = statek.pos; //! Position
-            vstate.block<vec3::DOF, 1>(vec3::DOF,0) = statek.vel; //! Velocity
-
-            if (type == EULER_ANGLES)
-            {
-                orientation[2] = statek.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
-                orientation[1] = statek.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
-                orientation[0] = statek.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
-            }
-            else
-            {
-                orientation << statek.orient.x(), statek.orient.y(), statek.orient.z();
-            }
-
-            vstate.block<SO3::DOF, 1>(2*vec3::DOF, 0) = orientation;
-            vstate.block<localization::vec3::DOF, 1>(2*vec3::DOF + SO3::DOF, 0) = statek.gbias; //! Gyros bias
-            vstate.block<localization::vec3::DOF, 1>(3*vec3::DOF + SO3::DOF, 0) = statek.abias; //! Acc bias
+            vstate.block<State::DOF, 1> (0,0) = statek.getVectorizedState(static_cast<State::VectorizedType>(type));
 
             /** statek_l **/
-            vstate.block<vec3::DOF, 1>(State::DOF,0) = statek_l.pos; //! Position
-            vstate.block<vec3::DOF, 1>(State::DOF+vec3::DOF,0) = statek_l.vel; //! Velocity
-
-            if (type == EULER_ANGLES)
-            {
-                orientation[2] = statek_l.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
-                orientation[1] = statek_l.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
-                orientation[0] = statek_l.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
-            }
-            else
-            {
-                orientation << statek_l.orient.x(), statek_l.orient.y(), statek_l.orient.z();
-            }
-
-            vstate.block<SO3::DOF, 1>(State::DOF+(2*vec3::DOF), 0) = orientation;
-            vstate.block<localization::vec3::DOF, 1>(State::DOF+(2*vec3::DOF) + SO3::DOF, 0) = statek_l.gbias; //! Gyros bias
-            vstate.block<localization::vec3::DOF, 1>(State::DOF+(3*vec3::DOF) + SO3::DOF, 0) = statek_l.abias; //! Acc bias
+            vstate.block<State::DOF, 1> (State::DOF,0) = statek_l.getVectorizedState(static_cast<State::VectorizedType>(type));
 
             /** statek_i **/
-            vstate.block<vec3::DOF, 1>(2*State::DOF,0) = statek_i.pos; //! Position
-            vstate.block<vec3::DOF, 1>(2*State::DOF+vec3::DOF,0) = statek_i.vel; //! Velocity
-
-            if (type == EULER_ANGLES)
-            {
-                orientation[2] = statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
-                orientation[1] = statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
-                orientation[0] = statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
-            }
-            else
-            {
-                orientation << statek_i.orient.x(), statek_i.orient.y(), statek_i.orient.z();
-            }
-
-            vstate.block<SO3::DOF, 1>(2*State::DOF+(2*vec3::DOF), 0) = orientation;
-            vstate.block<localization::vec3::DOF, 1>(2*State::DOF+(2*vec3::DOF) + SO3::DOF, 0) = statek_i.gbias; //! Gyros bias
-            vstate.block<localization::vec3::DOF, 1>(2*State::DOF+(3*vec3::DOF) + SO3::DOF, 0) = statek_i.abias; //! Acc bias
+            vstate.block<State::DOF, 1> (2*State::DOF,0) = statek_i.getVectorizedState(static_cast<State::VectorizedType>(type));
 
             return vstate;
         }

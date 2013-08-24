@@ -94,13 +94,13 @@ namespace localization
             /**@brief Filter prediction step
              */
             template<typename _ProcessModel>
-            void predict(_ProcessModel g, const SingleStateCovariance &Q)
+            void predict(_ProcessModel f, const SingleStateCovariance &Q)
             {
-                predict(g, boost::bind(ukfom::id<SingleStateCovariance>, Q));
+                predict(f, boost::bind(ukfom::id<SingleStateCovariance>, Q));
             }
 
             template<typename _ProcessModel, typename _ProcessNoiseCovariance>
-            void predict(_ProcessModel g, _ProcessNoiseCovariance Q)
+            void predict(_ProcessModel f, _ProcessNoiseCovariance Q)
             {
                 /** Get the current state vector error to propagate **/
                 _SingleState statek_i = mu_error.statek_i;
@@ -126,7 +126,7 @@ namespace localization
                 /*****************************/
 
                 /** Apply the non-linear transformation of the process model **/
-                std::transform(X.begin(), X.end(), X.begin(), g);
+                std::transform(X.begin(), X.end(), X.begin(), f);
 
                 printSigmaPoints<SingleStateSigma>(X);
 
