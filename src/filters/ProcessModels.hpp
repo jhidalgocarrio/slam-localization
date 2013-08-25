@@ -70,22 +70,56 @@ namespace localization
         return s2;
     }
 
+    template <typename _SingleState, typename _ProcessModelMatrix>
+    _ProcessModelMatrix processModel (const Eigen::Vector3d &angvelo, const Eigen::Vector3d &acc,
+                                    const Eigen::Quaterniond &orient, double dt)
+    {
+        _ProcessModelMatrix F, dF; /** Process matrix and discrete process Matrix */
+        Eigen::Matrix3d velo2product; /** Vec 2 product  matrix */
+        Eigen::Matrix3d acc2product; /** Vec 2 product  matrix */
+
+        /** In cross product form **/
+        velo2product << 0, -angvelo(2), angvelo(1),
+                     angvelo(2), 0, -angvelo(0),
+                     -angvelo(1), angvelo(0), 0;
+
+        /** In cross product form **/
+        acc2product << 0, -acc(2), acc(1),
+                    acc(2), 0, -acc(0),
+                    -acc(1), acc(0), 0;
+
+        /** Form the process model matrix **/
+        F.setZero();dF.setZero();
+        F.template block<3,3>(0,3) = orient.inverse().matrix(); //! Position part
+        F.template block<3,3>(3,6) = -acc2product; //! Velocity part
+        F.template block<3,3>(3,3*4) = -Eigen::Matrix3d::Identity(); //! Velocity part
+        F.template block<3,3>(6,6) = -velo2product; //! Attitude part
+        F.template block<3,3>(6,3*3) = -0.5*Eigen::Matrix3d::Identity(); //! Attitude part
+
+        /** Discrete the matrix  (ZOH) **/
+        dF = Eigen::Matrix<double, _SingleState::DOF, _SingleState::DOF>::Identity() + F * dt + F * F * pow(dt,2)/2.0;
+
+        return dF;
+    }
+
 
     template <typename _SingleState, typename _SingleStateCovariance>
-    _SingleStateCovariance processNoiseCov (const base::Vector3d &accrw,
+    _SingleStateCovariance processNoiseCov (const Eigen::Matrix<double, _SingleState::DOF, _SingleState::DOF> &F,
+                    const base::Vector3d &accrw,
                     const base::Vector3d &gyrorw,
                     const base::Vector3d &gbiasins,
                     const base::Vector3d &abiasins,
-                    const Eigen::Quaterniond &robotorient, double &delta_t)
+                    const Eigen::Quaterniond &orient, double &delta_t)
     {
         //TO-DO Eigen::Matrix<double, 3, 3> Cq;
         double sqrtdelta_t = sqrt(delta_t); /** Square root of delta time interval */
 
         /** Dimension is for one single error state **/
-        _SingleStateCovariance cov = _SingleStateCovariance::Zero();
+        _SingleStateCovariance Cov = _SingleStateCovariance::Zero();// Covariance matrix
+        _SingleStateCovariance dCov = _SingleStateCovariance::Zero();// Discrete Cov matrix
 
         /** Noise for error in position **/
-        ::MTK::subblock (cov, &_SingleState::pos) = Eigen::Matrix3d::Zero();
+        ::MTK::subblock (Cov, &_SingleState::pos) = Eigen::Matrix3d::Zero();
 
         /** Noise for error in velocity **/
         Eigen::Matrix3d Qa;
@@ -93,7 +127,7 @@ namespace localization
         Qa(0,0) = pow(accrw[0]/sqrtdelta_t,2);
         Qa(1,1) = pow(accrw[1]/sqrtdelta_t,2);
         Qa(2,2) = pow(accrw[2]/sqrtdelta_t,2);
-        ::MTK::subblock (cov, &_SingleState::vel) = /*Cq.inverse */ Qa;
+        ::MTK::subblock (Cov, &_SingleState::vel) = /*Cq.inverse */ Qa;
 
         /** Noise for error in orientation **/
         Eigen::Matrix3d Qg;
@@ -101,7 +135,7 @@ namespace localization
         Qg(0,0) = pow(gyrorw[0]/sqrtdelta_t,2);
         Qg(1,1) = pow(gyrorw[1]/sqrtdelta_t,2);
         Qg(2,2) = pow(gyrorw[2]/sqrtdelta_t,2);
-        ::MTK::subblock (cov, &_SingleState::orient) = 0.25 * Qg;
+        ::MTK::subblock (Cov, &_SingleState::orient) = 0.25 * Qg;
 
         /** Noise for error in gyros bias instability **/
         Eigen::Matrix3d Qgbias;
@@ -109,7 +143,7 @@ namespace localization
         Qgbias(0,0) = pow(gbiasins[0],2);
         Qgbias(1,1) = pow(gbiasins[1],2);
         Qgbias(2,2) = pow(gbiasins[2],2);
-        ::MTK::subblock (cov, &_SingleState::gbias) = Qgbias;
+        ::MTK::subblock (Cov, &_SingleState::gbias) = Qgbias;
 
         /** Noise for error in acc bias instability **/
         Eigen::Matrix3d Qabias;
@@ -117,9 +151,13 @@ namespace localization
         Qabias(0,0) = pow(abiasins[0],2);
         Qabias(1,1) = pow(abiasins[1],2);
         Qabias(2,2) = pow(abiasins[2],2);
-        ::MTK::subblock (cov, &_SingleState::abias) = Qabias;
+        ::MTK::subblock (Cov, &_SingleState::abias) = Qabias;
 
-        return cov ;
+        /** Form the system noise matrix (discretization) **/
+        dCov = Cov*delta_t + 0.5*delta_t*F*Cov + 0.5*delta_t*Cov*F.transpose();
+        dCov = 0.5*(Cov + Cov.transpose());
+
+        return dCov ;
     }
 }
 

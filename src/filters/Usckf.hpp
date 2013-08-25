@@ -75,22 +75,66 @@ namespace localization
             {
             }
 
-            /**@brief Propagate the state of the navigation quantities
-             */
-            void propagate(const _SingleState & delta_state)
-            {
-                mu_state.statek_i.pos += delta_state.pos; //! Increment in position
-                mu_state.statek_i.vel += delta_state.vel; //! Increment in velocity
-                mu_state.statek_i.orient = mu_state.statek_i.orient * delta_state.orient; //! Delta in orientation
-            }
-
-            /**@brief Set current State
-             */
+            /**@brief Set current State mu_state
+            */
             void setStatek_i(const _SingleState & state)
             {
                 mu_state.statek_i = state;
             }
 
+            /**@brief Prediction step in the linearized form of an EKF
+             */
+            template<typename _ProcessModel>
+            void ekfPredict (const _ProcessModel &F, const SingleStateCovariance &Q)
+            {
+                SingleStateCovariance Pk = MTK::subblock (Pk_error, &_AugmentedState::statek_i);
+
+                /** Propagate the vector through the system **/
+                mu_error.statek_i.set(F * mu_error.statek_i.getVectorizedState (_SingleState::ERROR_QUATERNION));
+
+                /** Propagate the P covariance matrix **/
+                Pk = F*Pk*F.transpose() + Q;
+
+                /** Store the subcovariance matrix for statek_i **/
+                MTK::subblock (Pk_error, &_AugmentedState::statek_i) = Pk;
+
+                /************************/
+                /**  Cross-Cov Matrix  **/
+                /************************/
+
+                /** Compute the Cross Cov for the Copy States of the AugmentedState **/
+                SingleStateCovariance Pkkk;
+
+                /** Covariance between state(k) and state(k+i) **/
+                Pkkk = MTK::subblock (Pk_error, &_AugmentedState::statek, &_AugmentedState::statek_i);
+                Pkkk = Pkkk * F.transpose();
+                MTK::subblock (Pk_error, &_AugmentedState::statek, &_AugmentedState::statek_i) = Pkkk;
+
+                /** Covariance between state(k+l) and state(k+i) **/
+                Pkkk = MTK::subblock (Pk_error, &_AugmentedState::statek_l, &_AugmentedState::statek_i);
+                Pkkk = Pkkk * F.transpose();
+                MTK::subblock (Pk_error, &_AugmentedState::statek_l, &_AugmentedState::statek_i) = Pkkk;
+
+                /** Covariance between state(k+i) and state(k) **/
+                Pkkk = MTK::subblock (Pk_error, &_AugmentedState::statek_i, &_AugmentedState::statek);
+                Pkkk = F * Pkkk;
+                MTK::subblock (Pk_error, &_AugmentedState::statek_i, &_AugmentedState::statek) = Pkkk;
+
+                /** Covariance between state(k+i) and state(k+l) **/
+                Pkkk = MTK::subblock (Pk_error, &_AugmentedState::statek_i, &_AugmentedState::statek_l);
+                Pkkk = F * Pkkk;
+                MTK::subblock (Pk_error, &_AugmentedState::statek_i, &_AugmentedState::statek_l) = Pkkk;
+
+                /**********/
+                /** TO-DO: cross-cov with the features (Dynamic size part of the filter) **/
+
+                #ifdef  USCKF_DEBUG_PRINTS
+                std::cout << "[EKF_PREDICT] statek_i(k+1|k):" << std::endl << mu_error.statek_i << std::endl;
+                std::cout << "[EKF_PREDICT] Pk(k+1|k):"<< std::endl << Pk << std::endl;
+                std::cout << "[EKF_PREDICT] Process Noise Cov Q(k):"<< std::endl << Q << std::endl;
+                #endif
+
+            }
             /**@brief Filter prediction step
              */
             template<typename _ProcessModel>
