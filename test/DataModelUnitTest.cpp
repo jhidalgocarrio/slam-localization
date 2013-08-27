@@ -30,9 +30,7 @@ bool increment(std::vector<int> & vector, int k)
 
 BOOST_AUTO_TEST_CASE( DATAMODEL )
 {
-   	localization::DataModel data1, data2;
-	data1 = localization::DataModel(3);
-	data2 = localization::DataModel(3);
+   	localization::DataModel<double, 3> data1, data2;
 
 	data1.data << 0.0124889, 0.00171945, -0.0138983;
 	data2.data << 0.0168381, 0.000632167, -0.0235605;
@@ -47,7 +45,7 @@ BOOST_AUTO_TEST_CASE( DATAMODEL )
 	std::cout<<"data2 is: "<<data2<<"\n";
 	std::cout<<"Inverse of data2 Cov:\n"<<data2.Cov.inverse()<<"\n";
 	
-	localization::DataModel data3;
+	localization::DataModel<double, 3> data3;
 	data3 = data1 + data2;
 	
 	std::cout<<"*** OPERATOR + ***\n";

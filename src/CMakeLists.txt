@@ -1,7 +1,5 @@
 set (LOCALIZATION_SRCS
-    Util.cpp
     Lesma.cpp
-    DataModel.cpp
     DeadReckon.cpp
     )
 

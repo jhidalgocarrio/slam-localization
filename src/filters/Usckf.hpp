@@ -327,18 +327,18 @@ namespace localization
                 typedef Eigen::Matrix<ScalarType, _SingleState::DOF, DOF_MEASUREMENT> CrossCov;
 
                 /** Get the current state vector error to propagate **/
-                _SingleState statek_i = mu_error.statek_i;
+                _SingleState errork_i = mu_error.statek_i;
 
                 /** statek_i cov matrix **/
                 SingleStateCovariance Pk = MTK::subblock (Pk_error, &_AugmentedState::statek_i);
 
                 #ifdef USCKF_DEBUG_PRINTS
-                std::cout << "[USCKF_SINGLE_UPDATE] statek_i(k+1|k):\n" << statek_i <<std::endl;
+                std::cout << "[USCKF_SINGLE_UPDATE] statek_i(k+1|k):\n" << errork_i <<std::endl;
                 std::cout << "[USCKF_SINGLE_UPDATE] Pk(k+1|k):\n" << Pk <<std::endl;
                 #endif
 
                 SingleStateSigma X(2 * DOF_SINGLE_STATE + 1);
-                generateSigmaPoints(statek_i, Pk, X);
+                generateSigmaPoints(errork_i, Pk, X);
 
                 std::vector<_Measurement> Z(X.size());
                 std::transform(X.begin(), X.end(), Z.begin(), h);
@@ -350,7 +350,7 @@ namespace localization
                 const MeasurementCov S = covSigmaPoints<DOF_MEASUREMENT, _Measurement>(meanZ, Z) + R();
 
                 /** The cross-correlation matrix **/
-                const CrossCov covXZ = crossCovSigmaPoints<_SingleState, DOF_MEASUREMENT, SingleStateSigma, _Measurement>(statek_i, meanZ, X, Z);
+                const CrossCov covXZ = crossCovSigmaPoints<_SingleState, DOF_MEASUREMENT, SingleStateSigma, _Measurement>(errork_i, meanZ, X, Z);
 
                 MeasurementCov S_inverse;
                 S_inverse = S.inverse();
@@ -361,13 +361,18 @@ namespace localization
 
                 Pk -= K * S * K.transpose();
                 Pk = 0.5 * (Pk + Pk.transpose()); //! Guarantee symmetry
-                statek_i = statek_i + K * innovation;
+                errork_i = errork_i + K * innovation;
+
+                /** Store the error vector **/
+                mu_error.statek_i = errork_i;
 
                 /** Store the subcovariance matrix for statek_i **/
                 MTK::subblock (Pk_error, &_AugmentedState::statek_i) = Pk;
 
                 #ifdef USCKF_DEBUG_PRINTS
-                std::cout << "[USCKF_SINGLE_UPDATE] statek_i(k+1|k+1):\n" << statek_i <<std::endl;
+                std::cout << "[USCKF_SINGLE_UPDATE] statek_i(k+1|k+1):\n" << errork_i <<std::endl;
+                VectorizedSingleState vectork_i = errork_i.getVectorizedState();
+                std::cout << "[USCKF_SINGLE_UPDATE] Orientation error(k+1|k+1) Roll: "<<vectork_i[6]<<" Pitch: " <<vectork_i[7]<<" Yaw: "<<vectork_i[8]<<std::endl;
                 std::cout << "[USCKF_SINGLE_UPDATE] Pk(k+1|k+1):\n" << Pk <<std::endl;
                 std::cout << "[USCKF_SINGLE_UPDATE] K:\n" << K <<std::endl;
                 std::cout << "[USCKF_SINGLE_UPDATE] S:\n" << S <<std::endl;
@@ -383,12 +388,12 @@ namespace localization
                 /**************************/
 
                 /** Apply correction **/
-                mu_state.statek_i.pos += statek_i.pos;
-                mu_state.statek_i.vel += statek_i.vel;
-                mu_state.statek_i.orient = (mu_state.statek_i.orient * statek_i.orient);
+                mu_state.statek_i.pos += errork_i.pos;
+                mu_state.statek_i.vel += errork_i.vel;
+                mu_state.statek_i.orient = (mu_state.statek_i.orient * errork_i.orient);
                 mu_state.statek_i.orient.normalize();
-                mu_state.statek_i.gbias += statek_i.gbias;
-                mu_state.statek_i.abias += statek_i.abias;
+                mu_state.statek_i.gbias += errork_i.gbias;
+                mu_state.statek_i.abias += errork_i.abias;
 
             }
 
@@ -713,47 +718,6 @@ namespace localization
                     std::cout << "norm:" << ((mu_error - muX).norm() > 0. ? ">" : "=") << std::endl;
                 }
                 assert (mu_error == muX);
-            }
-
-            template <typename _MatrixType>
-            _MatrixType guaranteeSPD (const _MatrixType &A)
-            {
-                _MatrixType spdA;
-                Eigen::VectorXd s;
-                s.resize(A.rows(), 1);
-
-                /**
-                 * Single Value Decomposition
-                */
-                Eigen::JacobiSVD <Eigen::MatrixXd > svdOfA (A, Eigen::ComputeThinU | Eigen::ComputeThinV);
-
-                s = svdOfA.singularValues(); //!eigenvalues
-                std::cout<<"[SVD] s: \n"<<s<<"\n";
-                std::cout<<"[SVD] svdOfA.matrixU():\n"<<svdOfA.matrixU()<<"\n";
-                std::cout<<"[SVD] svdOfA.matrixV():\n"<<svdOfA.matrixV()<<"\n";
-
-                Eigen::EigenSolver<_MatrixType> eig(A);
-                std::cout << "[SVD] BEFORE: eigen values: " << eig.eigenvalues().transpose() << std::endl;
-
-                for (register int i=0; i<s.size(); ++i)
-                {
-                    std::cout<<"[SVD] i["<<i<<"]\n";
-
-                    if (s(i) < 0.00)
-                        s(i) = 0.00;
-                }
-                spdA = svdOfA.matrixU() * s.matrix().asDiagonal() * svdOfA.matrixV();
-
-                Eigen::EigenSolver<_MatrixType> eigSPD(spdA);
-                if (eig.eigenvalues() == eigSPD.eigenvalues())
-                    std::cout<<"[SVD] EQUAL!!\n";
-
-                std::cout << "[SVD] AFTER: eigen values: " << eigSPD.eigenvalues().transpose() << std::endl;
-
-                Eigen::EigenSolver<_MatrixType> eigSPD2(spdA);
-                std::cout << "[SVD] AGAIN: eigen values: " << eigSPD2.eigenvalues().transpose() << std::endl;
-
-                return spdA;
             }
 
     public:

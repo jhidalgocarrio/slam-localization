@@ -5,7 +5,7 @@
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 
-#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
+//#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -39,41 +39,20 @@ namespace localization
         H.template block<3,3>(3,6) = 2.0*gtilde2product;
         H(3,_SingleStateDoF-3) = 1; H(4,_SingleStateDoF-2) = 1; H(5,_SingleStateDoF-1) = 1;
 
-        /*#ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
+        #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
         std::cout<<"[MEASUREMENT_MATRIX] H is of size "<< H.rows() <<" x "<<H.cols()<<"\n";
         std::cout<<"[MEASUREMENT_MATRIX] H:\n"<< H <<"\n";
-        #endif*/
+        #endif
 
         return H;
     }
 
-    template <typename _SingleState, typename _VectorizedType>
-    _VectorizedType getVectorizedSingleState (const _SingleState & state)
-    {
-        _VectorizedType vstate;
-
-        vstate.template block<localization::vec3::DOF, 1>(0,0) = state.pos; //!Position
-        vstate.template block<localization::vec3::DOF, 1>(localization::vec3::DOF,0) = state.vel; //!Velocity
-
-        Eigen::Matrix<double, localization::SO3::DOF, 1> qe; //! Error quaternion
-        qe << state.orient.x(), state.orient.y(), state.orient.z();
-        vstate.template block<localization::SO3::DOF, 1>(2*localization::vec3::DOF, 0) = qe;
-
-        vstate.template block<localization::vec3::DOF, 1>(2*localization::vec3::DOF + localization::SO3::DOF, 0) = state.gbias; //! Gyros bias
-        vstate.template block<localization::vec3::DOF, 1>(3*localization::vec3::DOF + localization::SO3::DOF, 0) = state.abias; //! Acc bias
-
-        return vstate;
-    }
-
-
-    template <typename _SingleState, typename _MeasurementVector, typename _VectorizedType >
+    template <typename _SingleState, typename _MeasurementVector>
         _MeasurementVector proprioceptiveMeasurementModel (const _SingleState &statek_i, const Eigen::Matrix<double, 6, _SingleState::DOF> &H)
     {
         _MeasurementVector z_model;
 
-        _VectorizedType xk_i = getVectorizedSingleState<_SingleState, _VectorizedType> (statek_i);
-
-        z_model = H * xk_i;
+        z_model = H * static_cast<_SingleState>(statek_i).getVectorizedState(_SingleState::ERROR_QUATERNION);
 
         /*#ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
         std::cout<<"[MEASUREMENT_MODEL] z_model:\n"<< z_model<<"\n";
@@ -95,12 +74,13 @@ namespace localization
 
         double sqrtdelta_t = sqrt(delta_t); /** Square root of delta time interval */
 
+        /** Part for the velocity **/
+        Cov.block<3,3> (0,0) = Eigen::Matrix3d::Identity();
+
         /** Part of the gravity **/
         Rat(0,0) = 3 * pow(accrw[0]/sqrtdelta_t,2);//0.0054785914701378034;
         Rat(1,1) = 3 * pow(accrw[1]/sqrtdelta_t,2);//0.0061094546837916494;
         Rat(2,2) = 3 * pow(accrw[2]/sqrtdelta_t,2);//0.0063186020143245212;
-
-        /** To-DO: Part for the velocity **/
         Cov.block<3,3> (3,3) = Rat;
 
         #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
@@ -118,8 +98,8 @@ namespace localization
 
     protected:
 
-        unsigned int r1count;/** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
-        unsigned int m1; /** Parameter for adaptive algorithm (to estimate Uk with is not directly observale) */
+        unsigned int r1count; /** Variable used in the adaptive algorithm, to compute the Uk matrix for SVD*/
+        unsigned int m1; /** Parameter for adaptive algorithm (to estimate Uk which is not directly observale) */
         unsigned int m2; /** Parameter for adaptive algorithm (to prevent falsering entering in no-external acc mode) */
         double gamma; /** Parameter for adaptive algorithm (only entering when Qstart is greater than RHR'+Ra) */
         unsigned int r2count; /** Parameter for adaptive algorithm */
@@ -252,7 +232,7 @@ namespace localization
                     Qstar = Eigen::Matrix3d::Zero();
             }
 
-            return Qstar;
+            return R + Qstar; //! R is the static and Qstar is the external acceleration covariance
         }
     };
 }

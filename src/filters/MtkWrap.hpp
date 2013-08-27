@@ -53,7 +53,6 @@ namespace  localization
     {
             typedef MtkWrap<M> self;
     public:
-            //typedef double scalar; // MTK only works with double
             typedef typename M::scalar scalar_type;
             typedef typename M::VectorizedType VectorizedType;
 

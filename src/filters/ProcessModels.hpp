@@ -90,7 +90,7 @@ namespace localization
 
         /** Form the process model matrix **/
         F.setZero();dF.setZero();
-        F.template block<3,3>(0,3) = orient.inverse().matrix(); //! Position part
+        F.template block<3,3>(0,3) = orient.matrix(); //! Position part (velocity is comming in body, position in world)
         F.template block<3,3>(3,6) = -acc2product; //! Velocity part
         F.template block<3,3>(3,3*4) = -Eigen::Matrix3d::Identity(); //! Velocity part
         F.template block<3,3>(6,6) = -velo2product; //! Attitude part
@@ -99,6 +99,10 @@ namespace localization
         /** Discrete the matrix  (ZOH) **/
         dF = Eigen::Matrix<double, _SingleState::DOF, _SingleState::DOF>::Identity() + F * dt + F * F * pow(dt,2)/2.0;
 
+        #ifdef PROCESS_MODEL_DEBUG_PRINTS
+        std::cout<<"[PROCESS_MODEL] F is\n"<<F<<"\n";
+        std::cout<<"[PROCESS_MODEL] dF is\n"<<dF<<"\n";
+        #endif
         return dF;
     }
 
@@ -118,9 +122,6 @@ namespace localization
         _SingleStateCovariance Cov = _SingleStateCovariance::Zero();// Covariance matrix
         _SingleStateCovariance dCov = _SingleStateCovariance::Zero();// Discrete Cov matrix
 
-        /** Noise for error in position **/
-        ::MTK::subblock (Cov, &_SingleState::pos) = Eigen::Matrix3d::Zero();
-
         /** Noise for error in velocity **/
         Eigen::Matrix3d Qa;
         Qa.setZero();
@@ -128,6 +129,9 @@ namespace localization
         Qa(1,1) = pow(accrw[1]/sqrtdelta_t,2);
         Qa(2,2) = pow(accrw[2]/sqrtdelta_t,2);
         ::MTK::subblock (Cov, &_SingleState::vel) = /*Cq.inverse */ Qa;
+
+        /** Noise for error in position **/
+        ::MTK::subblock (Cov, &_SingleState::pos) = orient.matrix() * Qa * delta_t;//Eigen::Matrix3d::Zero();
 
         /** Noise for error in orientation **/
         Eigen::Matrix3d Qg;
@@ -155,7 +159,12 @@ namespace localization
 
         /** Form the system noise matrix (discretization) **/
         dCov = Cov*delta_t + 0.5*delta_t*F*Cov + 0.5*delta_t*Cov*F.transpose();
-        dCov = 0.5*(Cov + Cov.transpose());
+        dCov = 0.5*(dCov + dCov.transpose());
+
+        #ifdef PROCESS_MODEL_DEBUG_PRINTS
+        std::cout<<"[PROCESS_NOISE_COV] Cov is\n"<<Cov<<"\n";
+        std::cout<<"[PROCESS_NOISE_COV] dCov is\n"<<dCov<<"\n";
+        #endif
 
         return dCov ;
     }

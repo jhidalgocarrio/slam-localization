@@ -19,7 +19,7 @@
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 #include "DataTypes.hpp" /** Orogen compatible export data types **/
 
-#define MEASUREMENT_ITEN_DEBUG_PRINTS 1
+#define UTIL_DEBUG_PRINTS 1
 
 namespace localization	
 {
@@ -38,9 +38,9 @@ namespace localization
 	Eigen::Matrix <double, Eigen::Dynamic, 1> besselBCoeff, besselACoeff; /** IIR Bessel filter Coefficients **/
 	Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> arrayVelMM, arrayVelMMIIR; /** Array of past rover velocities from the motion model (for Bessel filter) **/
 	Eigen::Quaternion <double> q_weight_distribution; /** Offset quaternion to set the uneven weight distribution of the rover **/
-	std::deque <DataModel> velMM; /** Velocity model from navigation kinematics (already filtered by Bessel IIR) **/
-	std::deque <DataModel> increVelMM; /** Increment in velocity model from navigation kinematics (already filtered by Bessel IIR) **/
-	DataModel dcontactAngle; /** delta contact angle from the navigation kinematics **/
+	std::deque < DataModel<double, 3> > velMM; /** Velocity model from navigation kinematics (already filtered by Bessel IIR) **/
+	std::deque < DataModel<double, 3> > increVelMM; /** Increment in velocity model from navigation kinematics (already filtered by Bessel IIR) **/
+	DataModel<double,3> dcontactAngle; /** delta contact angle from the navigation kinematics **/
 	
 	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> Rencoders; /** Measurement noise convariance matrix for joint velocities */
 	Eigen::Matrix <double,NUMAXIS,NUMAXIS> Rangvelo; /** Measurement noise convariance matrix for angular velocities */
@@ -64,7 +64,7 @@ namespace localization
 	Eigen::Matrix <double,NUMAXIS,1> eccx, eccy, eccz; /** Accelerometers excentricity with respect to the body center of the robot **/
 		
 	/** Slip vector **/
-	DataModel slipModel, slipVector, slipError;
+	DataModel<double,3> slipModel, slipVector, slipError;
 	
 
     public:
@@ -76,364 +76,6 @@ namespace localization
 	/** Util default descontructor
          */
         ~Util();
-	
-	/**
-	* Print a welcome to stdout
-	* \return nothing
-	*/
-	void welcome();
-	
-	/**
-	* @brief Initialization method
-	* 
-	* Class initialization.
-	* 
-	*/
-	void Init ( Eigen::Matrix< double, ENCODERS_VECTOR_SIZE , ENCODERS_VECTOR_SIZE  >& Ren,
-		    Eigen::Matrix< double, NUMAXIS , NUMAXIS  >& Rangvelo,
-		    Eigen::Quaternion <double> q_weight, int buffer_size);
-	
-	/**
-	* @brief This function set the Accelerometers excentricity
-	* 
-	* Here the eccentricity is defined as the vector of the distance
-	* between the Body center and the accelerometer of the IMU.
-	*
-	* @author Javier Hidalgo Carrio.
-	*
-	* @param[in] eccx vector of the distance in meters for Accelerometers X axis
-	* @param[in] eccy vector of the distance in meters for Accelerometers Y axis
-	* @param[in] eccz vector of the distance in meters for Accelerometers Z axis
-	*
-	* @return OK is everything all right. ERROR on other cases.
-	*
-	*/
-	void setEccentricity (Eigen::Matrix <double,NUMAXIS,1>  &eccx, Eigen::Matrix <double,NUMAXIS,1>  &eccy, Eigen::Matrix <double,NUMAXIS,1>  &eccz);
-	
-	/**
-	* @brief Set the current encoders velocities
-	* 
-	* Set the encoders velocities for the kinematics
-	* 
-	* @param[in] vjoints the vector of joints encoders velocities
-	* 
-	*/
-	void setEncodersVelocity(const Eigen::Matrix<double, Eigen::Dynamic, 1> &vjoints);
-	
-	
-	/**
-	* @brief Set the current inertial values (acc and gyros)
-	* 
-	* Set the current corrected inertial values
-	* 
-	* @param[in] acc current acceleration
-	* @param[in] angvelo current angular velocity
-	* 
-	*/
-	void setInertialValues(const Eigen::Matrix <double,NUMAXIS,1>  &acceleration, const Eigen::Matrix <double,NUMAXIS,1>  &angular_velocity);;
-	
-	/**
-	* @brief Gets Inertial Values (acc and angvelo)
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @param[out] acc current acceleration
-	* @param[out] angvelo current angular velocity
-	* 
-	* @return void
-	*
-	*/
-	void getInertialValues(Eigen::Matrix <double,NUMAXIS,1> &acc, Eigen::Matrix <double,NUMAXIS,1> &angvelo);
-	
-	/**
-	* @brief Gets Average of Inertial Values (acc and angvelo)
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @param[out] acc current acceleration
-	* @param[out] angvelo current angular velocity
-	* 
-	* @return void
-	*
-	*/
-	void getStepInertialValues(Eigen::Matrix <double,NUMAXIS,1> &acc, Eigen::Matrix <double,NUMAXIS,1> &angvelo);
-	
-	/**
-	* @brief Gets increment in linear velocities
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @param[out] dt the delta time (step size)
-	* 
-	* @return the linear velocities
-	*
-	*/
-	Eigen::Matrix <double,NUMAXIS,1> getLinearVelocities(double dt);
-	
-	/**
-	* @brief Gets 3x1 slip vector
-	* 
-	* @param[in] wheel_idx wheel index between 0 and NUMBER_OF_WHEELS-1
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return the slip vector
-	*
-	*/
-	Eigen::Matrix <double,NUMAXIS,1> getSlipVector(const unsigned int wheel_idx);
-	
-	/**
-	* @brief Gets rover slip vector
-	* 
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return the complete slip vector
-	*
-	*/
-	Eigen::Matrix <double,SLIP_VECTOR_SIZE,1> getSlipVector();
-	
-	/**
-	* @brief Gets rover slip vector Covariance
-	* 
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return the complete slip vector cov matrix
-	*
-	*/
-	Eigen::Matrix <double,SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> getSlipVectorCov();
-	
-	/**
-	* @brief Gets rover slip error vector
-	* 
-	* Return the slip error vector for the complete number of wheels
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return the rover slip error vector
-	*
-	*/
-	Eigen::Matrix <double,SLIP_VECTOR_SIZE,1> getSlipErrorVector();
-	
-	/**
-	* @brief Gets rover slip error covariance matrix
-	* 
-	* Return the slip error covariance matrix for the complete number of wheels
-	* 
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return the rover slip error covariance matrix
-	*
-	*/
-	Eigen::Matrix <double,SLIP_VECTOR_SIZE, SLIP_VECTOR_SIZE> getSlipErrorVectorCovariance();
-	
-	/**
-	* @brief Gets contact angle vector
-	*
-	* @author Javier Hidalgo Carrio.
-	*
-	* @return the contact angles
-	*
-	*/
-	Eigen::Matrix <double,Eigen::Dynamic,1> getContactAnglesVelocity();	
-	
-	/**
-	* @brief Get the velocity from the odometry model
-	* 
-	* Rover velocity from pure odometry model (navigation kinematics)
-	* 
-	* @return current rover velocity from odometry
-	* 
-	*/
-	Eigen::Matrix<double, NUMAXIS, 1 > getCurrentVeloModel();
-	
-	/**
-	* @brief Get the covariance of the velocity from the odometry model
-	* 
-	* Covariance matrix of the estimated quantity
-	* 
-	* @return the covariance matrix
-	* 
-	*/
-	Eigen::Matrix<double, NUMAXIS, NUMAXIS > getCurrentVeloModelCovariance();
-	
-	
-	/**
-	* @brief Get the increment in velocity
-	* 
-	* Rover increment velocity from odometry model (navigation kinematics)
-	* 
-	* @return current rover incremet in velocity from odometry
-	* 
-	*/
-	Eigen::Matrix<double, NUMAXIS, 1 > getIncrementalVeloModel();
-	
-	/**
-	* @brief Get the covariance of the increment in velocity
-	* 
-	* Covariance matrix of the estimated quantity
-	* 
-	* @return the covariance matrix
-	* 
-	*/
-	Eigen::Matrix<double, NUMAXIS, NUMAXIS > getIncrementalVeloModelCovariance();
-	
-	/**
-	 * @brief Returns the covariance noise matrix
-	 */
-	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE,ENCODERS_VECTOR_SIZE> getEncodersVelocityCovariance();
-	
-	/**
-	 * @brief Returns the covariance noise matrix
-	 */
-	Eigen::Matrix <double,NUMBER_OF_WHEELS,NUMBER_OF_WHEELS>  getContactAnglesVelocityCovariance();
-	
-	/**
-	 * @brief Returns the quaternion with the projection for the nadir vector
-	 */
-	Eigen::Quaternion <double>  getLevelWeightDistribution();
-	
-	
-	/**
-	* @brief Simpson's rule for numerical integration
-	* 
-	* It computes Simpson's numerical integration method
-	*
-	* @author Javier Hidalgo Carrio.
-	*
-	* @param[in] fa sample at time t-2
-	* @param[in] fm sample at time t-1
-	* @param[in] fb sample at time t
-	* @param[in] delta_ab time between samples b and a
-	*
-	* @return OK is everything all right. ERROR on other cases.
-	*
-	*/
-	inline double simpsonsIntegral (double fa, double fm, double fb, double delta_ab);
-	
-// 	/**
-// 	* @brief Perform the accelerometers integration
-// 	* 
-// 	* Integration of accelerometers for the window defined
-// 	* in INTEGRATION_WINDOWS_SIZE
-// 	*/
-// 	Eigen::Matrix<double, NUMAXIS,1> accIntegrationWindow(double dt);
-// 	
-	
-	/**
-	* @brief Get angular velocity covariance matrix
-	* 
-	* Covariance matrix of the estimated quantity
-	* 
-	* @return the covariance matrix
-	* 
-	*/
-	Eigen::Matrix <double,NUMAXIS,NUMAXIS> getRangvelo ();
-	
-	/**
-	* @brief Get joints encoders velocity covariance matrix
-	* 
-	* Covariance matrix of the estimated quantity
-	* 
-	* @return the covariance matrix
-	* 
-	*/
-	Eigen::Matrix <double,ENCODERS_VECTOR_SIZE, ENCODERS_VECTOR_SIZE> getRencoders ();
-	
-	/**
-	* @brief Least-Squares navigation kinematics solution
-	* 
-	* Computes the rover velocity, slip vector due to non-holonomic constraints
-	* and contact angle velocities.
-	* 
-	* @param[in] A the matrix with the non-sensed values
-	* @param[in] B the matrix with the sensed values
-	* @param[in] R covariance matrix of the sensed values.
-	* 
-	* @return relative least-squares error
-	* 
-	*/
-	double navigationKinematics (const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &A, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &B,
-				     const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &W);
-	
-	/**
-	* @brief Least-Squares slip kinematics solution
-	* 
-	* Computes the rover slip vector for the number of wheels
-	* due to loose of traction with the ground
-	* 
-	* 
-	* @param[in] A the matrix with the non-sensed values
-	* @param[in] B the matrix with the sensed values
-	* @param[in] R covariance matrix of the sensed values.
-	* 
-	* @return relative least-squares error
-	* 
-	*/
-	double slipKinematics (const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &A, const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &B,
-				const Eigen::Matrix< double, Eigen::Dynamic, Eigen::Dynamic > &R, const Eigen::Matrix< double, NUMAXIS, 1> &linvelo);
-	
-	
-	/**
-	* @brief Save slip info to the Orogen-compatible DataType
-	* 
-	* 
-	* @param[out] sinfo the slip information
-	* 
-	* @return void
-	* 
-	*/
-	void toSlipInfo (localization::SlipInfo &sinfo);
-	
-	
-	/**
-	* @brief Save some useful measurement generation info.
-	* 
-	* 
-	* @param[out] measurementinfo some debung info the measurement generation
-	* 
-	* @return void
-	* 
-	*/
-	void toUtilInfo (localization::UtilInfo &measurementInfo);
-
-	
-	/**
-	* @brief Computes the Bhattacharyya coefficient
-	* 
-	* @return BC
-	* 
-	*/
-	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> bhattacharyya (DataModel &data1, DataModel &data2);
-	
-	/**
-	* @brief Computes the Mahalanobis distance
-	* 
-	* @return MH
-	* 
-	*/
-	double mahalanobis (DataModel &data1);
-	
-	/**
-	* @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
-	*/
-	double getWaveLenghtFromValue (const double value, const double max, const double min);
-
-	/**
-	* @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
-	*/
-	Eigen::Matrix<double, 3, 1> waveLenghtToColor (const double wavelength);
-	
-	/**
-	* @brief Convert data value in the range of MinValues..MaxValues
-	*/
-	Eigen::Matrix<double, 3, 1> waveLenghtToColorv2 (const double wavelength);
-
-	/**
-	* @brief 
-	*/
-	Eigen::Matrix<double, 3, 1> valueToColor (const double value, const double max, const double min);
 	
 	
 	/**
@@ -457,7 +99,7 @@ namespace localization
 	    /** Gravity affects by the altitude (aprox the value r = Re **/
 	    g = g*pow(Re/(Re+altitude), 2);
 
-            #ifdef MEASUREMENT_ITEN_DEBUG_PRINTS
+            #ifdef UTIL_DEBUG_PRINTS
 	    std::cout<<"[UTIL_CLASS] Theoretical gravity for this location (WGS-84 ellipsoid model): "<< g<<" [m/s^2]\n";
             #endif
 
@@ -487,7 +129,7 @@ namespace localization
 	    /** Compute the v vector expressed in the body frame **/
 	    v = (*q) * v;
 
-	    #ifdef DEBUG_PRINTS
+	    #ifdef UTIL_DEBUG_PRINTS
 	    std::cout<<"[UTIL_CLASS] Earth Rotation:"<<v<<"\n";
 	    #endif
 
@@ -522,33 +164,33 @@ namespace localization
 	    euler[2] = quat->toRotationMatrix().eulerAngles(2,1,0)[0];//YAW
 	    euler[1] = quat->toRotationMatrix().eulerAngles(2,1,0)[1];//PITCH
 	    euler[0] = quat->toRotationMatrix().eulerAngles(2,1,0)[2];//ROLL
-	    
+
 	    if (mode == EAST)
 	    {
-		#ifdef DEBUG_PRINTS
+		#ifdef UTIL_DEBUG_PRINTS
 		std::cout << "[EAST] magnetic declination\n";
 		#endif
 		euler[2] -= magnetic_declination; /** Magnetic declination is positive **/
 	    }
 	    else if (mode == WEST)
 	    {
-		#ifdef DEBUG_PRINTS
+		#ifdef UTIL_DEBUG_PRINTS
 		std::cout << "[WEST] magnetic declination\n";
 		#endif
 		euler[2] += magnetic_declination; /** Magnetic declination is negative **/
 	    }
 	    else
 	    {
-		#ifdef DEBUG_PRINTS
+		#ifdef UTIL_DEBUG_PRINTS
 		std::cerr << "[ERROR] In the correction of the magnetic declination\n";
 		#endif
 		return false;
 	    }
-	    
+
 	    *quat = Eigen::Quaternion <double> (Eigen::AngleAxisd(euler[0], Eigen::Vector3d::UnitX())*
 				Eigen::AngleAxisd(euler[1], Eigen::Vector3d::UnitY()) *
 				Eigen::AngleAxisd(euler[2], Eigen::Vector3d::UnitZ()));
-	    
+
 	    return true;
 	};
 	
@@ -612,9 +254,9 @@ namespace localization
 				    const Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> &x, Eigen::Matrix <double, Eigen::Dynamic, Eigen::Dynamic> &y)
 	{
 	    int i=norder;
-	    
+
 	    std::cout<<"Filter n.cols:"<<x.cols()<<" n.cols:"<<y.cols()<<"\n";
-	    
+
 	    if ((x.cols() >= norder+1) && (y.cols() >= norder+1))
 	    {
 		std::cout<<"Performing filter\n";
@@ -627,12 +269,101 @@ namespace localization
 				    - a[5]*y.col(i-5) - a[6]*y.col(i-6)
 				    - a[7]*y.col(i-7) - a[8]*y.col(i-8));
 	    }
-	    
+
 	    std::cout<<"[IIR]Result:\n"<<y.col(i)<<"\n";
-	    
+
 	    return y.col(i);
 	};
-	  
+
+        /**
+        * @brief Computes the Bhattacharyya coefficient
+        */
+        template<typename _Scalar, int _DIM>
+        static Eigen::Matrix<_Scalar, _DIM, _DIM> bhattacharyya (const DataModel<_Scalar, _DIM> &data1, const DataModel<_Scalar, _DIM> &data2)
+        {
+            _Scalar number_expo = std::numeric_limits<_Scalar>::quiet_NaN();
+            Eigen::Matrix<_Scalar, _DIM, _DIM> Inv_half;
+            Eigen::Matrix<_Scalar, _DIM, _DIM> BC;
+            Eigen::Matrix<_Scalar, _DIM, _DIM> Cov1llt;
+            Eigen::Matrix<_Scalar, _DIM, _DIM> Cov2llt;
+            DataModel<_Scalar, _DIM> aux;
+
+            /** Substraction **/
+            aux = data1 - data2;
+            Inv_half = (aux.Cov * 0.5).inverse();
+
+            Eigen::Matrix<_Scalar, 1, 1> expo = -0.125 * (aux.data.transpose() * Inv_half * aux.data);
+            number_expo = exp(expo[0]);
+
+            Cov1llt = data1.Cov.llt().matrixL();
+            Cov2llt = data2.Cov.llt().matrixL();
+            Cov1llt = Cov1llt.llt().matrixL();
+            Cov2llt = Cov2llt.llt().matrixL();
+
+            BC = (Cov1llt*Cov2llt) * Inv_half.llt().matrixL();
+
+            #ifdef UTIL_DEBUG_PRINTS
+            std::cout << "[BHATTACHARYYA] number_expo is:\n" << number_expo << std::endl;
+            std::cout << "[BHATTACHARYYA] Cov1llt is:\n" << Cov1llt << std::endl;
+            std::cout << "[BHATTACHARYYA] Cov2llt is:\n" << Cov2llt << std::endl;
+            std::cout << "[BHATTACHARYYA] Inv_half is:\n" << Inv_half << std::endl;
+            std::cout << "[BHATTACHARYYA] BC(without expo) is:\n" << BC << std::endl;
+            #endif
+
+            BC = BC * number_expo;
+
+            #ifdef UTIL_DEBUG_PRINTS
+            std::cout << "[BHATTACHARYYA] BC is:\n" << BC << std::endl;
+            #endif
+
+            return BC;
+        };
+
+        template <typename _MatrixType>
+        static _MatrixType guaranteeSPD (const _MatrixType &A)
+        {
+            _MatrixType spdA;
+            Eigen::VectorXd s;
+            s.resize(A.rows(), 1);
+
+            /**
+             * Single Value Decomposition
+            */
+            Eigen::JacobiSVD <Eigen::MatrixXd > svdOfA (A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+
+            s = svdOfA.singularValues(); //!eigenvalues
+
+            #ifdef UTIL_DEBUG_PRINTS
+            std::cout<<"[SPD-SVD] s: \n"<<s<<"\n";
+            std::cout<<"[SPD-SVD] svdOfA.matrixU():\n"<<svdOfA.matrixU()<<"\n";
+            std::cout<<"[SPD-SVD] svdOfA.matrixV():\n"<<svdOfA.matrixV()<<"\n";
+
+            Eigen::EigenSolver<_MatrixType> eig(A);
+            std::cout << "[SPD-SVD] BEFORE: eigen values: " << eig.eigenvalues().transpose() << std::endl;
+            #endif
+
+            for (register int i=0; i<s.size(); ++i)
+            {
+                #ifdef UTIL_DEBUG_PRINTS
+                std::cout<<"[SPD-SVD] i["<<i<<"]\n";
+                #endif
+
+                if (s(i) < 0.00)
+                    s(i) = 0.00;
+            }
+            spdA = svdOfA.matrixU() * s.matrix().asDiagonal() * svdOfA.matrixV();
+
+            #ifdef UTIL_DEBUG_PRINTS
+            Eigen::EigenSolver<_MatrixType> eigSPD(spdA);
+            if (eig.eigenvalues() == eigSPD.eigenvalues())
+                std::cout<<"[SPD-SVD] EQUAL!!\n";
+
+            std::cout << "[SPD-SVD] AFTER: eigen values: " << eigSPD.eigenvalues().transpose() << std::endl;
+            #endif
+
+            return spdA;
+        };
+
     }; //end of measurement class
 
 }//end of namespace localization
