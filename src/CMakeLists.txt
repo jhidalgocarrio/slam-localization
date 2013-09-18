@@ -6,6 +6,7 @@ set (LOCALIZATION_SRCS
 set (LOCALIZATION_HDRS
     Configuration.hpp
     Util.hpp
+    Analysis.hpp
     Lesma.hpp
     DataModel.hpp
     DeadReckon.hpp

@@ -6,6 +6,7 @@
 #define _MEASUREMENT_ITEM_HPP_
 
 #include <iostream> /** IO C++ Standard library */
+#include <cmath> /** Math C++ Standard library */
 #include <queue> /** FIFO queues **/
 #include <deque> /**  Dynamic-sized FIFO queues to have pop_back and other methods **/
 #include <algorithm> /** Algorithm C++ Standard library */
@@ -19,7 +20,7 @@
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 #include "DataTypes.hpp" /** Orogen compatible export data types **/
 
-#define UTIL_DEBUG_PRINTS 1
+//#define UTIL_DEBUG_PRINTS 1
 
 namespace localization	
 {
@@ -319,6 +320,21 @@ namespace localization
             return BC;
         };
 
+        template <typename _Scalar, int _DIM>
+        static _Scalar mahalanobis (const DataModel<_Scalar, _DIM> &data1, const DataModel<_Scalar, _DIM> &data2)
+        {
+            _Scalar distance;
+            DataModel<_Scalar, _DIM> aux = data1 - data2;
+
+            distance = aux.data.transpose() * aux.Cov.inverse() * aux.data;
+
+            #ifdef UTIL_DEBUG_PRINTS
+            std::cout << "[MAHALANOBIS] Distance is:" << distance << std::endl;
+            #endif
+
+            return distance;
+        }
+
         template <typename _MatrixType>
         static _MatrixType guaranteeSPD (const _MatrixType &A)
         {
@@ -364,7 +380,22 @@ namespace localization
             return spdA;
         };
 
-    }; //end of measurement class
+        /**
+         * @brief Check if NaN values
+         */
+        template<typename _Derived>
+        static inline bool isnotnan(const Eigen::MatrixBase<_Derived>& x)
+        {
+            return ((x.array() == x.array())).all();
+        };
+
+        template<typename _Derived>
+        static inline bool isfinite(const Eigen::MatrixBase<_Derived>& x)
+        {
+            return isnotnan(x - x);
+        };
+
+    }; //end of util class
 
 }//end of namespace localization
 

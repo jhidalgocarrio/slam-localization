@@ -31,7 +31,7 @@
 #include <mtk/build_manifold.hpp>
 
 
-#define USCKF_DEBUG_PRINTS 1
+//#define USCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -172,7 +172,9 @@ namespace localization
                 /** Apply the non-linear transformation of the process model **/
                 std::transform(X.begin(), X.end(), X.begin(), f);
 
+                #ifdef USCKF_DEBUG_PRINTS
                 printSigmaPoints<SingleStateSigma>(X);
+                #endif
 
                 /** Compute the mean **/
                 mu_error.statek_i = meanSigmaPoints(X);
@@ -548,7 +550,9 @@ namespace localization
                             X[i++] = mu + (delta + L.getL().col(j));
                             X[i++] = mu + (delta - L.getL().col(j));
                     }
+                    #ifdef USCKF_DEBUG_PRINTS
                     printSigmaPoints<AugmentedStateSigma>(X);
+                    #endif
             }
             /**@brief Sigma Point Calculation for the complete Augmented State
              */
@@ -581,7 +585,10 @@ namespace localization
                             X[i++] = mu + L.col(j);
                             X[i++] = mu + (-L.col(j));
                     }
+
+                    #ifdef USCKF_DEBUG_PRINTS
                     printSigmaPoints<SingleStateSigma>(X);
+                    #endif
             }
 
             // manifold mean

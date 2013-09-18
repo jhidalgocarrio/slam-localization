@@ -122,8 +122,8 @@ namespace localization
             return __is >> __var.pos >> __var.vel >> __var.orient >> __var.gbias >> __var.abias ;
         }
 
-        /**@brief Create a vectorized state of a single state vector
-         * but not in the form of Manifold in the for of error quaternion
+        /**@brief Create a vectorize state of a single state vector
+         * but not in the form of Manifold in the form of error quaternion
          * for the orientation.
          */
 

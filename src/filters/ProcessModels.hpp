@@ -2,7 +2,7 @@
 #define _PROCESS_MODELS_HPP_
 
 
-#define PROCESS_MODEL_DEBUG_PRINTS 1
+//#define PROCESS_MODEL_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -128,7 +128,7 @@ namespace localization
         Qa(0,0) = pow(accrw[0]/sqrtdelta_t,2);
         Qa(1,1) = pow(accrw[1]/sqrtdelta_t,2);
         Qa(2,2) = pow(accrw[2]/sqrtdelta_t,2);
-        ::MTK::subblock (Cov, &_SingleState::vel) = /*Cq.inverse */ Qa;
+        ::MTK::subblock (Cov, &_SingleState::vel) = /*Cq.inverse */ Qa;//TO-DO if multipliing to have in world, do it with vector diagonal
 
         /** Noise for error in position **/
         ::MTK::subblock (Cov, &_SingleState::pos) = orient.matrix() * Qa * delta_t;//Eigen::Matrix3d::Zero();
