@@ -5,7 +5,7 @@
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 
-//#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
+#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -18,7 +18,7 @@ namespace localization
         Eigen::Matrix < double, 6, _SingleStateDoF > H; /** Measurement matrix of the model */
         Eigen::Vector3d gtilde; /** Gravitation in the world frame */
         Eigen::Vector3d gtilde_body; /** Gravitation in the body frame */
-        Eigen::Matrix3d gtilde2product; /** Vec 2 product  matrix for the gravity vector in body frame */
+        Eigen::Matrix3d gtilde2product; /** Vector 2 product  matrix for the gravity vector in body frame */
 
         /** Init and gtilde **/
         H.setZero();
@@ -30,12 +30,12 @@ namespace localization
         /** Calculate the gravity vector in the body frame **/
         gtilde_body = orient.inverse() * gtilde;
 
-        /** Cross matrix of the g vector in body frame **/
+        /** Cross matrix of the gravity vector in body frame **/
         gtilde2product << 0, -gtilde_body(2), gtilde_body(1),
 		    gtilde_body(2), 0, -gtilde_body(0),
     		    -gtilde_body(1), gtilde_body(0), 0;
 
-        /** Form the matrix for the measurement of the attitude (acc correction) **/
+        /** Form the matrix for the measurement of the attitude (accelerometers correction) **/
         H.template block<3,3>(3,6) = 2.0*gtilde2product;
         H(3,_SingleStateDoF-3) = 1; H(4,_SingleStateDoF-2) = 1; H(5,_SingleStateDoF-1) = 1;
 
@@ -66,16 +66,15 @@ namespace localization
 
     /**@brief Noise Measurement Matrix for the attitude and velocity correction
      */
-    Eigen::Matrix<double, 6, 6> proprioceptiveMeasurementNoiseCov (const base::Vector3d &accrw, double &delta_t)
+    Eigen::Matrix<double, 6, 6> proprioceptiveMeasurementNoiseCov (const Eigen::Matrix<double, 3, 3> &veloErrorCov, const base::Vector3d &accrw, double &delta_t)
     {
-        Eigen::Matrix<double, 6, 6> Cov; /** Cov. matrix of the measurement **/
+        double sqrtdelta_t = sqrt(delta_t); /** Square root of delta time interval */
+        Eigen::Matrix<double, 6, 6> Cov; /** Covariance matrix of the measurement **/
         Eigen::Matrix3d Rat; /** Gravity vector covariance matrix */
         Cov.setZero(); Rat.setZero();
 
-        double sqrtdelta_t = sqrt(delta_t); /** Square root of delta time interval */
-
         /** Part for the velocity **/
-        Cov.block<3,3> (0,0) = Eigen::Matrix3d::Identity();
+        Cov.block<3,3> (0,0) = veloErrorCov;
 
         /** Part of the gravity **/
         Rat(0,0) = 3 * pow(accrw[0]/sqrtdelta_t,2);//0.0054785914701378034;
