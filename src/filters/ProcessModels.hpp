@@ -2,7 +2,7 @@
 #define _PROCESS_MODELS_HPP_
 
 
-//#define PROCESS_MODEL_DEBUG_PRINTS 1
+#define PROCESS_MODEL_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -90,9 +90,9 @@ namespace localization
 
         /** Form the process model matrix **/
         F.setZero();dF.setZero();
-        F.template block<3,3>(0,3) = orient.matrix(); //! Position part (velocity is comming in body, position in world)
-        F.template block<3,3>(3,6) = -acc2product; //! Velocity part
-        F.template block<3,3>(3,3*4) = -Eigen::Matrix3d::Identity(); //! Velocity part
+        F.template block<3,3>(0,3) = Eigen::Matrix3d::Identity();//orient.matrix(); //! Position part (velocity is coming in body, position in world)
+        F.template block<3,3>(3,6) = -orient.matrix() * acc2product; //! Velocity part
+        F.template block<3,3>(3,3*4) = -orient.matrix(); //! Velocity part
         F.template block<3,3>(6,6) = -velo2product; //! Attitude part
         F.template block<3,3>(6,3*3) = -0.5*Eigen::Matrix3d::Identity(); //! Attitude part
 
@@ -128,10 +128,10 @@ namespace localization
         Qa(0,0) = pow(accrw[0]/sqrtdelta_t,2);
         Qa(1,1) = pow(accrw[1]/sqrtdelta_t,2);
         Qa(2,2) = pow(accrw[2]/sqrtdelta_t,2);
-        ::MTK::subblock (Cov, &_SingleState::vel) = /*Cq.inverse */ Qa;//TO-DO if multipliing to have in world, do it with vector diagonal
+        ::MTK::subblock (Cov, &_SingleState::vel) = orient.matrix() * Qa;
 
         /** Noise for error in position **/
-        ::MTK::subblock (Cov, &_SingleState::pos) = orient.matrix() * Qa * delta_t;//Eigen::Matrix3d::Zero();
+        ::MTK::subblock (Cov, &_SingleState::pos) = orient.matrix() * Qa * delta_t;
 
         /** Noise for error in orientation **/
         Eigen::Matrix3d Qg;
