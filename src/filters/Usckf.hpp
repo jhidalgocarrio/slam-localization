@@ -31,7 +31,7 @@
 #include <mtk/build_manifold.hpp>
 
 
-//#define USCKF_DEBUG_PRINTS 1
+#define USCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -404,9 +404,12 @@ namespace localization
              * and Unscented tranform (UKF))
              */
             template<typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
-            void ekfUpdate(VectorizedSingleState &xk_i, const _Measurement &z, _MeasurementModel H, _MeasurementNoiseCovariance R)
+            void ekfUpdate(const _Measurement &z, _MeasurementModel H, _MeasurementNoiseCovariance R)
             {
                 const static int DOF_MEASUREMENT = ukfom::dof<_Measurement>::value; /** Dimension of the measurement */
+
+                /** Get the state in vector form **/
+                VectorizedSingleState xk_i = mu_error.statek_i.getVectorizedState();
 
                 /** statek_i cov matrix **/
                 SingleStateCovariance Pk = MTK::subblock (Pk_error, &_AugmentedState::statek_i);
@@ -514,6 +517,11 @@ namespace localization
                 return Pk_error;
             }
 
+            SingleStateCovariance PkSingleState()
+            {
+                SingleStateCovariance Pk = MTK::subblock (Pk_error, &_AugmentedState::statek_i);
+                return Pk;
+            }
 
     private:
 

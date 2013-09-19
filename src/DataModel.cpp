@@ -20,8 +20,6 @@ DataModel::DataModel()
     data.setZero();
     Cov.resize(1,1);
     Cov.setIdentity();
-    
-    
     Cov = ZERO_UNCERTAINTY * Cov;
 }
 
@@ -30,7 +28,7 @@ DataModel::DataModel(const unsigned int dim)
     data.resize(dim,1);
     data.setZero();
     Cov.resize(dim,dim);
-    Cov.setIdentity();    
+    Cov.setIdentity();
 
     Cov = ZERO_UNCERTAINTY * Cov;
 
