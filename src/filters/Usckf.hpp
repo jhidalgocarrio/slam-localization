@@ -399,19 +399,30 @@ namespace localization
 
             }
 
+            /** @brief Standard EKF Update of the state (TO-DO: improve this part using Manifold
+             * and Unscented transform (UKF))
+             */
+            template <typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
+            void ekfUpdate(const _Measurement &z, _MeasurementModel H, _MeasurementNoiseCovariance R)
+            {
+                ekfUpdate(z, H, R, ukfom::accept_any_mahalanobis_distance<ScalarType>);/*accept_mahalanobis_distance<ScalarType>);*/
+
+            }
 
             /** @brief Standard EKF Update of the state (TO-DO: improve this part using Manifold
-             * and Unscented tranform (UKF))
+             * and Unscented transform (UKF))
              */
-            template<typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
-            void ekfUpdate(const _Measurement &z, _MeasurementModel H, _MeasurementNoiseCovariance R)
+            template <typename _Measurement, typename _MeasurementModel,
+                    typename _MeasurementNoiseCovariance,  typename _SignificanceTest>
+            void ekfUpdate(const _Measurement &z, _MeasurementModel H,
+                    _MeasurementNoiseCovariance R, _SignificanceTest mt)
             {
                 const static int DOF_MEASUREMENT = ukfom::dof<_Measurement>::value; /** Dimension of the measurement */
 
                 /** Get the state in vector form **/
-                VectorizedSingleState xk_i = mu_error.statek_i.getVectorizedState();
+                VectorizedSingleState xk_i = mu_error.statek_i.getVectorizedState(_SingleState::ERROR_QUATERNION);
 
-                /** statek_i cov matrix **/
+                /** statek_i covariance matrix **/
                 SingleStateCovariance Pk = MTK::subblock (Pk_error, &_AugmentedState::statek_i);
 
                 #ifdef USCKF_DEBUG_PRINTS
@@ -420,19 +431,31 @@ namespace localization
                 #endif
 
                 /** Compute the Kalman Gain Matrix **/
-                Eigen::Matrix<ScalarType, DOF_MEASUREMENT, DOF_MEASUREMENT> S;
+                Eigen::Matrix<ScalarType, DOF_MEASUREMENT, DOF_MEASUREMENT> S, S_inverse;
                 Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_MEASUREMENT> K;
-                S = H * Pk * H.transpose() + R; //!Calculate the cov of the innovation
-                K = Pk * H.transpose() * S.inverse(); //!Calculate K using the inverse of S
+                S = H * Pk * H.transpose() + R; //!Calculate the covariance of the innovation
+                S_inverse = S.inverse();
+                K = Pk * H.transpose() * S_inverse; //!Calculate K using the inverse of S
+
+                /** Innovation **/
+                const _Measurement innovation = (z - H * xk_i);
+                const ScalarType mahalanobis2 = (innovation.transpose() *  S_inverse * innovation)(0);
 
                 /** Update the state vector and the covariance matrix */
-                xk_i = xk_i + K * (z - H * xk_i);
-                Pk = (Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_SINGLE_STATE>::Identity()
-                        -K * H) * Pk *(Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_SINGLE_STATE>::Identity()
-                        -K * H).transpose() + K * R * K.transpose();
-                Pk = 0.5 * (Pk + Pk.transpose()); //! Guarantee symmetry
+                if (mt(mahalanobis2))
+                {
+                    #ifdef USCKF_DEBUG_PRINTS
+                    std::cout << "[USCKF_EKF_UPDATE] mahalanobis return true"<<std::endl;
+                    #endif
 
-                /** Store the subcovariance matrix for statek_i **/
+                    xk_i = xk_i + K * innovation;
+                    Pk = (Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_SINGLE_STATE>::Identity()
+                            -K * H) * Pk *(Eigen::Matrix<ScalarType, DOF_SINGLE_STATE, DOF_SINGLE_STATE>::Identity()
+                            -K * H).transpose() + K * R * K.transpose();
+                    Pk = 0.5 * (Pk + Pk.transpose()); //! Guarantee symmetry
+                }
+
+                /** Store the sub-covariance matrix for statek_i **/
                 MTK::subblock (Pk_error, &_AugmentedState::statek_i) = Pk;
 
                 #ifdef USCKF_DEBUG_PRINTS
@@ -478,16 +501,16 @@ namespace localization
                 mu_error.statek_i.abias.setZero();
             }
 
-            void clonning()
+            void cloning()
             {
-                /** Augmented state clonnning (error and magnitudes state) **/
+                /** Augmented state cloning (error and magnitudes state) **/
                 mu_state.statek_l = mu_state.statek_i;
                 mu_state.statek = mu_state.statek_l;
 
                 mu_error.statek_l = mu_error.statek_i;
                 mu_error.statek = mu_error.statek_l;
 
-                /** Covariance  state clonnning **/
+                /** Covariance  state cloning **/
                 SingleStateCovariance Pk = MTK::subblock (Pk_error, &_AugmentedState::statek_i);
                 MTK::subblock (Pk_error, &_AugmentedState::statek, &_AugmentedState::statek) = Pk;
                 MTK::subblock (Pk_error, &_AugmentedState::statek_l, &_AugmentedState::statek_l) = Pk;
@@ -712,6 +735,7 @@ namespace localization
                     }
             }
 
+
     public:
             void checkSigmaPoints()
             {
@@ -737,6 +761,69 @@ namespace localization
 
     public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+            template <typename _ScalarType>
+            static bool accept_mahalanobis_distance(const _ScalarType &mahalanobis2, const int dof)
+            {
+                #ifdef USCKF_DEBUG_PRINTS
+                std::cout << "[MAHALANOBIS_DISTANCE] mahalanobis2: " << mahalanobis2 <<std::endl;
+                std::cout << "[MAHALANOBIS_DISTANCE] dof: " << dof <<std::endl;
+                #endif
+
+
+                /** Only significance of alpha = 5% is computed **/
+                switch (dof)
+                {
+                    case 1:
+                        if (mahalanobis2 < 3.84)
+                            return true;
+                        else
+                            return false;
+                    case 2:
+                        if (mahalanobis2 < 5.99)
+                            return true;
+                        else
+                            return false;
+                    case 3:
+                        if (mahalanobis2 < 7.81)
+                            return true;
+                        else
+                            return false;
+                    case 4:
+                        if (mahalanobis2 < 9.49)
+                            return true;
+                        else
+                            return false;
+                    case 5:
+                        if (mahalanobis2 < 11.07)
+                            return true;
+                        else
+                            return false;
+                    case 6:
+                        if (mahalanobis2 < 12.59)
+                            return true;
+                        else
+                            return false;
+                    case 7:
+                        if (mahalanobis2 < 14.07)
+                            return true;
+                        else
+                            return false;
+                    case 8:
+                        if (mahalanobis2 < 15.51)
+                            return true;
+                        else
+                            return false;
+                    case 9:
+                        if (mahalanobis2 < 16.92)
+                            return true;
+                        else
+                            return false;
+                    default:
+                        std::cerr<<"[MAHALANOBIS-ERROR] DoF("<<dof<<") not supported"<<std::endl;
+                        return false;
+                }
+            };
     };
 	
 } // namespace rover_localization

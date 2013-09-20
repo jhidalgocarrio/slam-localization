@@ -121,8 +121,8 @@ namespace localization
             }
 
             /** Update the velocity information in the posterior **/
-            postPose.velocity = postPose.orientation * cartesianVelocities[0].block<NUMAXIS, 1> (0,0); //!Velocity in odometry frame
-            postPose.cov_velocity = postPose.orientation.matrix() * cartesianVelCov.block<NUMAXIS, NUMAXIS> (0,0);
+            postPose.velocity = cartesianVelocities[0].block<NUMAXIS, 1> (0,0); //!Velocity in body frame
+            postPose.cov_velocity = cartesianVelCov.block<NUMAXIS, NUMAXIS> (0,0);
             postPose.angular_velocity = cartesianVelocities[0].block<NUMAXIS, 1> (NUMAXIS, 0);
             postPose.cov_angular_velocity = cartesianVelCov.block<NUMAXIS, NUMAXIS> (NUMAXIS, NUMAXIS);
 
