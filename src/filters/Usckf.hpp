@@ -98,9 +98,9 @@ namespace localization
                 /** Store the subcovariance matrix for statek_i **/
                 MTK::subblock (Pk_error, &_AugmentedState::statek_i) = Pk;
 
-                /************************/
-                /**  Cross-Cov Matrix  **/
-                /************************/
+                /*******************************/
+                /**  Cross-Covariance Matrix  **/
+                /*******************************/
 
                 /** Compute the Cross Cov for the Copy States of the AugmentedState **/
                 SingleStateCovariance Pkkk;
@@ -126,7 +126,7 @@ namespace localization
                 MTK::subblock (Pk_error, &_AugmentedState::statek_i, &_AugmentedState::statek_l) = Pkkk;
 
                 /**********/
-                /** TO-DO: cross-cov with the features (Dynamic size part of the filter) **/
+                /** TO-DO: cross-cov with the features (Dynamic size part of the vector state) **/
 
                 #ifdef  USCKF_DEBUG_PRINTS
                 std::cout << "[EKF_PREDICT] statek_i(k+1|k):" << std::endl << mu_error.statek_i << std::endl;
@@ -311,6 +311,78 @@ namespace localization
                     #endif
             }
 
+            template<typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
+            void ekfUpdate(const _Measurement &z, _MeasurementModel H, _MeasurementNoiseCovariance R)
+            {
+                    ekfUpdate(z, H, R, ukfom::accept_any_mahalanobis_distance<ScalarType>);
+            }
+
+            template<typename _Measurement, typename _MeasurementModel>
+            void ekfUpdate(const _Measurement &z, _MeasurementModel H,
+                        const Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> &R)
+            {
+                    typedef Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> measurement_cov;
+                    ekfUpdate(z, H, boost::bind(ukfom::id<measurement_cov>, R), ukfom::accept_any_mahalanobis_distance<ScalarType>);
+            }
+
+            template<typename _Measurement, typename _MeasurementModel,
+                    typename _MeasurementNoiseCovariance, typename _SignificanceTest>
+            void ekfUpdate(const _Measurement &z, _MeasurementModel H,
+                        _MeasurementNoiseCovariance R, _SignificanceTest mt)
+            {
+                    const static int DOF_MEASUREMENT = ukfom::dof<_Measurement>::value; /** Dimension of the measurement */
+
+                    /** Get the state in vector form **/
+                    VectorizedAugmentedState x_breve = mu_error.getVectorizedState(_AugmentedState::ERROR_QUATERNION);
+
+                    #ifdef USCKF_DEBUG_PRINTS
+                    std::cout << "[EKF_UPDATE] x_breve(before):\n" << x_breve <<std::endl;
+                    std::cout << "[EKF_UPDATE] P_breve(before):\n" << Pk_error <<std::endl;
+                    #endif
+
+                    /** Compute the Kalman Gain Matrix **/
+                    Eigen::Matrix<ScalarType, DOF_MEASUREMENT, DOF_MEASUREMENT> S, S_inverse;
+                    Eigen::Matrix<ScalarType, DOF_AUGMENTED_STATE, DOF_MEASUREMENT> K;
+                    S = H * Pk_error * H.transpose() + R; //!Calculate the covariance of the innovation
+                    S_inverse = S.inverse();
+                    K = Pk_error * H.transpose() * S_inverse; //!Calculate K using the inverse of S
+
+                    /** Innovation **/
+                    const _Measurement innovation = (z - H * x_breve);
+                    const ScalarType mahalanobis2 = (innovation.transpose() *  S_inverse * innovation)(0);
+
+                    /** Update the state vector and the covariance matrix */
+                    if (mt(mahalanobis2))
+                    {
+                        #ifdef USCKF_DEBUG_PRINTS
+                        std::cout << "[EKF_SINGLE_UPDATE] mahalanobis return true"<<std::endl;
+                        #endif
+
+                        x_breve = x_breve + K * innovation;
+                        Pk_error = (Eigen::Matrix<ScalarType, DOF_AUGMENTED_STATE, DOF_AUGMENTED_STATE>::Identity()
+                                -K * H) * Pk_error *(Eigen::Matrix<ScalarType, DOF_AUGMENTED_STATE, DOF_AUGMENTED_STATE>::Identity()
+                                -K * H).transpose() + K * R * K.transpose();
+                        Pk_error = 0.5 * (Pk_error + Pk_error.transpose()); //! Guarantee symmetry
+                    }
+
+                    #ifdef USCKF_DEBUG_PRINTS
+                    std::cout << "[EKF_UPDATE] x_breve(after):\n" << x_breve <<std::endl;
+                    std::cout << "[EKF_UPDATE] P_breve(after):\n" << Pk_error <<std::endl;
+                    std::cout << "[EKF_UPDATE] K:\n" << K <<std::endl;
+                    std::cout << "[EKF_UPDATE] S:\n" << S <<std::endl;
+                    std::cout << "[EKF_UPDATE] z:\n" << z <<std::endl;
+                    std::cout << "[EKF_UPDATE] H*x_breve:\n" << H*x_breve <<std::endl;
+                    std::cout << "[EKF_UPDATE] innovation:\n" << innovation <<std::endl;
+                    std::cout << "[EKF_UPDATE] R is of size:" <<R.rows()<<"x"<<R.cols()<<std::endl;
+                    std::cout << "[EKF_UPDATE] R:\n" << R <<std::endl;
+                    #endif
+
+                    /**************************/
+                    /** Apply the Corrections */
+                    /**************************/
+
+        }
+
             template<typename _Measurement, typename _MeasurementModel>
             void singleUpdate(const _Measurement &z, _MeasurementModel h,
                         const Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> &R)
@@ -403,9 +475,9 @@ namespace localization
              * and Unscented transform (UKF))
              */
             template <typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
-            void ekfUpdate(const _Measurement &z, _MeasurementModel H, _MeasurementNoiseCovariance R)
+            void ekfSingleUpdate(const _Measurement &z, _MeasurementModel H, _MeasurementNoiseCovariance R)
             {
-                ekfUpdate(z, H, R, ukfom::accept_any_mahalanobis_distance<ScalarType>);/*accept_mahalanobis_distance<ScalarType>);*/
+                ekfSingleUpdate(z, H, R, ukfom::accept_any_mahalanobis_distance<ScalarType>);/*accept_mahalanobis_distance<ScalarType>);*/
 
             }
 
@@ -414,7 +486,7 @@ namespace localization
              */
             template <typename _Measurement, typename _MeasurementModel,
                     typename _MeasurementNoiseCovariance,  typename _SignificanceTest>
-            void ekfUpdate(const _Measurement &z, _MeasurementModel H,
+            void ekfSingleUpdate(const _Measurement &z, _MeasurementModel H,
                     _MeasurementNoiseCovariance R, _SignificanceTest mt)
             {
                 const static int DOF_MEASUREMENT = ukfom::dof<_Measurement>::value; /** Dimension of the measurement */
@@ -426,8 +498,8 @@ namespace localization
                 SingleStateCovariance Pk = MTK::subblock (Pk_error, &_AugmentedState::statek_i);
 
                 #ifdef USCKF_DEBUG_PRINTS
-                std::cout << "[USCKF_EKF_UPDATE] xk_i(before):\n" << xk_i <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] Pk(before):\n" << Pk <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] xk_i(before):\n" << xk_i <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] Pk(before):\n" << Pk <<std::endl;
                 #endif
 
                 /** Compute the Kalman Gain Matrix **/
@@ -445,7 +517,7 @@ namespace localization
                 if (mt(mahalanobis2))
                 {
                     #ifdef USCKF_DEBUG_PRINTS
-                    std::cout << "[USCKF_EKF_UPDATE] mahalanobis return true"<<std::endl;
+                    std::cout << "[EKF_SINGLE_UPDATE] mahalanobis return true"<<std::endl;
                     #endif
 
                     xk_i = xk_i + K * innovation;
@@ -459,15 +531,15 @@ namespace localization
                 MTK::subblock (Pk_error, &_AugmentedState::statek_i) = Pk;
 
                 #ifdef USCKF_DEBUG_PRINTS
-                std::cout << "[USCKF_EKF_UPDATE] xk_i(after):\n" << xk_i <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] Pk(after):\n" << Pk <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] K:\n" << K <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] S:\n" << S <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] z:\n" << z <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] H*xk_i:\n" << H*xk_i <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] innovation:\n" << (z - H * xk_i) <<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] R is of size:" <<R.rows()<<"x"<<R.cols()<<std::endl;
-                std::cout << "[USCKF_EKF_UPDATE] R:\n" << R <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] xk_i(after):\n" << xk_i <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] Pk(after):\n" << Pk <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] K:\n" << K <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] S:\n" << S <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] z:\n" << z <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] H*xk_i:\n" << H*xk_i <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] innovation:\n" << innovation <<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] R is of size:" <<R.rows()<<"x"<<R.cols()<<std::endl;
+                std::cout << "[EKF_SINGLE_UPDATE] R:\n" << R <<std::endl;
                 #endif
 
                 /**************************/

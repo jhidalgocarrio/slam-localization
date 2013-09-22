@@ -114,7 +114,7 @@ namespace localization
                     const base::Vector3d &gyrorw,
                     const base::Vector3d &gbiasins,
                     const base::Vector3d &abiasins,
-                    const Eigen::Quaterniond &orient, double &delta_t)
+                    const Eigen::Quaterniond &orient, const double delta_t)
     {
         //TO-DO Eigen::Matrix<double, 3, 3> Cq;
         double sqrtdelta_t = sqrt(delta_t); /** Square root of delta time interval */

@@ -161,8 +161,8 @@ namespace localization
     {
         typedef AugmentedState self;
 
-        ::MTK::SubManifold<State, 0> statek; /** Oldest pose state(when first extereoceptive measurement was taken) */
-        ::MTK::SubManifold<State, State::DOF + 0> statek_l; /** Pose state (when second extereoceptive measurement was taken) */
+        ::MTK::SubManifold<State, 0> statek; /** Oldest pose state(when first exteroceptive measurement was taken) */
+        ::MTK::SubManifold<State, State::DOF + 0> statek_l; /** Pose state (when second exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + State::DOF + 0> statek_i; /** Current Pose state (update to the proprioceptive measurements) */
         ::MTK::SubManifold<MTK_FEATURE_TYPE(vec3), State::DOF + State::DOF + State::DOF + 0> featuresk; /** Features of the measurement took at t=k */
         ::MTK::SubManifold<MTK_FEATURE_TYPE(vec3), State::DOF + State::DOF + State::DOF + 0> featuresk_l; /** Features of the measurement took at t=k+l */
