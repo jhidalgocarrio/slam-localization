@@ -4,6 +4,8 @@
 
 #define PROCESS_MODEL_DEBUG_PRINTS 1
 
+#include <mtk/startIdx.hpp> /** Direct access to sub-block of manifolds **/
+
 namespace localization
 {
 //    template<typename _SingleState>

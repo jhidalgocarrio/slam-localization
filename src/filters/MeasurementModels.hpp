@@ -7,6 +7,8 @@
 
 #define MEASUREMENT_MODEL_DEBUG_PRINTS 1
 
+#include <mtk/startIdx.hpp> /** Direct access to sub-block of manifolds **/
+
 namespace localization
 {
     /**@brief Measurement Model for the attitude and velocity correction
@@ -42,6 +44,33 @@ namespace localization
         #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
         std::cout<<"[MEASUREMENT_MATRIX] H is of size "<< H.rows() <<" x "<<H.cols()<<"\n";
         std::cout<<"[MEASUREMENT_MATRIX] H:\n"<< H <<"\n";
+        #endif
+
+        return H;
+    }
+
+    /**@brief Measurement model for the position correction of a delay state form
+     */
+    template <typename _AugmentedState, typename _SingleState>
+        Eigen::Matrix<double, 3, _AugmentedState::DOF> delayPositionMeasurementMatrix()
+    {
+        Eigen::Matrix < double, 3, _AugmentedState::DOF> H; /** Measurement matrix of the model */
+        Eigen::Matrix < double, 3, _SingleState::DOF> Hk_l, Hk_i; /** Measurement matrix of the model */
+
+        /** Initialize **/
+        H.setZero(); Hk_l.setZero(); Hk_i.setZero();
+
+        /** Delay model between statek_i and statek_l **/
+        Hk_l.template block<3, 3>(::MTK::getStartIdx(&_SingleState::pos), ::MTK::getStartIdx(&_SingleState::pos)) = -Eigen::Matrix3d::Identity();
+        Hk_i.template block<3, 3>(::MTK::getStartIdx(&_SingleState::pos), ::MTK::getStartIdx(&_SingleState::pos)) = Eigen::Matrix3d::Identity();
+
+        /** Form the H matrix **/
+        H.template block<3, _SingleState::DOF> (0, ::MTK::getStartIdx(&_AugmentedState::statek_l)) = Hk_l;
+        H.template block<3, _SingleState::DOF> (0, ::MTK::getStartIdx(&_AugmentedState::statek_i)) = Hk_i;
+
+        #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
+        std::cout<<"[DELAY_MEASUREMENT_MATRIX] H is of size "<< H.rows() <<" x "<<H.cols()<<"\n";
+        std::cout<<"[DELAY_MEASUREMENT_MATRIX] H:\n"<< H <<"\n";
         #endif
 
         return H;
@@ -139,9 +168,9 @@ namespace localization
                             const Eigen::Matrix <double, 3, _DoFState> &H,
                             const Eigen::Matrix3d &R)
         {
-            Eigen::Matrix3d R1a; /** Measurement noise convariance matrix for the adaptive algorithm */
+            Eigen::Matrix3d R1a; /** Measurement noise covariance matrix for the adaptive algorithm */
             Eigen::Matrix3d fooR; /**  Measurement noise matrix from accelerometers matrix Ra */
-            Eigen::Matrix3d Uk; /** Uk measurement noise convariance matrix for the adaptive algorithm */
+            Eigen::Matrix3d Uk; /** Uk measurement noise covariance matrix for the adaptive algorithm */
             Eigen::Matrix3d Qstar; /** External acceleration covariance matrix */
             Eigen::Matrix3d u; /** Unitary matrix U for the SVD decomposition */
             Eigen::Vector3d lambda; /** Lambda vector for the adaptive algorithm */
@@ -169,6 +198,7 @@ namespace localization
             r1count = (r1count+1)%(m1);
 
             Uk.setZero();
+
             /** Starting the Uk is R **/
             for (register int j=0; j<static_cast<int>(m1); j++)
             {
@@ -205,7 +235,7 @@ namespace localization
                 #endif
 
                 r2count = 0;
-                Eigen::Vector3d auxvector; /** Auxiliar vector variable */
+                Eigen::Vector3d auxvector; /** Auxiliary vector variable */
                 auxvector(0) = std::max(lambda(0)-mu(0),static_cast<double>(0.00));
                 auxvector(1) = std::max(lambda(1)-mu(1),static_cast<double>(0.00));
                 auxvector(2) = std::max(lambda(2)-mu(2),static_cast<double>(0.00));
@@ -221,7 +251,7 @@ namespace localization
                 r2count ++;
                 if (r2count < m2)
                 {
-                    Eigen::Vector3d auxvector; /** Auxiliar vector variable */
+                    Eigen::Vector3d auxvector; /** Auxiliary vector variable */
                     auxvector(0) = std::max(lambda(0)-mu(0),static_cast<double>(0.00));
                     auxvector(1) = std::max(lambda(1)-mu(1),static_cast<double>(0.00));
                     auxvector(2) = std::max(lambda(2)-mu(2),static_cast<double>(0.00));
@@ -231,6 +261,10 @@ namespace localization
                 else
                     Qstar = Eigen::Matrix3d::Zero();
             }
+
+            #ifdef ADAPTIVE_ATTITUDE_DEBUG_PRINTS
+            std::cout<<"[ADAPTIVE_ATTITUDE] Qstar:\n"<<Qstar<<"\n";
+            #endif
 
             return R + Qstar; //! R is the static and Qstar is the external acceleration covariance
         }

@@ -334,9 +334,10 @@ namespace localization
 
                     /** Get the state in vector form **/
                     VectorizedAugmentedState x_breve = mu_error.getVectorizedState(_AugmentedState::ERROR_QUATERNION);
+                    VectorizedAugmentedState x_hat = mu_state.getVectorizedState(_AugmentedState::ERROR_QUATERNION);
 
                     #ifdef USCKF_DEBUG_PRINTS
-                    std::cout << "[EKF_UPDATE] x_breve(before):\n" << x_breve <<std::endl;
+                    std::cout << "[EKF_UPDATE] x_hat(before):\n" << x_hat <<std::endl;
                     std::cout << "[EKF_UPDATE] P_breve(before):\n" << Pk_error <<std::endl;
                     #endif
 
@@ -348,7 +349,7 @@ namespace localization
                     K = Pk_error * H.transpose() * S_inverse; //!Calculate K using the inverse of S
 
                     /** Innovation **/
-                    const _Measurement innovation = (z - H * x_breve);
+                    const _Measurement innovation = (z - H * x_hat);
                     const ScalarType mahalanobis2 = (innovation.transpose() *  S_inverse * innovation)(0);
 
                     /** Update the state vector and the covariance matrix */
@@ -356,9 +357,10 @@ namespace localization
                     {
                         #ifdef USCKF_DEBUG_PRINTS
                         std::cout << "[EKF_SINGLE_UPDATE] mahalanobis return true"<<std::endl;
+                        std::cout << "[EKF_UPDATE] H*x_hat:\n" << H*x_hat <<std::endl;
                         #endif
 
-                        x_breve = x_breve + K * innovation;
+                        x_hat = x_hat + K * innovation;
                         Pk_error = (Eigen::Matrix<ScalarType, DOF_AUGMENTED_STATE, DOF_AUGMENTED_STATE>::Identity()
                                 -K * H) * Pk_error *(Eigen::Matrix<ScalarType, DOF_AUGMENTED_STATE, DOF_AUGMENTED_STATE>::Identity()
                                 -K * H).transpose() + K * R * K.transpose();
@@ -366,22 +368,17 @@ namespace localization
                     }
 
                     #ifdef USCKF_DEBUG_PRINTS
-                    std::cout << "[EKF_UPDATE] x_breve(after):\n" << x_breve <<std::endl;
+                    std::cout << "[EKF_UPDATE] x_hat(after):\n" << x_hat <<std::endl;
                     std::cout << "[EKF_UPDATE] P_breve(after):\n" << Pk_error <<std::endl;
                     std::cout << "[EKF_UPDATE] K:\n" << K <<std::endl;
                     std::cout << "[EKF_UPDATE] S:\n" << S <<std::endl;
                     std::cout << "[EKF_UPDATE] z:\n" << z <<std::endl;
-                    std::cout << "[EKF_UPDATE] H*x_breve:\n" << H*x_breve <<std::endl;
                     std::cout << "[EKF_UPDATE] innovation:\n" << innovation <<std::endl;
                     std::cout << "[EKF_UPDATE] R is of size:" <<R.rows()<<"x"<<R.cols()<<std::endl;
                     std::cout << "[EKF_UPDATE] R:\n" << R <<std::endl;
                     #endif
 
-                    /**************************/
-                    /** Apply the Corrections */
-                    /**************************/
-
-        }
+            }
 
             template<typename _Measurement, typename _MeasurementModel>
             void singleUpdate(const _Measurement &z, _MeasurementModel h,
@@ -518,6 +515,7 @@ namespace localization
                 {
                     #ifdef USCKF_DEBUG_PRINTS
                     std::cout << "[EKF_SINGLE_UPDATE] mahalanobis return true"<<std::endl;
+                    std::cout << "[EKF_SINGLE_UPDATE] H*xk_i:\n" << H*xk_i <<std::endl;
                     #endif
 
                     xk_i = xk_i + K * innovation;
@@ -536,7 +534,6 @@ namespace localization
                 std::cout << "[EKF_SINGLE_UPDATE] K:\n" << K <<std::endl;
                 std::cout << "[EKF_SINGLE_UPDATE] S:\n" << S <<std::endl;
                 std::cout << "[EKF_SINGLE_UPDATE] z:\n" << z <<std::endl;
-                std::cout << "[EKF_SINGLE_UPDATE] H*xk_i:\n" << H*xk_i <<std::endl;
                 std::cout << "[EKF_SINGLE_UPDATE] innovation:\n" << innovation <<std::endl;
                 std::cout << "[EKF_SINGLE_UPDATE] R is of size:" <<R.rows()<<"x"<<R.cols()<<std::endl;
                 std::cout << "[EKF_SINGLE_UPDATE] R:\n" << R <<std::endl;
