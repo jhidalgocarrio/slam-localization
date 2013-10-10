@@ -5,7 +5,7 @@
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 
-#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
+//#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
 
 #include <mtk/startIdx.hpp> /** Direct access to sub-block of manifolds **/
 
@@ -230,7 +230,7 @@ namespace localization
             if ((lambda - mu).maxCoeff() > gamma)
             {
 
-                #ifdef ADAPTIVE_ATTITUDE_DEBUG_PRINTS
+                #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
                 std::cout<<"[ADAPTIVE_ATTITUDE] Bigger than GAMMA("<<gamma<<")\n";
                 #endif
 
@@ -244,7 +244,7 @@ namespace localization
             }
             else
             {
-                #ifdef ADAPTIVE_ATTITUDE_DEBUG_PRINTS
+                #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
                 std::cout<<"[ADAPTIVE_ATTITUDE] Lower than GAMMA("<<gamma<<") r2count: "<<r2count<<"\n";
                 #endif
 
@@ -262,7 +262,7 @@ namespace localization
                     Qstar = Eigen::Matrix3d::Zero();
             }
 
-            #ifdef ADAPTIVE_ATTITUDE_DEBUG_PRINTS
+            #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
             std::cout<<"[ADAPTIVE_ATTITUDE] Qstar:\n"<<Qstar<<"\n";
             #endif
 

@@ -2,7 +2,7 @@
 #define _PROCESS_MODELS_HPP_
 
 
-#define PROCESS_MODEL_DEBUG_PRINTS 1
+//#define PROCESS_MODEL_DEBUG_PRINTS 1
 
 #include <mtk/startIdx.hpp> /** Direct access to sub-block of manifolds **/
 
