@@ -95,6 +95,7 @@ namespace localization
 
     /**@brief Noise Measurement Matrix for the attitude and velocity correction
      */
+    inline
     Eigen::Matrix<double, 6, 6> proprioceptiveMeasurementNoiseCov (const Eigen::Matrix<double, 3, 3> &veloErrorCov,
                                 const base::Vector3d &accrw, const base::Vector3d &accresolution, const double delta_t)
     {

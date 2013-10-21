@@ -12,7 +12,7 @@
 
 #define MTK_DEFINE_FEATURE_TYPE(type)\
     typedef std::vector< type > MTK##type##Feature; \
-    std::ostream& operator<<(std::ostream& __os, const MTK##type##Feature& __var) \
+    inline std::ostream& operator<<(std::ostream& __os, const MTK##type##Feature& __var) \
     { \
         __os << "["; \
         for (MTK##type##Feature::const_iterator ii = __var.begin(); ii != __var.end(); ++ii) \
@@ -35,7 +35,7 @@ namespace localization
     // We can't use types having a comma inside AutoConstruct macros :(
     typedef ::MTK::vect<3, double> vec3;
     typedef ::localization::MTK::SO3<double> SO3;
-    typedef std::vector<vec3> featureType;
+//    typedef std::vector<vec3> featureType;
     MTK_DEFINE_FEATURE_TYPE(vec3)
 
     struct State
