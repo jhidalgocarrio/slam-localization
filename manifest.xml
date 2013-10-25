@@ -1,21 +1,19 @@
 <package>
-  <description brief="Library set of classes for a general mobile rover localization approach.">
-  This has the set of libraries developed under the ESA-NPI project for rovers localization
+  <description brief="Collection of algorithms for a general robot localization approach.">
+      This involves data noise modeling, process and measurements model as well as filters for
+      conventional state optimization problems.
   </description>
   <author>Javier Hidalgo Carrio/javier.hidalgo_carrio@dfki.de</author>
-  <license></license>
-  <url>http://</url>
-  <logo>http://</logo>
-  <!--
-   To add any dependencies use the depend tag
-  <depend package="dummy-dependency-0" />
-	...
-  <depend package="dummy-dependency-n-1" />
-  <depend package="dummy-dependency-n" />
-  -->
+
+  <copyright>
+    DFKI/robotik@dfki.de
+    Javier Hidalgo Carrio/javier.hidalgo_carrio@dfki.de
+  </copyright>
+
+  <license>GPL v2 or later</license>
+
   <depend package="base/types" />
   <depend package="slam/odometry" />
   <depend package="slam/mtk" />
-  <depend package="slam/envire" />
 
 </package>
