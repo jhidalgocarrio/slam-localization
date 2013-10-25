@@ -12,7 +12,7 @@
 #include <envire/core/Transform.hpp> /** Envire module which has transformation with uncertainty **/
 #include "Configuration.hpp" /** For the localization framework constant and configuration values **/
 
-#include <rover_localization/Util.hpp> /**Helper class of the framework **/
+#include <localization/Util.hpp> /**Helper class of the framework **/
 
 //#define DEAD_RECKON_DEBUG_PRINTS 1
 

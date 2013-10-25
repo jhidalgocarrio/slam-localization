@@ -904,6 +904,6 @@ namespace localization
             };
     };
 	
-} // namespace rover_localization
+} // namespace localization
 
 #endif // __USCKF_HPP_

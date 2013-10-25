@@ -5,7 +5,7 @@
 #include <mtk/types/pose.hpp>
 #include <mtk/src/SubManifold.hpp>
 
-#include <rover_localization/mtk/SOn.hpp>
+#include <localization/mtk/SOn.hpp>
 
 #ifndef PARSED_BY_DOXYGEN
 //////// internals //////

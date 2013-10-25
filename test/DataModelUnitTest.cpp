@@ -2,9 +2,9 @@
 #include <boost/test/included/unit_test.hpp>
 
 /** Library **/
-#include <rover_localization/Configuration.hpp> /** Constant values of the library */
-#include <rover_localization/Util.hpp> /** Util function for localization **/
-#include <rover_localization/DataModel.hpp> /** Data Model using Gaussian pdf **/
+#include <localization/Configuration.hpp> /** Constant values of the library */
+#include <localization/Util.hpp> /** Util function for localization **/
+#include <localization/DataModel.hpp> /** Data Model using Gaussian pdf **/
 
 /** Eigen **/
 #include <Eigen/Core> /** Core */

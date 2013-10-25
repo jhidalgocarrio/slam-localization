@@ -2,10 +2,10 @@
 #include <boost/test/included/unit_test.hpp>
 
 /** Library **/
-#include <rover_localization/filters/Usckf.hpp> /** USCKF class with Manifolds */
-#include <rover_localization/filters/MtkWrap.hpp> /** USCKF wrapper for the state vector */
-#include <rover_localization/filters/State.hpp> /** Filters State */
-#include <rover_localization/Configuration.hpp> /** Constant values of the library */
+#include <localization/filters/Usckf.hpp> /** USCKF class with Manifolds */
+#include <localization/filters/MtkWrap.hpp> /** USCKF wrapper for the state vector */
+#include <localization/filters/State.hpp> /** Filters State */
+#include <localization/Configuration.hpp> /** Constant values of the library */
 
 /** Eigen **/
 #include <Eigen/Core> /** Core */

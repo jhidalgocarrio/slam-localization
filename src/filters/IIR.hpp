@@ -4,7 +4,7 @@
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Cholesky> /** For the Cholesky decomposition **/
 
-#include <rover_localization/Util.hpp> /**Helper class of the framework **/
+#include <localization/Util.hpp> /**Helper class of the framework **/
 
 //#define IIR_DEBUG_PRINTS 1
 
