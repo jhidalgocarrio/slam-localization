@@ -9,10 +9,10 @@
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
 #include <Eigen/Geometry> /** Eigen data type for Matrix, Quaternion, etc... */
 #include <Eigen/StdVector> /** For STL container with Eigen types **/
-#include <envire/core/Transform.hpp> /** Envire module which has transformation with uncertainty **/
-#include "Configuration.hpp" /** For the localization framework constant and configuration values **/
+#include <localization/core/Transform.hpp> /** Envire module which has transformation with uncertainty **/
+#include <localization/Configuration.hpp> /** For the localization framework constant and configuration values **/
 
-#include <localization/Util.hpp> /**Helper class of the framework **/
+#include <localization/tools/Util.hpp> /**Helper class of the framework **/
 
 //#define DEAD_RECKON_DEBUG_PRINTS 1
 
@@ -35,21 +35,25 @@ namespace localization
          *
 	 */
 	static base::samples::RigidBodyState updatePose(const double delta_t,
-                            const std::vector< Eigen::Matrix <double, 2*NUMAXIS, 1> , Eigen::aligned_allocator < Eigen::Matrix <double, 2*NUMAXIS, 1> > > &cartesianVelocities,
-                            const Eigen::Matrix <double, 2*NUMAXIS, 2*NUMAXIS> &cartesianVelCov,
+                            const std::vector< Eigen::Matrix <double, 6, 1> , Eigen::aligned_allocator < Eigen::Matrix <double, 6, 1> > > &cartesianVelocities,
+                            const Eigen::Matrix <double, 6, 6> &cartesianVelCov,
                             const base::samples::RigidBodyState &prevPose,
                             base::samples::RigidBodyState &postPose,
                             bool useTranforWithUncertainty = false)
         {
             base::samples::RigidBodyState deltaPose; /** rbs form of the computation **/
-            envire::TransformWithUncertainty tfDeltaPose; /** delta transformation between current pose and next pose **/
-            envire::TransformWithUncertainty tfPrevPose; /** Previous pose**/
-            envire::TransformWithUncertainty tfPostPose; /** Posterior pose **/
+            TransformWithUncertainty tfDeltaPose; /** delta transformation between current pose and next pose **/
+            TransformWithUncertainty tfPrevPose; /** Previous pose**/
+            TransformWithUncertainty tfPostPose; /** Posterior pose **/
 
+            /** Form the delta pose **/
             deltaPose.invalidate();
 
             /** Calculate the delta position from velocity (dead reckoning) assuming constant acceleration **/
             deltaPose.position = (delta_t/2.0) * (cartesianVelocities[0].block<NUMAXIS,1> (0,0) + cartesianVelocities[1].block<NUMAXIS,1>(0,0));
+
+            deltaPose.velocity = cartesianVelocities[0].block<NUMAXIS,1> (0,0);
+            deltaPose.angular_velocity = cartesianVelocities[0].block<NUMAXIS,1> (NUMAXIS,0);
 
             /** Calculate the delta quaternion **/
             std::vector< Eigen::Matrix < double, NUMAXIS, 1 > , Eigen::aligned_allocator

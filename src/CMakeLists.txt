@@ -1,16 +1,15 @@
 set (LOCALIZATION_SRCS
-    Lesma.cpp
-    DeadReckon.cpp
+    core/Transform.cpp
     )
 
 set (LOCALIZATION_HDRS
     Configuration.hpp
-    Util.hpp
-    Analysis.hpp
-    Lesma.hpp
-    DataModel.hpp
-    DeadReckon.hpp
-    DataTypes.hpp
+    core/DataModel.hpp
+    core/DeadReckon.hpp
+    core/Types.hpp
+    core/Transform.hpp
+    tools/Util.hpp
+    tools/Analysis.hpp
     filters/Usckf.hpp
     filters/MtkWrap.hpp
     filters/State.hpp

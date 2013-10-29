@@ -13,7 +13,6 @@
   <license>GPL v2 or later</license>
 
   <depend package="base/types" />
-  <depend package="slam/odometry" />
   <depend package="slam/mtk" />
 
 </package>

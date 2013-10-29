@@ -4,7 +4,7 @@
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Cholesky> /** For the Cholesky decomposition **/
 
-#include <localization/Util.hpp> /**Helper class of the framework **/
+#include <localization/tools/Util.hpp> /**Helper class **/
 
 //#define IIR_DEBUG_PRINTS 1
 
@@ -214,8 +214,8 @@ namespace localization
 				    const Eigen::Matrix <double, (_Order+1)*_DataDimension, (_Order+1)*_DataDimension> &xCov,
                                     Eigen::Matrix <double, (_Order+1)*_DataDimension, (_Order+1)*_DataDimension> &yCov)
 	{
-            Eigen::Matrix <double, (_Order+1)*_DataDimension, (_Order+1)*_DataDimension> xSigma = xCov.llt().matrixL();
-            Eigen::Matrix <double, (_Order+1)*_DataDimension, (_Order+1)*_DataDimension> ySigma = yCov.llt().matrixL();
+            //Eigen::Matrix <double, (_Order+1)*_DataDimension, (_Order+1)*_DataDimension> xSigma = xCov.llt().matrixL();
+            //Eigen::Matrix <double, (_Order+1)*_DataDimension, (_Order+1)*_DataDimension> ySigma = yCov.llt().matrixL();
 
             #ifdef IIR_DEBUG_PRINTS
             std::cout<<"[IIR-FILTER] bMatrix is\n"<<bMatrix<<"\naMatrix is\n"<<aMatrix<<"\n";

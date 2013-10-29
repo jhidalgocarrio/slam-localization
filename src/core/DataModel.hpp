@@ -9,7 +9,7 @@
 
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Dense> /** for the algebra and transformation matrices **/
-#include "Configuration.hpp" /** For the localization framework constant and configuration values **/
+#include <localization/Configuration.hpp> /** For the localization framework constant and configuration values **/
 
 namespace localization	
 {

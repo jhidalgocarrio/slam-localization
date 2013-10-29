@@ -16,9 +16,9 @@
 #include <Eigen/Cholesky> /** For the Cholesky decomposition **/
 
 /** Localization library  headers **/
-#include "DataModel.hpp" /** For the quantities models **/
-#include "Configuration.hpp" /** For the localization framework constant and configuration values **/
-#include "DataTypes.hpp" /** Orogen compatible export data types **/
+#include <localization/core/DataModel.hpp> /** For the quantities models **/
+#include <localization/Configuration.hpp> /** For the localization framework constant and configuration values **/
+#include <localization/core/Types.hpp> /** Orogen compatible export data types **/
 
 //#define UTIL_DEBUG_PRINTS 1
 
@@ -108,9 +108,9 @@ namespace localization
 	};
 	
 	/**
-	* @brief Substract the Earth rotation from the gyroscopes readout
+	* @brief Subtract the Earth rotation from the gyroscopes readout
 	*
-	* This function computes the substraction of the rotation of the Earth (EARTHW)
+	* This function computes the subtraction of the rotation of the Earth (EARTHW)
 	* from the gyroscope values. This function uses quaternion of transformation from
 	* the geographici to body frame and the latitude in radians.
 	*
@@ -123,7 +123,7 @@ namespace localization
 	* @return void
 	*
 	*/
-	static void SubstractEarthRotation(Eigen::Matrix <double, NUMAXIS, 1, Eigen::DontAlign> *u, Eigen::Quaternion <double, Eigen::DontAlign> *q, double latitude)
+	static void SubtractEarthRotation(Eigen::Matrix <double, NUMAXIS, 1, Eigen::DontAlign> *u, Eigen::Quaternion <double, Eigen::DontAlign> *q, double latitude)
 	{
 	    Eigen::Matrix <double, NUMAXIS, 1> v (EARTHW*cos(latitude), 0, EARTHW*sin(latitude)); /** vector of earth rotation components expressed in the geografic frame according to the latitude **/
 
@@ -289,7 +289,7 @@ namespace localization
             Eigen::Matrix<_Scalar, _DIM, _DIM> Cov2llt;
             DataModel<_Scalar, _DIM> aux;
 
-            /** Substraction **/
+            /** Subtraction **/
             aux = data1 - data2;
             Inv_half = (aux.Cov * 0.5).inverse();
 
@@ -333,7 +333,7 @@ namespace localization
             #endif
 
             return distance;
-        }
+        };
 
         template <typename _MatrixType>
         static _MatrixType guaranteeSPD (const _MatrixType &A)
@@ -393,6 +393,201 @@ namespace localization
         static inline bool isfinite(const Eigen::MatrixBase<_Derived>& x)
         {
             return isnotnan(x - x);
+        };
+
+        /**
+        * @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
+        */
+        static double getWaveLenghtFromValue (const double value, const double max, const double min)
+        {
+            const double minVisibleLength = 350.0;
+            const double maxVisibleLength = 650.0;
+
+            return (value - min)/(max-min)*(maxVisibleLength-minVisibleLength) + minVisibleLength;
+
+        };
+
+        static int colorAdjust (const double colorvalue, const double factor)
+        {
+            const double gamma        =   0.80;
+            const double intensitymax = 255.0;
+
+            if (colorvalue == 0.00)
+                return 0;
+            else
+                return round(intensitymax * pow(colorvalue * factor, gamma));
+
+        };
+
+        /**
+        * @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
+        */
+        static Eigen::Matrix<double, 3, 1> waveLenghtToColor (const double wavelength)
+        {
+            const double intensitymax = 255.0;
+
+            Eigen::Matrix<double, 3, 1> color;
+            double blue, factor, green, red;
+
+            if ((wavelength > 379.00)&&(wavelength < 440.00))
+            {
+                    red = -(wavelength - 440.0) / (440.0 - 380.0);
+                    green = 0.00;
+                    blue = 1.00;
+            }
+            else if ((wavelength > 439.00)&&(wavelength < 490.00))
+            {
+                    red = 0.00;
+                    green = (wavelength - 440.0) / (490.0 - 440.0);
+                    blue = 1.00;
+            }
+            else if ((wavelength > 489.00)&&(wavelength < 510.00))
+            {
+                    red = 0.00;
+                    green = 1.00;
+                    blue = -(wavelength - 510.0) / (510 - 490);
+            }
+            else if ((wavelength > 509.00)&&(wavelength < 580.00))
+            {
+                    red = (wavelength - 510.0) / (580 - 510);
+                    green = 1.00;
+                    blue = 0.00;
+            }
+            else if ((wavelength > 579.00)&&(wavelength < 645.00))
+            {
+                    red = 1.00;
+                    green = -(wavelength - 645.0) / (645 - 580);
+                    blue = 0.00;
+            }
+            else if ((wavelength > 644.00)&&(wavelength < 781.00))
+            {
+                    red = 1.00;
+                    green = 0.00;
+                    blue = 0.00;
+            }
+            else if (wavelength >781.00)
+            {
+                    red = 1.00;
+                    green = 0.0;
+                    blue = 0.0;
+            }
+            else
+            {
+                    red = 0.0;
+                    green = 0.0;
+                    blue = 1.00;
+            }
+
+            if ((wavelength > 379.00)&&(wavelength < 420.00))
+            {
+                    factor = 0.3 + 0.7*(wavelength - 380) / (420 - 380);
+            }
+            else if ((wavelength > 419.00)&&(wavelength < 701.00))
+            {
+                    factor = 1.0;
+            }
+            else if ((wavelength > 700.00)&&(wavelength < 781.00))
+            {
+                    factor = 0.3 + 0.7*(780.00 - wavelength) / (780 - 700);
+            }
+            else
+            {
+                    factor = 0.00;
+            }
+
+            color[0] = colorAdjust(red, factor) / intensitymax;
+            color[1] = colorAdjust(green, factor) / intensitymax;
+            color[2] = colorAdjust(blue, factor) / intensitymax;
+
+            return color;
+        };
+
+
+        /**
+        * @brief Convert data value in the range of MinValues..MaxValues to the range 350 - 650
+        */
+        static Eigen::Matrix<double, 3, 1> waveLenghtToColorv2 (const double wavelength)
+        {
+            const double intensitymax = 255.0;
+
+            Eigen::Matrix<double, 3, 1> color;
+            double blue, factor, green, red;
+
+            if ((wavelength > 379.00)&&(wavelength < 580.00))
+            {
+                    red = (wavelength - 510.0) / (580 - 510);
+                    green = 1.00;
+                    blue = 0.00;
+            }
+            else if ((wavelength > 579.00)&&(wavelength < 645.00))
+            {
+                    red = 1.00;
+                    green = -(wavelength - 645.0) / (645 - 580);
+                    blue = 0.00;
+            }
+            else if ((wavelength > 644.00)&&(wavelength < 781.00))
+            {
+                    red = 1.00;
+                    green = 0.00;
+                    blue = 0.00;
+            }
+            else if (wavelength >781.00)
+            {
+                    red = 1.00;
+                    green = 0.0;
+                    blue = 0.0;
+            }
+            else
+            {
+                    red = 0.0;
+                    green = 1.0;
+                    blue = 0.00;
+            }
+
+            if ((wavelength > 379.00)&&(wavelength < 420.00))
+            {
+                    factor = 0.3 + 0.7*(wavelength - 380) / (420 - 380);
+            }
+            else if ((wavelength > 419.00)&&(wavelength < 701.00))
+            {
+                    factor = 1.0;
+            }
+            else if ((wavelength > 700.00)&&(wavelength < 781.00))
+            {
+                    factor = 0.3 + 0.7*(780.00 - wavelength) / (780 - 700);
+            }
+            else
+            {
+                    factor = 0.00; //! Balck color in envire
+            }
+
+            color[0] = colorAdjust(red, factor) / intensitymax;
+            color[1] = colorAdjust(green, factor) / intensitymax;
+            color[2] = colorAdjust(blue, factor) / intensitymax;
+
+            return color;
+
+        };
+
+        /**
+        * @brief 
+        */
+        static Eigen::Matrix<double, 3, 1> valueToColor (const double value, const double max, const double min)
+        {
+            double wavelength;//! In nanometers
+
+            wavelength = getWaveLenghtFromValue(value, max, min);
+            #ifdef DEBUG_PRINTS
+            std::cout<< "[SLIP2COLOR] wavelength "<<wavelength<<"\n";
+            #endif
+
+            /** Restrict the wavelenght to be between Green and Red **/
+            if (wavelength < 550.00)
+                wavelength = 550.00;
+            else if (wavelength > 780.00)
+                wavelength = 780.00;
+
+            return waveLenghtToColor(wavelength);
         };
 
     }; //end of util class
