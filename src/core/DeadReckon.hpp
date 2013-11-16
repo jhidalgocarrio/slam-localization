@@ -28,7 +28,51 @@ namespace localization
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     public:
-	
+
+
+        static Eigen::Affine3d updatePose (const double delta_t, const Eigen::Matrix<double, 6, 1> &cartesianVelocities,
+                                        const Eigen::Affine3d &prevPose, Eigen::Affine3d &postPose)
+        {
+            Eigen::Affine3d deltaPose;
+            deltaPose.setIdentity();
+
+            deltaPose.translation() = delta_t * cartesianVelocities.block<3,1> (0,0);
+
+            /** Calculate the delta quaternion **/
+            Eigen::Vector3d angleRot =  delta_t * cartesianVelocities.block<3,1> (3,0);
+            Eigen::Matrix3d rotM (Eigen::AngleAxisd(angleRot[2], Eigen::Vector3d::UnitZ())*
+                Eigen::AngleAxisd(angleRot[1], Eigen::Vector3d::UnitY()) *
+                Eigen::AngleAxisd(angleRot[0], Eigen::Vector3d::UnitX()));
+
+            deltaPose.rotate(rotM);
+
+            postPose = prevPose * deltaPose;
+
+
+            return deltaPose;
+        }
+
+        static TransformWithUncertainty updatePose (const double delta_t, const Eigen::Matrix<double, 6, 1> &cartesianVelocities,
+                                        const TransformWithUncertainty &prevPose, TransformWithUncertainty &postPose)
+        {
+            /** Calculate the delta quaternion **/
+            Eigen::Vector3d angleRot =  delta_t * cartesianVelocities.block<3,1> (3,0);
+            Eigen::Quaterniond deltaq (Eigen::AngleAxisd(angleRot[2], Eigen::Vector3d::UnitZ())*
+                Eigen::AngleAxisd(angleRot[1], Eigen::Vector3d::UnitY()) *
+                Eigen::AngleAxisd(angleRot[0], Eigen::Vector3d::UnitX()));
+
+            Eigen::Affine3d deltaTrans;
+            deltaTrans = deltaq;
+            deltaTrans.pretranslate(delta_t * cartesianVelocities.block<3,1> (0,0));
+
+            TransformWithUncertainty deltaPose (deltaTrans);
+
+            postPose = prevPose * deltaPose;
+
+
+            return deltaPose;
+        }
+
 	/** \Brief Performs the time integration of delta pose updates
 	 *
 	 * @return delta pose of the change in pose
@@ -153,7 +197,7 @@ namespace localization
         * */
         static Eigen::Quaternion<double> updateAttitude (const double dt,
                                 const std::vector< Eigen::Matrix < double, NUMAXIS, 1> , Eigen::aligned_allocator < Eigen::Matrix <double, NUMAXIS, 1> > > &angularVelocities,
-                                const Eigen::Matrix <double, NUMAXIS, NUMAXIS> &angularVelCov)
+                                const Eigen::Matrix <double, NUMAXIS, NUMAXIS> &angularVelCov = Eigen::Matrix <double, NUMAXIS, NUMAXIS>::Zero())
         {
             Eigen::Quaternion<double> deltaq; /** Instantaneous change in attitude **/
             Eigen::Matrix <double,QUATERSIZE,QUATERSIZE> omega4, oldomega4; /** Angular velocity matrix */

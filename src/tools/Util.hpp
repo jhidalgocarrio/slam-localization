@@ -80,7 +80,7 @@ namespace localization
 	
 	
 	/**
-	* @brief This computes the theoretical gravity value according to the WGS-84 ellipsoid earth model.
+	* @brief This computes the theoretical gravity value according to the WGS-84 ellipsoid Earth model.
 	*
 	* @author Javier Hidalgo Carrio.
 	*
@@ -125,7 +125,7 @@ namespace localization
 	*/
 	static void SubtractEarthRotation(Eigen::Matrix <double, NUMAXIS, 1, Eigen::DontAlign> *u, Eigen::Quaternion <double, Eigen::DontAlign> *q, double latitude)
 	{
-	    Eigen::Matrix <double, NUMAXIS, 1> v (EARTHW*cos(latitude), 0, EARTHW*sin(latitude)); /** vector of earth rotation components expressed in the geografic frame according to the latitude **/
+	    Eigen::Matrix <double, NUMAXIS, 1> v (EARTHW*cos(latitude), 0, EARTHW*sin(latitude)); /** vector of earth rotation components expressed in the geographic frame according to the latitude **/
 
 	    /** Compute the v vector expressed in the body frame **/
 	    v = (*q) * v;
