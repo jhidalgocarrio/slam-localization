@@ -29,14 +29,60 @@ namespace localization
 
     public:
 
+        static TransformWithUncertainty updatePose (const double delta_t,
+                                        const std::vector< Eigen::Matrix <double, 6, 1> , Eigen::aligned_allocator < Eigen::Matrix <double, 6, 1> > > &cartesianVelocities,
+                                        const Eigen::Matrix <double, 6, 6> &cartesianVelCov,
+                                        const TransformWithUncertainty &prevPose, TransformWithUncertainty &postPose)
+        {
+            /** Calculate the delta quaternion **/
+            std::vector< Eigen::Vector3d, Eigen::aligned_allocator< Eigen::Vector3d > > angularVelocities (cartesianVelocities.size(), Eigen::Vector3d::Zero());
+            angularVelocities[0] = cartesianVelocities[0].block<3, 1> (3, 0);
+            angularVelocities[1] = cartesianVelocities[1].block<3, 1> (3, 0);
+
+            Eigen::Quaterniond deltaq = updateAttitude(delta_t, angularVelocities);
+
+            /** Delta transformation **/
+            Eigen::Affine3d deltaTrans;
+            deltaTrans = deltaq;
+            deltaTrans.translation() = (delta_t/2.0) * (cartesianVelocities[0].block<3,1> (0,0) + cartesianVelocities[1].block<3,1>(0,0));
+
+            /** Delta pose uncertainty (top left corner for orientation, bottom right corner for position) **/
+            Eigen::Matrix<double, 6, 6> deltaPoseCov(Eigen::Matrix<double, 6, 6>::Zero());
+            deltaPoseCov.block<3,3>(0,0) = cartesianVelCov.block<3,3> (3,3) * delta_t * delta_t;
+            deltaPoseCov.block<3,3>(3,3) = cartesianVelCov.block<3,3> (0,0) * delta_t * delta_t;
+            Eigen::LLT< Eigen::Matrix<double, 6, 6> > llt(deltaPoseCov);
+            Eigen::Matrix<double, 6, 6> deltaPoseStd = llt.matrixL();
+            TransformWithUncertainty deltaPose (deltaTrans, deltaPoseStd * deltaPoseStd.transpose());
+
+            #ifdef DEAD_RECKON_DEBUG_PRINTS
+            std::cout<<"[DR] **** delta_t: "<<delta_t<<"\n";
+            std::cout<<"[DR] cartesianVelocities[0]:\n"<<cartesianVelocities[0]<<"\n";
+            std::cout<<"[DR] cartesianVelocities[1]:\n"<<cartesianVelocities[1]<<"\n";
+            std::cout<<"[DR] deltaPose\n" <<deltaPose.getTransform().matrix()<<"\n";
+            std::cout<<"[DR] deltaPoseCov\n" <<deltaPose.getCovariance()<<"\n";
+            Eigen::Matrix <double,localization::NUMAXIS,1> euler; /** In euler angles **/
+            euler[2] = deltaq.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+            euler[1] = deltaq.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+            euler[0] = deltaq.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+            std::cout<<"[DR] delta Roll: "<<euler[0]*localization::R2D<<" delta Pitch: "<<euler[1]*localization::R2D<<" delta Yaw: "<<euler[2]*localization::R2D<<"\n";
+            std::cout<<"[DR] prevPose\n" <<prevPose.getTransform().matrix()<<"\n";
+            std::cout<<"[DR] prevPoseCov\n" <<prevPose.getCovariance()<<"\n";
+            euler[2] = prevPose.getTransform().rotation().eulerAngles(2,1,0)[0];//Yaw
+            euler[1] = prevPose.getTransform().rotation().eulerAngles(2,1,0)[1];//Pitch
+            euler[0] = prevPose.getTransform().rotation().eulerAngles(2,1,0)[2];//Roll
+            std::cout<<"[DR] prev Roll: "<<euler[0]*localization::R2D<<" prev Pitch: "<<euler[1]*localization::R2D<<" prev Yaw: "<<euler[2]*localization::R2D<<"\n";
+            #endif
+
+
+            /** Dead reckon delta step **/
+            postPose = prevPose * deltaPose;
+
+            return deltaPose;
+        }
 
         static Eigen::Affine3d updatePose (const double delta_t, const Eigen::Matrix<double, 6, 1> &cartesianVelocities,
                                         const Eigen::Affine3d &prevPose, Eigen::Affine3d &postPose)
         {
-            Eigen::Affine3d deltaPose;
-            deltaPose.setIdentity();
-
-            deltaPose.translation() = delta_t * cartesianVelocities.block<3,1> (0,0);
 
             /** Calculate the delta quaternion **/
             Eigen::Vector3d angleRot =  delta_t * cartesianVelocities.block<3,1> (3,0);
@@ -44,7 +90,11 @@ namespace localization
                 Eigen::AngleAxisd(angleRot[1], Eigen::Vector3d::UnitY()) *
                 Eigen::AngleAxisd(angleRot[0], Eigen::Vector3d::UnitX()));
 
+            Eigen::Affine3d deltaPose;
+            deltaPose.setIdentity();
             deltaPose.rotate(rotM);
+            deltaPose.translation() = delta_t * cartesianVelocities.block<3,1> (0,0);
+
 
             postPose = prevPose * deltaPose;
 
