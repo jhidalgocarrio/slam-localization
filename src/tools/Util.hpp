@@ -116,8 +116,8 @@ namespace localization
 	*
 	* @author Javier Hidalgo Carrio.
 	*
-	* @param[in, out] *u pointer to angular velocity
-	* @param[in] *q quaternion from geographic to body frame vb = qbg * vg (qbg is transf a vector  from g to b)
+	* @param[in, out] *u pointer to angular velocity in body frame
+	* @param[in] *q quaternion from body to geographic(world) frame v_body = q_body_2_geo * v_geo
 	* @param[in] latitude location latitude angle in radians
 	*
 	* @return void

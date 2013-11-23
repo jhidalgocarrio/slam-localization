@@ -11,6 +11,7 @@ set (LOCALIZATION_HDRS
     tools/Util.hpp
     tools/Analysis.hpp
     filters/Usckf.hpp
+    filters/UsckfError.hpp
     filters/MtkWrap.hpp
     filters/State.hpp
     filters/ProcessModels.hpp

@@ -1,7 +1,8 @@
 #ifndef _MEASUREMENT_MODELS_HPP_
 #define _MEASUREMENT_MODELS_HPP_
 
-#include <Eigen/StdVector> /** For STL container with Eigen types **/
+#include <Eigen/Geometry> /** Quaternion, Angle-Axis,...*/
+#include <Eigen/StdVector> /** STL container with Eigen types */
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 
@@ -11,13 +12,13 @@
 
 namespace localization
 {
-    /**@brief Measurement Model for the attitude and velocity correction
-     */
+    /**@brief Measurement Model for the attitude correction
+    */
     template <int _SingleStateDoF>
-    Eigen::Matrix < double, 6, _SingleStateDoF > proprioceptiveMeasurementMatrix
+    Eigen::Matrix < double, 3, _SingleStateDoF > proprioceptiveMeasurementMatrix
                     (const Eigen::Quaterniond &orient, const double gravity)
     {
-        Eigen::Matrix < double, 6, _SingleStateDoF > H; /** Measurement matrix of the model */
+        Eigen::Matrix < double, 3, _SingleStateDoF > H; /** Measurement matrix of the model */
         Eigen::Vector3d gtilde; /** Gravitation in the world frame */
         Eigen::Vector3d gtilde_body; /** Gravitation in the body frame */
         Eigen::Matrix3d gtilde2product; /** Vector 2 product  matrix for the gravity vector in body frame */
@@ -25,9 +26,6 @@ namespace localization
         /** Initialize and gtilde **/
         H.setZero();
         gtilde <<0.00, 0.00, gravity;
-
-        /** Form the matrix for the measurement of the velocity correction **/
-        H.template block<3,3>(0,3).setIdentity();
 
         /** Calculate the gravity vector in the body frame **/
         gtilde_body = orient.inverse() * gtilde;
@@ -37,9 +35,9 @@ namespace localization
 		    gtilde_body(2), 0, -gtilde_body(0),
     		    -gtilde_body(1), gtilde_body(0), 0;
 
-        /** Form the matrix for the measurement of the attitude (accelerometers correction) **/
-        H.template block<3,3>(3,6) = 2.0*gtilde2product;
-        H(3,_SingleStateDoF-3) = 1; H(4,_SingleStateDoF-2) = 1; H(5,_SingleStateDoF-1) = 1;
+        /** The matrix for the measurement of the attitude (accelerometers correction) **/
+        H.template block<3,3>(0,3) = 2.0*gtilde2product;
+        H(0,_SingleStateDoF-3) = 1; H(1,_SingleStateDoF-2) = 1; H(2,_SingleStateDoF-1) = 1;
 
         #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
         std::cout<<"[MEASUREMENT_MATRIX] H is of size "<< H.rows() <<" x "<<H.cols()<<"\n";
@@ -96,22 +94,16 @@ namespace localization
     /**@brief Noise Measurement Matrix for the attitude and velocity correction
      */
     inline
-    Eigen::Matrix<double, 6, 6> proprioceptiveMeasurementNoiseCov (const Eigen::Matrix<double, 3, 3> &veloErrorCov,
-                                const base::Vector3d &accrw, const base::Vector3d &accresolution, const double delta_t)
+    Eigen::Matrix<double, 3, 3> proprioceptiveMeasurementNoiseCov (const base::Vector3d &accrw, const base::Vector3d &accresolution, const double delta_t)
     {
         double sqrtdelta_t = sqrt(delta_t); /** Square root of delta time interval */
-        Eigen::Matrix<double, 6, 6> Cov; /** Covariance matrix of the measurement **/
-        Eigen::Matrix3d Rat; /** Gravity vector covariance matrix */
-        Cov.setZero(); Rat.setZero();
-
-        /** Part for the velocity **/
-        Cov.block<3,3> (0,0) = veloErrorCov;
+        Eigen::Matrix3d Cov; /** Gravity vector covariance matrix */
+        Cov.setZero();
 
         /** Part of the gravity **/
-        Rat(0,0) = 3 * (accresolution[0] + pow(accrw[0]/sqrtdelta_t,2));//0.0054785914701378034;
-        Rat(1,1) = 3 * (accresolution[1] + pow(accrw[1]/sqrtdelta_t,2));//0.0061094546837916494;
-        Rat(2,2) = 3 * (accresolution[2] + pow(accrw[2]/sqrtdelta_t,2));//0.0063186020143245212;
-        Cov.block<3,3> (3,3) = Rat;
+        Cov(0,0) = 3 * (accresolution[0] + pow(accrw[0]/sqrtdelta_t,2));//0.0054785914701378034;
+        Cov(1,1) = 3 * (accresolution[1] + pow(accrw[1]/sqrtdelta_t,2));//0.0061094546837916494;
+        Cov(2,2) = 3 * (accresolution[2] + pow(accrw[2]/sqrtdelta_t,2));//0.0063186020143245212;
 
         #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
         std::cout<<"[MEASUREMENT_MODEL] Cov is of size "<< Cov.rows() <<" x "<<Cov.cols()<<"\n";

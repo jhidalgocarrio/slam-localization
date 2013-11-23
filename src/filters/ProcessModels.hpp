@@ -109,6 +109,45 @@ namespace localization
     }
 
 
+     template <typename _SingleState, typename _SingleStateCovariance>
+    _SingleStateCovariance processNoiseCov (const Eigen::Matrix3d &cov_position,
+                    const Eigen::Matrix3d &cov_orientation,
+                    const Eigen::Vector3d &gbiasins,
+                    const Eigen::Vector3d &abiasins)
+    {
+        /** Dimension is for one single error state **/
+        _SingleStateCovariance Cov = _SingleStateCovariance::Zero();// Covariance matrix
+
+        /** Position uncertainty **/
+        ::MTK::subblock (Cov, &_SingleState::pos) = cov_position;
+
+        /** Orientation uncertainty **/
+        ::MTK::subblock (Cov, &_SingleState::orient) = cov_orientation;
+
+        /** Noise for error in gyros bias instability **/
+        Eigen::Matrix3d Qgbias;
+        Qgbias.setZero();
+        Qgbias(0,0) = pow(gbiasins[0],2);
+        Qgbias(1,1) = pow(gbiasins[1],2);
+        Qgbias(2,2) = pow(gbiasins[2],2);
+        ::MTK::subblock (Cov, &_SingleState::gbias) = Qgbias;
+
+        /** Noise for error in accelerometers bias instability **/
+        Eigen::Matrix3d Qabias;
+        Qabias.setZero();
+        Qabias(0,0) = pow(abiasins[0],2);
+        Qabias(1,1) = pow(abiasins[1],2);
+        Qabias(2,2) = pow(abiasins[2],2);
+        ::MTK::subblock (Cov, &_SingleState::abias) = Qabias;
+
+
+        #ifdef PROCESS_MODEL_DEBUG_PRINTS
+        std::cout<<"[PROCESS_NOISE_COV] Cov is\n"<<Cov<<"\n";
+        #endif
+
+        return Cov;
+    }
+
     template <typename _SingleState, typename _SingleStateCovariance>
     _SingleStateCovariance processNoiseCov (const Eigen::Matrix<double, _SingleState::DOF, _SingleState::DOF> &F,
                     const base::Vector3d &accrw,

@@ -2,7 +2,7 @@
 #include <boost/test/included/unit_test.hpp>
 
 /** Library **/
-#include <localization/filters/Usckf.hpp> /** USCKF class with Manifolds */
+#include <localization/filters/UsckfError.hpp> /** USCKF class with Manifolds */
 #include <localization/filters/MtkWrap.hpp> /** USCKF wrapper for the state vector */
 #include <localization/filters/State.hpp> /** Filters State */
 #include <localization/Configuration.hpp> /** Constant values of the library */
@@ -21,8 +21,8 @@ typedef std::vector< MTK::vect<3, double> > MTKintFeature;
 MTKintFeature adios(100, Eigen::Vector3d::Zero() );
 
 /** Wrap the AugmentedState **/
-typedef localization::MtkWrap<localization::AugmentedState> WAugmentedState;
-typedef localization::MtkWrap<localization::State> WSingleState;
+typedef localization::MtkWrap<localization::AugmentedStateWithVel> WAugmentedState;
+typedef localization::MtkWrap<localization::StateWithVel> WSingleState;
 
 //acc is acceleration without any perturbation
 //angvelo is angular velocity (gyros) without any perturbation
