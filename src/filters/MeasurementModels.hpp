@@ -6,7 +6,7 @@
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 
-//#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
+#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
 
 #include <mtk/startIdx.hpp> /** Direct access to sub-block of manifolds **/
 
@@ -100,10 +100,33 @@ namespace localization
         Eigen::Matrix3d Cov; /** Gravity vector covariance matrix */
         Cov.setZero();
 
-        /** Part of the gravity **/
+        /** Attitude uncertainty from accelerometers **/
         Cov(0,0) = 3 * (accresolution[0] + pow(accrw[0]/sqrtdelta_t,2));//0.0054785914701378034;
         Cov(1,1) = 3 * (accresolution[1] + pow(accrw[1]/sqrtdelta_t,2));//0.0061094546837916494;
         Cov(2,2) = 3 * (accresolution[2] + pow(accrw[2]/sqrtdelta_t,2));//0.0063186020143245212;
+
+        #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
+        std::cout<<"[MEASUREMENT_MODEL] Cov is of size "<< Cov.rows() <<" x "<<Cov.cols()<<"\n";
+        std::cout<<"[MEASUREMENT_MODEL] Cov:\n"<< Cov <<"\n";
+        #endif
+
+        return Cov;
+    }
+
+     /**@brief Noise Measurement Matrix for the delta position
+     */
+    inline
+    Eigen::Matrix<double, 3, 3> deltaPosMeasurementNoiseCov (const base::Vector3d &accrw,
+                                                            const base::Vector3d &accresolution,
+                                                            const double delta_t)
+    {
+        double sqrtdelta_t = sqrt(delta_t); /** Square root of delta time interval */
+        Eigen::Matrix3d Cov; /** Gravity vector covariance matrix */
+        Cov.setZero();
+
+        Cov(0,0) =  delta_t * delta_t * delta_t * delta_t * (accresolution[0] + pow(accrw[0]/sqrtdelta_t,2));
+        Cov(1,1) =  delta_t * delta_t * delta_t * delta_t * (accresolution[1] + pow(accrw[1]/sqrtdelta_t,2));
+        Cov(2,2) =  delta_t * delta_t * delta_t * delta_t * (accresolution[2] + pow(accrw[2]/sqrtdelta_t,2));
 
         #ifdef MEASUREMENT_MODEL_DEBUG_PRINTS
         std::cout<<"[MEASUREMENT_MODEL] Cov is of size "<< Cov.rows() <<" x "<<Cov.cols()<<"\n";

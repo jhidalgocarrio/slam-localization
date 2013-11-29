@@ -16,6 +16,13 @@
 #include <iostream>
 #include <vector>
 
+#ifndef D2R
+#define D2R M_PI/180.00 /** Convert degree to radian **/
+#endif
+#ifndef R2D
+#define R2D 180.00/M_PI /** Convert radian to degree **/
+#endif
+
 // We can't use types having a comma inside AutoConstruct macros :(
 typedef MTK::vect<3, double> vec3;
 typedef MTK::SO3<double> SO3;
@@ -40,12 +47,13 @@ state process_model ( const state &s, const Eigen::Matrix<double, 3, 1> &a , con
     state s2 ;
 
     // apply rotation
-    std::cout<<"w is: "<<w<<"\n";
+    std::cout<<"gyros are: "<<w<<"\n";
     //MTK::vect <3, double> scaled_axis = w * dt ;
     Eigen::Vector3d scaled_axis = w * dt ;
-    MTK::SO3 <double> rot = SO3::exp (scaled_axis);
-    s2.orient = s.orient * rot;
-    // above is the same than s2.orient.boxplus(scaled_axis);
+    s2.orient.boxplus(scaled_axis); // this is the same than the two lines bellow
+    //MTK::SO3 <double> rot = SO3::exp (scaled_axis);
+    //s2.orient = s.orient * rot;
+
 
     // accelerate with gravity
     //Eigen::Matrix<double, 3, 1> gravity;
@@ -95,16 +103,25 @@ BOOST_AUTO_TEST_CASE( UKFOM )
     const ukfom::ukf<state>::cov init_cov = 0.001 * ukfom::ukf<state>::cov::Identity();
     ukfom::ukf<state> filter(ukf_state, init_cov);
     Eigen::Vector3d acc, gyro, gps;
-    gyro<<0.1,0.0, 0.0;
+    gyro<<10.0*D2R, 0.0*D2R, 0.0*D2R;
     acc<<0.0, 0.0, 0.0;
     gps<<1.0, 0.0, 0.0;
     for (register int i=0; i<1; ++i)
     {
         std::cout<<"IN_LOOP["<<i<<"]\n";
         //boost::bind(process_model, _1 , acc, gyro, 0.01);
-        //kf.predict();
         filter.predict(boost::bind(process_model, _1 , acc , gyro, 0.01), process_noise_cov(0.01));
         filter.update (gps, boost::bind(gps_measurement_model, _1), gps_measurement_noise_cov);
     }
+
+    state vstate = filter.mu();
+    Eigen::Matrix <double, 3, 1> euler; /** In Euler angles **/
+    euler[2] = vstate.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+    euler[1] = vstate.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+    euler[0] = vstate.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+    std::cout<<"Result Roll: "<<euler[0]*R2D<<" Pitch: "<<euler[1]*R2D<<" Yaw: "<<euler[2]*R2D<<"\n";
+    ::MTK::SO3<double> orientation = vstate.orient;
+    std::cout<<"Orientation is: "<<vstate.orient<<"\n";
+    std::cout<<"Orientation is: "<<orientation<<"\n";
 
 }
