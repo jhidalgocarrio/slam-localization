@@ -6,7 +6,7 @@
 #include <Eigen/LU> /** Lineal algebra of Eigen */
 #include <Eigen/SVD> /** Singular Value Decomposition (SVD) of Eigen */
 
-#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
+//#define MEASUREMENT_MODEL_DEBUG_PRINTS 1
 
 #include <mtk/startIdx.hpp> /** Direct access to sub-block of manifolds **/
 

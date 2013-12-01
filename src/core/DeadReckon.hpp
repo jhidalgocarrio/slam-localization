@@ -269,8 +269,8 @@ namespace localization
 
             /** Quaternion integration (third order linearization) **/
             quat = (Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity() + (0.75 * omega4 *dt)- (0.25 * oldomega4 * dt) -
-            ((1/6) * angularVelocities[0].squaredNorm() * pow(dt,2) *  Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
-            ((1/24) * omega4 * oldomega4 * pow(dt,2)) - ((1/48) * angularVelocities[0].squaredNorm() * omega4 * pow(dt,3))) * quat;
+            ((1.0/6.0) * angularVelocities[0].squaredNorm() * pow(dt,2) *  Eigen::Matrix<double,QUATERSIZE,QUATERSIZE>::Identity()) -
+            ((1.0/24.0) * omega4 * oldomega4 * pow(dt,2)) - ((1.0/48.0) * angularVelocities[0].squaredNorm() * omega4 * pow(dt,3))) * quat;
 
             /** Store in a quaternion form **/
             deltaq.w() = quat(0);
