@@ -22,7 +22,7 @@ set (LOCALIZATION_HDRS
 
 rock_library(localization
     SOURCES ${LOCALIZATION_SRCS}
-    DEPS_PKGCONFIG eigen3 base-types base-lib yaml-cpp
+    DEPS_PKGCONFIG eigen3 base-types base-lib #yaml-cpp
     DEPS_CMAKE LAPACK
     HEADERS ${LOCALIZATION_HDRS})
 
