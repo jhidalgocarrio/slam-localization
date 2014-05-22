@@ -74,6 +74,19 @@ namespace localization
 
         }
 
+         /** Peform the filter calling the protected method of the class
+         *
+         * @param[in] data vector of dimension _DataDimension of the new sample.
+         *
+         * @return filtered data
+         *
+         */
+        Eigen::Matrix<double, _DataDimension, 1> perform (const Eigen::Matrix <double, _DataDimension, 1> &data)
+        {
+            Eigen::Matrix <double, _DataDimension, _DataDimension> dataCov; dataCov.setZero();
+            return this-> perform (data, dataCov, false);
+        }
+
         /** Peform the filter calling the protected method of the class
          *
          * @param[in] data vector of dimension _DataDimension of the new sample.
