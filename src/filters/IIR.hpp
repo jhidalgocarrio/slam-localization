@@ -11,7 +11,7 @@
 namespace localization
 {
     /**@brief Implements an Infinite Impulse Response filter with order
-     * _Order especified as template parameters and _DataDimension is the
+     * _Order specified as template parameters and _DataDimension is the
      * Dimension of the data to filter (1-D, 2-D, 3-D, etc..) */
     template < unsigned int _Order, unsigned int _DataDimension > class IIR
     {
