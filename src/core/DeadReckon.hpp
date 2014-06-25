@@ -287,7 +287,45 @@ namespace localization
             return deltaq;
         }
 
+        /** \Brief Performs the time integration of delta pose updates
+	 *
+	 * @return delta pose of the change in pose
+         *
+	 */
+	inline static void updatePose(const double delta_t, const Eigen::Affine3d &prevPose, const Eigen::Matrix <double, 6, 6> &prevCov,
+                        const Eigen::Affine3d &deltaPose, const Eigen::Matrix <double, 6, 6> &deltaCov,
+                        Eigen::Affine3d &postPose, Eigen::Matrix <double, 6, 6> &postCov,
+                        bool useTranforWithUncertainty = false)
+        {
+            /** Propagate Covariance **/
+            if (useTranforWithUncertainty)
+            {
+                TransformWithUncertainty tfDeltaPose(deltaPose, deltaCov); /** delta transformation between current pose and next pose **/
+                TransformWithUncertainty tfPrevPose(prevPose, prevCov); /** Previous pose**/
+                TransformWithUncertainty tfPostPose(postPose, postCov); /** Posterior pose **/
 
+                /** To perform the transformation **/
+                tfPostPose = tfPrevPose * tfDeltaPose;
+
+                /** Get the pose and uncertainty **/
+                postPose = tfPostPose.getTransform();
+                postCov = tfPostPose.getCovariance();
+
+            }
+            else
+            {
+                /** Propagate Pose **/
+                postPose = prevPose * deltaPose;
+
+                /** Adding method of propagating uncertainty **/
+                postCov = prevCov + deltaCov;
+            }
+
+            /** Guarantee SPD covariance **/
+            localization::Util::guaranteeSPD(postCov);
+
+            return;
+        }
 
     };
 
