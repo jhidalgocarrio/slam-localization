@@ -34,15 +34,14 @@
 namespace localization
 {
 
-    enum ClonningMode
+    /** Different cloning mechanism **/
+    enum CloningMode
     {
         STATEK_I = 1,
         STATEK_L = 2,
         STATEK = 3
     };
 
-
-	
     template <typename _AugmentedState, typename _SingleState>
     class Usckf
     {
@@ -506,8 +505,8 @@ namespace localization
                 mu_state.statek_i.pos += xk_i.template block<3, 1>(0,0);
                 mu_state.statek_i.orient = (mu_state.statek_i.orient * qe);
                 mu_state.statek_i.orient.normalize();
-                mu_state.statek_i.gbias += xk_i.template block<3, 1>(6, 0);
-                mu_state.statek_i.abias += xk_i.template block<3, 1>(9, 0);
+                mu_state.statek_i.velo += xk_i.template block<3, 1>(6, 0);
+                mu_state.statek_i.angvelo += xk_i.template block<3, 1>(9, 0);
 
             }
 

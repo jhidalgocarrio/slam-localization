@@ -21,8 +21,8 @@ typedef std::vector< MTK::vect<3, double> > MTKintFeature;
 MTKintFeature adios(100, Eigen::Vector3d::Zero() );
 
 /** Wrap the AugmentedState **/
-typedef localization::MtkWrap<localization::AugmentedStateWithVel> WAugmentedState;
-typedef localization::MtkWrap<localization::StateWithVel> WSingleState;
+typedef localization::MtkWrap<localization::AugmentedState> WAugmentedState;
+typedef localization::MtkWrap<localization::State> WSingleState;
 
 //acc is acceleration without any perturbation
 //angvelo is angular velocity (gyros) without any perturbation
@@ -39,21 +39,17 @@ WSingleState processModel (const WSingleState &serror, const Eigen::Matrix<doubl
     /** Propagate the position (discretization approx) **/
     dFki = Eigen::Matrix<double, 3, 3>::Identity() * dt +
         0.5 * Eigen::Matrix<double, 3, 3>::Identity() * Eigen::Matrix<double, 3, 3>::Identity() * pow(dt,2);
-    s2.pos = serror.pos + dFki * serror.vel;
+    s2.pos = serror.pos + dFki * serror.velo;
 
     /** Propagate the velocity (discretization approx) **/
     Eigen::Matrix <double,3, 1> deltaVel;
     deltaVel = /*orientq.inverse() */ (acc * dt); /** TO-DO: Increment in velocity in world frame */
-    s2.vel = serror.vel +  serror.orient * deltaVel - orientq.inverse() * (serror.abias * dt);
+    s2.velo = serror.velo +  serror.orient * deltaVel;
 
     /** Propagate the error quaternion **/
-    Eigen::Matrix <double,3, 1> deltaAngle = (angvelo - 0.5 * serror.gbias) * dt;
+    Eigen::Matrix <double,3, 1> deltaAngle = angvelo * dt;
     s2.orient = serror.orient;
     s2.orient.boxplus(deltaAngle);
-
-    /** The bias (gyros and acc) update **/
-    s2.gbias = serror.gbias;
-    s2.abias = serror.abias;
 
     return s2;
 }
@@ -63,10 +59,9 @@ localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance proce
     localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance cov =
         localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance::Zero();
     MTK::setDiagonal (cov, &WSingleState::pos, 0.1 * dt);
-    MTK::setDiagonal (cov, &WSingleState::vel,  0.1 * dt);
     MTK::setDiagonal (cov, &WSingleState::orient, 0.1 * dt);
-    MTK::setDiagonal (cov, &WSingleState::gbias, 0.002 * dt);
-    MTK::setDiagonal (cov, &WSingleState::abias, 0.002 * dt);
+    MTK::setDiagonal (cov, &WSingleState::velo,  0.1 * dt);
+    MTK::setDiagonal (cov, &WSingleState::angvelo,  0.1 * dt);
 
     return cov ;
 }
@@ -123,7 +118,7 @@ BOOST_AUTO_TEST_CASE( USCKF )
                                                         static_cast<const localization::Usckf<WAugmentedState,
                                                         WSingleState>::AugmentedStateCovariance> (P0));
     vstate = filter.muError();
-    Eigen::Matrix <double,localization::NUMAXIS,1> eulerinit; /** In euler angles **/
+    Eigen::Matrix <double,localization::NUMAXIS,1> eulerinit; /** In Euler angles **/
     eulerinit[2] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
     eulerinit[1] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
     eulerinit[0] = vstate.statek_i.orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
