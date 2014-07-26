@@ -367,7 +367,7 @@ namespace localization
                 if (s(i) < 0.00)
                     s(i) = 0.00;
             }
-            spdA = svdOfA.matrixU() * s.matrix().asDiagonal() * svdOfA.matrixV();
+            spdA = svdOfA.matrixU() * s.matrix().asDiagonal() * svdOfA.matrixV().transpose();
 
             #ifdef UTIL_DEBUG_PRINTS
             Eigen::EigenSolver<_MatrixType> eigSPD(spdA);
