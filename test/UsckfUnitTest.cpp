@@ -26,7 +26,7 @@ typedef localization::MtkWrap<localization::State> WSingleState;
 
 //acc is acceleration without any perturbation
 //angvelo is angular velocity (gyros) without any perturbation
-WSingleState processModel (const WSingleState &serror, const Eigen::Matrix<double, 3, 1> &acc,
+WSingleState process_model (const WSingleState &serror, const Eigen::Matrix<double, 3, 1> &acc,
                         const Eigen::Matrix<double, 3, 1> &angvelo,
                         const Eigen::Quaternion<double> &orientq, double dt)
 {
@@ -132,7 +132,7 @@ BOOST_AUTO_TEST_CASE( USCKF )
         gyro << (1000.00*localization::D2R), (1000.00*localization::D2R), (1000.00*localization::D2R);
         std::cout<<"IN_LOOP ["<<i<<"]\n";
         localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance myCov = processNoiseCov(dt);
-        filter.predict(boost::bind(processModel, _1 , acc , gyro, orientq, dt), myCov);
+        filter.predict(boost::bind(process_model, _1 , acc , gyro, orientq, dt), myCov);
         //std::cout<<"IN_LOOP Pk+i|k+l|k\n"<<filter.PkAugmentedState();
     }
 

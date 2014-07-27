@@ -25,7 +25,7 @@
 #include <ukfom/traits/dof.hpp>
 #include <ukfom/util.hpp>
 
-// MTK's pose and orientation definition:
+/** MTK's pose and orientation definition **/
 #include <mtk/startIdx.hpp>
 
 
