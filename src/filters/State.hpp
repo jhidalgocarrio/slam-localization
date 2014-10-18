@@ -35,6 +35,7 @@ namespace localization
 {
     // We can't use types having a comma inside AutoConstruct macros :(
     typedef ::MTK::vect<3, double> vec3;
+    typedef ::MTK::vect<Eigen::Dynamic, double> vecDynamic;
     typedef ::MTK::SO3<double> SO3;
 //    typedef std::vector<vec3> featureType;
     MTK_DEFINE_FEATURE_TYPE(vec3)
@@ -158,8 +159,8 @@ namespace localization
         ::MTK::SubManifold<State, 0> statek; /** Oldest pose state(when first exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + 0> statek_l; /** Pose state (when second exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + State::DOF + 0> statek_i; /** Current Pose state (update to the proprioceptive measurements) */
-        ::MTK::SubManifold<MTK_FEATURE_TYPE(vec3), State::DOF + State::DOF + State::DOF + 0> featuresk; /** Features of the measurement took at t=k */
-        ::MTK::SubManifold<MTK_FEATURE_TYPE(vec3), State::DOF + State::DOF + State::DOF + 0> featuresk_l; /** Features of the measurement took at t=k+l */
+        ::MTK::SubManifold<vecDynamic, State::DOF + State::DOF + State::DOF + 0> featuresk; /** Features of the measurement have taken at t=k */
+        ::MTK::SubManifold<vecDynamic, State::DOF + State::DOF + State::DOF + 0> featuresk_l; /** Features of the measurement have taken at t=k+l */
 
         enum
         {
@@ -174,23 +175,18 @@ namespace localization
 
 
         typedef vec3::scalar scalar;
-        typedef Eigen::Matrix<scalar, DOF, 1> vectorized_type;
+        typedef Eigen::Matrix<scalar, Eigen::Dynamic, 1> vectorized_type;
 
         AugmentedState ( const State& statek = State(),
                 const State& statek_l = State(),
                 const State& statek_i = State(),
-                const MTK_FEATURE_TYPE(vec3)& featuresk = MTK_FEATURE_TYPE(vec3)(),
-                const MTK_FEATURE_TYPE(vec3)& featuresk_l = MTK_FEATURE_TYPE(vec3)()
+                const vecDynamic& featuresk = vecDynamic(),
+                const vecDynamic& featuresk_l = vecDynamic()
                 )
             : statek(statek), statek_l(statek_l), statek_i(statek_i), featuresk(featuresk), featuresk_l(featuresk_l)
             {}
 
         int getDOF() const
-        {
-            return DOF;
-        }
-
-        int getCurrentDOF() const
         {
             return DOF+featuresk.size()+featuresk_l.size();
         }
@@ -212,30 +208,20 @@ namespace localization
 
         friend std::ostream& operator<<(std::ostream& __os, const AugmentedState& __var)
         {
-            __os << "\n" << __var.statek << "\n" << __var.statek_l << "\n" << __var.statek_i << "\n";
-            __os << "[";
-            for (MTK_FEATURE_TYPE(vec3)::const_iterator ii = __var.featuresk.begin(); ii != __var.featuresk.end(); ++ii)
-            {
-                __os << " " << *ii;
-            }
-            __os << " ]\n";
-            __os << "[";
-            for (MTK_FEATURE_TYPE(vec3)::const_iterator ii = __var.featuresk_l.begin(); ii != __var.featuresk_l.end(); ++ii)
-            {
-                __os << " " << *ii;
-            }
-            __os << " ]\n";
+            __os << "\n" << __var.statek << "\n" << __var.statek_l << "\n"
+            << __var.statek_i << "\n" << __var.featuresk.matrix()<<"\n"<< __var.featuresk_l.matrix()<<"\n";
 
             return __os;
         }
         friend std::istream& operator>>(std::istream& __is, AugmentedState& __var)
         {
-            return __is >> __var.statek >> __var.statek_l >> __var.statek_i;
+            return __is >> __var.statek >> __var.statek_l >> __var.statek_i >> __var.featuresk >> __var.featuresk_l;
         }
 
         vectorized_type getVectorizedState (const VectorizedType type = EULER_ANGLES)
         {
-            AugmentedState::vectorized_type vstate;
+            AugmentedState::vectorized_type vstate(this->getDOF());
+            std::cout<<"size in vectorized_type: "<<vstate.size()<<"\n";
 
             /** statek **/
             vstate.block<State::DOF, 1> (0,0) = statek.getVectorizedState(static_cast<State::VectorizedType>(type));
@@ -245,6 +231,9 @@ namespace localization
 
             /** statek_i **/
             vstate.block<State::DOF, 1> (2*State::DOF,0) = statek_i.getVectorizedState(static_cast<State::VectorizedType>(type));
+
+            /** featuresk **/
+            vstate.block(3*State::DOF, 0, this->featuresk.size(), 1).setZero();
 
             return vstate;
         }

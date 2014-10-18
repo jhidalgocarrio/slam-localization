@@ -29,7 +29,7 @@
 #include <mtk/startIdx.hpp>
 
 
-#define USCKF_DEBUG_PRINTS 1
+//#define USCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -61,6 +61,7 @@ namespace localization
             typedef typename _AugmentedState::scalar_type ScalarType;
             typedef typename _AugmentedState::vectorized_type VectorizedAugmentedState;
             typedef typename _SingleState::vectorized_type VectorizedSingleState;
+
             typedef Eigen::Matrix<ScalarType, int(_AugmentedState::DOF), int(_AugmentedState::DOF)> AugmentedStateCovariance;
             typedef Eigen::Matrix<ScalarType, int(_SingleState::DOF), int(_SingleState::DOF)> SingleStateCovariance;
             typedef std::vector<_AugmentedState> AugmentedStateSigma;
@@ -128,7 +129,7 @@ namespace localization
                 SingleStateCovariance Pxy;
                 Pxy = crossCovSigmaPoints<_SingleState, _SingleState::DOF, SingleStateSigma,
                     _SingleState> (statek_i, mu_state.statek_i, XCopy, X);
-                SingleStateCovariance Fk = Pxy.transpose()*Pk_i.inverse();
+                SingleStateCovariance Fk = Pxy.transpose()*Pk_i.inverse(); // Fk = Pyx * (Pk_i)^-1
 
                 #ifdef USCKF_DEBUG_PRINTS
                 std::cout<<"[USCKF_PREDICT] Fk:\n"<< Fk << std::endl;
@@ -510,48 +511,55 @@ namespace localization
 
             }
 
-            void cloning(int mode)
+            void pushFeatures(MTK_FEATURE_TYPE(vec3)& features)
             {
 
+                /** State k+l is now state k and the associated covariances **/
+                this->cloning(STATEK_L);
+
+                /** State k+i is now state k+l and the associated covariances **/
+                this->cloning(STATEK_I);
+
+                /** Push a new set of features measurements **/
+                mu_state.features = mu_state.featuresk_l;
+                mu_state.featuresk_l = features;
+
+                /** Move the state|measurement cross covariance matrices **/
+
+
+            }
+
+            void cloning(int mode)
+            {
                 SingleStateCovariance Pk_i, Pk_l;
 
                 switch (mode)
                 {
                 case STATEK_I:
-                    /** Augmented state cloning **/
+                    /** Augmented state cloning, state k+l = state k+i**/
                     mu_state.statek_l = mu_state.statek_i;
 
-                    /** Covariance state cloning **/
+                    /** Covariance state cloning, Pk+l = Pk+i, Pk+l|k+i = Pk+i, Pk+i|k+l = Pk+i **/
                     Pk_i = MTK::subblock (Pk, &_AugmentedState::statek_i);
+                    Pk_l_i = MTK::subblock(Pk, &_AugmentedState::statek_l, &_AugmentedState::statek_i);
                     MTK::subblock (Pk, &_AugmentedState::statek_l, &_AugmentedState::statek_l) = Pk_i;
                     MTK::subblock (Pk, &_AugmentedState::statek_l, &_AugmentedState::statek_i) = Pk_i;
                     MTK::subblock (Pk, &_AugmentedState::statek_i, &_AugmentedState::statek_l) = Pk_i;
+
+                    /** Covariance state cloning, Pk|k+i = Pk+l|k+i, Pk+i|k = Pk+i|k+l **/
+                    MTK::subblock (Pk, &_AugmentedState::statek, &_AugmentedState::statek_i) = Pk_l_i;
+                    MTK::subblock (Pk, &_AugmentedState::statek_i, &_AugmentedState::statek) = Pk_l_i.transpose();
                     break;
 
                 case STATEK_L:
-                    /** Augmented state cloning **/
+                    /** Augmented state cloning, state k = state k+l **/
                     mu_state.statek = mu_state.statek_l;
 
-                    /** Covariance state cloning **/
+                    /** Covariance state cloning, Pk = Pk+l, Pk|k+l = Pk+l, Pk+l|k = Pk+l **/
                     Pk_l = MTK::subblock (Pk, &_AugmentedState::statek_l);
                     MTK::subblock (Pk, &_AugmentedState::statek, &_AugmentedState::statek) = Pk_l;
                     MTK::subblock (Pk, &_AugmentedState::statek, &_AugmentedState::statek_l) = Pk_l;
                     MTK::subblock (Pk, &_AugmentedState::statek_l, &_AugmentedState::statek) = Pk_l;
-                    break;
-
-                case STATEK_I + STATEK_L:
-                    /** Augmented state cloning **/
-                    mu_state.statek_l = mu_state.statek_i;
-                    mu_state.statek = mu_state.statek_l;
-
-                    /** Covariance state cloning **/
-                    Pk_i = MTK::subblock (Pk, &_AugmentedState::statek_i);
-                    MTK::subblock (Pk, &_AugmentedState::statek_l, &_AugmentedState::statek_l) = Pk_i;
-                    MTK::subblock (Pk, &_AugmentedState::statek_l, &_AugmentedState::statek_i) = Pk_i;
-                    MTK::subblock (Pk, &_AugmentedState::statek_i, &_AugmentedState::statek_l) = Pk_i;
-                    MTK::subblock (Pk, &_AugmentedState::statek, &_AugmentedState::statek) = Pk_i;
-                    MTK::subblock (Pk, &_AugmentedState::statek, &_AugmentedState::statek_l) = Pk_i;
-                    MTK::subblock (Pk, &_AugmentedState::statek_l, &_AugmentedState::statek) = Pk_i;
                     break;
 
                 default:

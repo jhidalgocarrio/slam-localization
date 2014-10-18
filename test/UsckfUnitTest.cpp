@@ -69,8 +69,11 @@ localization::Usckf <WAugmentedState, WSingleState>::SingleStateCovariance proce
 BOOST_AUTO_TEST_CASE( USCKF )
 {
 
-    localization::MTK_FEATURE_TYPE( vec3 ) featuresVO(24, 1.34*Eigen::Vector3d::Identity() );
-    localization::MTK_FEATURE_TYPE( vec3 ) featuresICP(24, 3.45*Eigen::Vector3d::Identity() );
+    localization::vecDynamic featuresVO, featuresICP;
+    featuresVO.resize(4,1);
+    featuresVO<<3.34, 3.34, 3.34, 3.34;
+    featuresICP.resize(10,1);
+    featuresICP<<1.34, 1.34, 1.34, 1.34,1.34, 1.34, 1.34, 1.34, 1.34, 1.34;
 
     WAugmentedState vstate;
     WAugmentedState verror;
@@ -80,20 +83,22 @@ BOOST_AUTO_TEST_CASE( USCKF )
     std::cout<<"vstate.statek_l is "<<vstate.statek_l<<"\n";
     std::cout<<"vstate.statek_i is "<<vstate.statek_i<<"\n";
     std::cout<<"vstate: "<<vstate<<"\n";
-    std::cout<<"vectorized state: "<<vstate.getVectorizedState()<<"\n";
+    std::cout<<"vectorized state:\n"<<vstate.getVectorizedState()<<"\n";
+    std::cout<<"featuresICP.size():\n"<<featuresICP.size() <<"\n";
+    std::cout<<"featuresICP:\n"<<featuresICP.matrix()<<"\n";
 
     //std::vector< Eigen::Matrix <double, 3, 1> , Eigen::aligned_allocator < Eigen::Matrix <double, 3, 1> > > featuresVO;
 
-    featuresVO = featuresICP;
-    featuresVO.resize(5);
     std::cout<<"size of featuresk: "<<vstate.featuresk.size()<<"\n";
-    vstate.featuresk.resize(featuresVO.size());
     vstate.featuresk = featuresVO;
     std::cout<<"size of featuresk: "<<vstate.featuresk.size()<<"\n";
-    vstate.featuresk_l.resize(featuresICP.size());
     vstate.featuresk_l = featuresICP;
     std::cout<<"size of featuresk_l: "<<vstate.featuresk_l.size()<<"\n";
     std::cout<<"vstate: "<<vstate<<"\n";
+    std::cout<<"vectorized state:\n"<<vstate.getVectorizedState()<<"\n";
+
+    localization::AugmentedState vstatebis(vstate.statek, vstate.statek_l, vstate.statek_i, featuresVO, featuresICP);
+    std::cout<<"vstatebis::DOF is "<<vstatebis.getDOF()<<"\n";
 
     const double dt = 0.01; /** 100Hz */
 
