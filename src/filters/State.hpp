@@ -35,7 +35,7 @@ namespace localization
 {
     // We can't use types having a comma inside AutoConstruct macros :(
     typedef ::MTK::vect<3, double> vec3;
-    typedef ::MTK::vect<Eigen::Dynamic, double> vecDynamic;
+    typedef ::MTK::vect<Eigen::Dynamic, double> MeasurementType;
     typedef ::MTK::SO3<double> SO3;
 //    typedef std::vector<vec3> featureType;
     MTK_DEFINE_FEATURE_TYPE(vec3)
@@ -87,11 +87,6 @@ namespace localization
 
             velo = vstate.block<localization::vec3::DOF, 1>(vec3::DOF + SO3::DOF, 0); //! Linear Velocity
             angvelo = vstate.block<localization::vec3::DOF, 1>(2*vec3::DOF + SO3::DOF, 0); //! Angular Velocity
-        }
-
-        int getDOF() const
-        {
-            return DOF;
         }
 
         void boxplus(const ::MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 )
@@ -159,8 +154,8 @@ namespace localization
         ::MTK::SubManifold<State, 0> statek; /** Oldest pose state(when first exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + 0> statek_l; /** Pose state (when second exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + State::DOF + 0> statek_i; /** Current Pose state (update to the proprioceptive measurements) */
-        ::MTK::SubManifold<vecDynamic, State::DOF + State::DOF + State::DOF + 0> featuresk; /** Features of the measurement have taken at t=k */
-        ::MTK::SubManifold<vecDynamic, State::DOF + State::DOF + State::DOF + 0> featuresk_l; /** Features of the measurement have taken at t=k+l */
+        ::MTK::SubManifold<MeasurementType, State::DOF + State::DOF + State::DOF + 0> featuresk; /** Features of the measurement have taken at t=k */
+        ::MTK::SubManifold<MeasurementType, State::DOF + State::DOF + State::DOF + 0> featuresk_l; /** Features of the measurement have taken at t=k+l */
 
         enum
         {
@@ -180,8 +175,8 @@ namespace localization
         AugmentedState ( const State& statek = State(),
                 const State& statek_l = State(),
                 const State& statek_i = State(),
-                const vecDynamic& featuresk = vecDynamic(),
-                const vecDynamic& featuresk_l = vecDynamic()
+                const MeasurementType& featuresk = MeasurementType(),
+                const MeasurementType& featuresk_l = MeasurementType()
                 )
             : statek(statek), statek_l(statek_l), statek_i(statek_i), featuresk(featuresk), featuresk_l(featuresk_l)
             {}
@@ -220,7 +215,7 @@ namespace localization
 
         vectorized_type getVectorizedState (const VectorizedType type = EULER_ANGLES)
         {
-            AugmentedState::vectorized_type vstate(this->getDOF());
+            vectorized_type vstate(this->getDOF(), 1);
             std::cout<<"size in vectorized_type: "<<vstate.size()<<"\n";
 
             /** statek **/
@@ -233,7 +228,10 @@ namespace localization
             vstate.block<State::DOF, 1> (2*State::DOF,0) = statek_i.getVectorizedState(static_cast<State::VectorizedType>(type));
 
             /** featuresk **/
-            vstate.block(3*State::DOF, 0, this->featuresk.size(), 1).setZero();
+            vstate.block(3*State::DOF, 0, this->featuresk.size(), 1) = featuresk;
+
+            /** featuresk_l **/
+            vstate.block(3*State::DOF+this->featuresk.size(), 0, this->featuresk_l.size(), 1) = featuresk_l;
 
             return vstate;
         }

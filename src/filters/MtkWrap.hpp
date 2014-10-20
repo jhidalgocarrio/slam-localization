@@ -106,9 +106,67 @@ namespace  localization
                     return !(*this == other);
             }
 
-            vectorized_type getVectorizedState(const VectorizedType type = M::EULER_ANGLES)
+    public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    };
+
+    /**
+     * MtkDynamicWrap<M> wraps an MTK-Manifold M to a usckf-compatible manifold.
+     * M has to have an enum DOF and implement the methods boxplus and boxminus.
+     */
+    template<class M>
+    struct MtkDynamicWrap : public M
+    {
+            typedef MtkDynamicWrap<M> self;
+    public:
+            typedef typename M::scalar scalar_type;
+            typedef typename M::VectorizedType VectorizedType;
+
+
+            typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> vectorized_type;
+
+            MtkDynamicWrap(const M &m=M()) : M(m) {}
+
+            /*
+             * manifold operator (+)
+             *
+             */
+            self& operator+=(const vectorized_type &delta_state)
             {
-                return M::getVectorizedState(type);
+                    assert(delta_state.size() == M::getDOF());
+                    M::boxplus(delta_state.data());
+                    return *this;
+            }
+
+            const self operator+(const vectorized_type &delta_state) const
+            {
+                    self result = *this;
+                    result += delta_state;
+
+                    return result;
+            }
+
+            /*
+             * manifold operator (-)
+             */
+            const vectorized_type operator-(const self &other) const
+            {
+                    vectorized_type result;
+                    assert(result.rows()==M::getDOF());
+                    M::boxminus(result.data(), other);
+
+                    return result;
+            }
+
+            bool operator==(const self &other) const
+            {
+                    vectorized_type diff = (*this) - other;
+                    return diff.isZero(1e-12);
+            }
+
+            bool operator!=(const self &other) const
+            {
+                    return !(*this == other);
             }
 
     public:
