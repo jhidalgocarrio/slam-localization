@@ -53,16 +53,42 @@ StateFilter::SingleStateCovariance processNoiseCov (double dt)
     MTK::setDiagonal (cov, &WSingleState::angvelo,  0.1 * dt);
 
     return cov ;
-}
+};
+
+localization::MeasurementType measurementModelVO (const WAugmentedState &wastate)
+{
+    WSingleState delta_state, statek, statek_i; /** Propagated state */
+    localization::MeasurementType z_hat;
+    z_hat = wastate.featuresk;
+    statek = wastate.statek;
+    statek_i = wastate.statek_i;
+
+    delta_state = statek - statek_i;
+    Eigen::Affine3d delta_transform (delta_state.orient);
+    delta_transform.translation() = delta_state.pos;
+
+    for (register unsigned int i = 0; i < z_hat.size(); i+=3)
+    {
+        Eigen::Vector3d coord;
+        coord<<wastate.featuresk[i], wastate.featuresk[i+1], wastate.featuresk[i+2];
+        coord = delta_transform * coord;
+        z_hat[i] = coord[0];
+        z_hat[i+1] = coord[1];
+        z_hat[i+2] = coord[2];
+    }
+//    std::cout<<"z_hat "<<z_hat<<"\n";
+
+    return z_hat;
+};
 
 BOOST_AUTO_TEST_CASE( STATES )
 {
 
     localization::MeasurementType featuresVO, featuresICP;
-    featuresVO.resize(4,1);
-    featuresVO<<3.34, 3.34, 3.34, 3.34;
-    featuresICP.resize(10,1);
-    featuresICP<<1.34, 1.34, 1.34, 1.34,1.34, 1.34, 1.34, 1.34, 1.34, 1.34;
+    featuresVO.resize(3,1);
+    featuresVO<<3.34, 3.34, 3.34;
+    featuresICP.resize(9,1);
+    featuresICP<<1.34, 1.34, 1.34, 1.34,1.34, 1.34, 1.34, 1.34, 1.34;
 
     WAugmentedState vstate;
 
@@ -95,15 +121,60 @@ BOOST_AUTO_TEST_CASE( STATES )
     std::cout<<"[STATE] vstatebis2::DOF is "<<vstatebis2.getDOF()<<"\n";
     std::cout<<"[STATE] vstatebis2: "<<vstatebis2<<"\n";
 
+    WAugmentedState vstatebis3;
+    vstatebis3 = vstatebis;
+    std::cout<<"[STATE] vstatebis3: "<<vstatebis3<<"\n";
+}
+
+BOOST_AUTO_TEST_CASE( OPERATIONS )
+{
+    localization::MeasurementType featuresVO, featuresICP;
+    featuresVO.resize(3,1);
+    featuresVO<<3.34, 3.34, 3.34;
+    featuresICP.resize(9,1);
+    featuresICP<<1.34, 1.34, 1.34, 1.34,1.34, 1.34, 1.34, 1.34, 1.34;
+
+    WAugmentedState vstate;
+    vstate.featuresk = featuresVO;
+    vstate.featuresk_l = featuresICP;
+
+    std::cout<<"[OPERATIONS] vstate: "<<vstate<<"\n";
+
+    WAugmentedState vstatebis;
+    vstatebis = vstate;
+    vstatebis.statek_i.pos<< 20, 3.0, -4.00;
+
+    Eigen::Matrix <double,localization::NUMAXIS,1> euler; /** In euler angles **/
+    euler[2] = 1.00 * localization::D2R;
+    euler[1] = 1.00 * localization::D2R;
+    euler[0] = 1.00 * localization::D2R;
+
+    vstatebis.statek_i.orient.boxplus(euler);
+    vstatebis.statek = vstatebis.statek_i;
+    vstatebis.statek_l = vstatebis.statek_i;
+    std::cout<<"[OPERATIONS] vstatebis.getDOF(): "<<vstatebis.getDOF()<<"\n";
+    std::cout<<"[OPERATIONS] vstatebis: "<<vstatebis<<"\n";
+
+    /** Operation with states **/
+    WAugmentedState sumstate, resstate;
+    resstate = vstate - vstatebis;
+    sumstate = vstate + vstatebis;
+    std::cout<<"[OPERATIONS] vstate - vstatebis\n"<< vstate - vstatebis <<"\n";
+    std::cout<<"[OPERATIONS] vstate + vstatebis\n"<< vstate + vstatebis <<"\n";
+
+    std::cout<<"[OPERATIONS] resstate\n"<< resstate <<"\n";
+    std::cout<<"[OPERATIONS] sumstate\n"<< sumstate <<"\n";
+    std::cout<<"[OPERATIONS] resstate+sumstate\n"<< resstate+sumstate <<"\n";
+    std::cout<<"[OPERATIONS] sumstate-resstate\n"<< sumstate-resstate <<"\n";
 }
 
 BOOST_AUTO_TEST_CASE( USCKF )
 {
     localization::MeasurementType featuresVO, featuresICP;
-    featuresVO.resize(4,1);
-    featuresVO<<3.34, 3.34, 3.34, 3.34;
-    featuresICP.resize(10,1);
-    featuresICP<<1.34, 1.34, 1.34, 1.34,1.34, 1.34, 1.34, 1.34, 1.34, 1.34;
+    featuresVO.resize(3,1);
+    featuresVO<<3.34, 3.34, 3.34;
+    featuresICP.resize(9,1);
+    featuresICP<<1.34, 1.34, 1.34, 1.34,1.34, 1.34, 1.34, 1.34, 1.34;
 
     WAugmentedState vstate;
     vstate.featuresk = featuresVO;
@@ -133,7 +204,7 @@ BOOST_AUTO_TEST_CASE( USCKF )
     P0.block(0, 0, P0_states.rows(), P0_states.cols()) = P0_states;
 
     //std::cout<<"[USCKF] P0_states:\n"<<P0_states<<std::endl;
-    std::cout<<"[USCKF] P0_states is of size "<<P0.rows() <<" x "<<P0.cols()<<std::endl;
+    std::cout<<"[USCKF] P0 is of size "<<P0.rows() <<" x "<<P0.cols()<<std::endl;
     std::cout<<"[USCKF] P0_states is of size "<<P0_states.rows() <<" x "<<P0_states.cols()<<std::endl;
 
     StateFilter filter(static_cast<const WAugmentedState> (vstate), static_cast<const StateFilter::AugmentedStateCovariance> (P0));
@@ -141,6 +212,10 @@ BOOST_AUTO_TEST_CASE( USCKF )
     /***************************/
     /** PROPAGATION / PREDICT **/
     /***************************/
+    std::cout<<"***************\n";
+    std::cout<<"*** PREDICT ***\n";
+    std::cout<<"***************\n";
+
     for (register int i=0; i<2; ++i)
     {
         Eigen::Vector3d velo, angular_velo;
@@ -149,13 +224,37 @@ BOOST_AUTO_TEST_CASE( USCKF )
         std::cout<<"[USCKF] IN_LOOP ["<<i<<"]\n";
         StateFilter::SingleStateCovariance myCov = processNoiseCov(dt);
         filter.predict(boost::bind(processModel, _1 , velo , angular_velo, dt), myCov);
-        std::cout<<"[USCKF] IN_LOOP Pk+i|k+l|k\n"<<filter.PkAugmentedState()<<"\n";
+       // std::cout<<"[USCKF] IN_LOOP Pk+i|k+l|k\n"<<filter.PkAugmentedState()<<"\n";
     }
 
+    std::cout<<"[USCKF] vstate after propagation: "<<filter.muState()<<"\n";
 
     /***************************/
     /** CORRECTION / UPDATE   **/
     /***************************/
+    std::cout<<"**************\n";
+    std::cout<<"*** UPDATE ***\n";
+    std::cout<<"**************\n";
+
+    /** Measurement model **/
+    localization::MeasurementType featuresVO_hat;
+    featuresVO_hat = measurementModelVO(filter.muState());
+    std::cout<<"[USCKF] featuresVO_hat: "<<featuresVO_hat<<"\n";
+
+    /** Measurement **/
+    Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, 1> measurementVO;
+    measurementVO.resize(featuresVO.size(), 1);
+    measurementVO<<2.33, 3.35, 3.35;
+    std::cout<<"[USCKF] Measurement: "<<measurementVO<<"\n";
+    Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, Eigen::Dynamic> measurementNoiseVO;
+    measurementNoiseVO.resize(measurementVO.size(), measurementVO.size());
+    measurementNoiseVO.setIdentity();
+    measurementNoiseVO = 0.01 * measurementNoiseVO;
+    filter.update(measurementVO, boost::bind(measurementModelVO, _1), measurementNoiseVO);
+
+    /***********/
+    /** END   **/
+    /***********/
 
     vstate = filter.muState();
     Eigen::Matrix <double,localization::NUMAXIS,1> euler; /** In euler angles **/

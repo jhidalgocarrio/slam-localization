@@ -54,7 +54,7 @@ namespace  localization
             typedef MtkWrap<M> self;
     public:
             typedef typename M::scalar scalar_type;
-            typedef typename M::VectorizedType VectorizedType;
+            typedef typename M::VectorizedMode VectorizedMode;
 
             enum {
                     DOF = M::DOF
@@ -63,6 +63,12 @@ namespace  localization
             typedef Eigen::Matrix<scalar_type, DOF, 1> vectorized_type;
 
             MtkWrap(const M &m=M()) : M(m) {}
+
+            self& operator=(const vectorized_type &vstate)
+            {
+                this->set(vstate);
+                return *this;
+            }
 
             /*
              * manifold operator (+)
@@ -120,25 +126,37 @@ namespace  localization
             typedef MtkDynamicWrap<M> self;
     public:
             typedef typename M::scalar scalar_type;
-            typedef typename M::VectorizedType VectorizedType;
+            typedef typename M::VectorizedMode VectorizedMode;
 
 
             typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> vectorized_type;
 
             MtkDynamicWrap(const M &m=M()) : M(m) {}
 
+            self& operator=(const self &state)
+            {
+                    this->statek = state.statek;
+                    this->statek_l = state.statek_l;
+                    this->statek_i = state.statek_i;
+                    this->featuresk = state.featuresk;
+                    this->featuresk_l = state.featuresk_l;
+                    return *this;
+            }
+
             /*
              * manifold operator (+)
              *
              */
-            self& operator+=(const vectorized_type &delta_state)
+            self& operator+=(const self &delta_state)
             {
-                    assert(delta_state.size() == M::getDOF());
-                    M::boxplus(delta_state.data());
+                    assert(delta_state.getDOF() == M::getDOF());
+
+                    M state; state = delta_state;
+                    M::boxplus(state);
                     return *this;
             }
 
-            const self operator+(const vectorized_type &delta_state) const
+            const self operator+(const self &delta_state) const
             {
                     self result = *this;
                     result += delta_state;
@@ -149,14 +167,21 @@ namespace  localization
             /*
              * manifold operator (-)
              */
-            const vectorized_type operator-(const self &other) const
+            const self operator-(const self &other) const
             {
-                    vectorized_type result;
-                    assert(result.rows()==M::getDOF());
-                    M::boxminus(result.data(), other);
+                    M result; // It does not have the dynamic part
+                    assert(other.getDOF()==M::getDOF());
+
+                    /** Create the dynamic part of the result **/
+                    result.featuresk = this->featuresk;
+                    result.featuresk_l = this->featuresk_l;
+
+                    /** Perform operation **/
+                    M::boxminus(result, other);
 
                     return result;
             }
+
 
             bool operator==(const self &other) const
             {

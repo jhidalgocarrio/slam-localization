@@ -38,7 +38,7 @@ namespace localization
     typedef ::MTK::vect<Eigen::Dynamic, double> MeasurementType;
     typedef ::MTK::SO3<double> SO3;
 //    typedef std::vector<vec3> featureType;
-    MTK_DEFINE_FEATURE_TYPE(vec3)
+//    MTK_DEFINE_FEATURE_TYPE(vec3)
 
     struct State
     {
@@ -54,10 +54,10 @@ namespace localization
             DOF = vec3::DOF + SO3::DOF + vec3::DOF + vec3::DOF + 0
         };
 
-        enum VectorizedType
+        enum VectorizedMode
         {
             EULER_ANGLES = 0,
-            ERROR_QUATERNION = 1
+            ANGLE_AXIS = 1
         };
 
         typedef vec3::scalar scalar;
@@ -69,20 +69,20 @@ namespace localization
 
         /** @brief set the State from a vectorized type State
          */
-        void set (const vectorized_type &vstate, const VectorizedType type = EULER_ANGLES)
+        void set (const vectorized_type &vstate, const VectorizedMode type = ANGLE_AXIS)
         {
             pos = vstate.block<vec3::DOF, 1>(0,0); //! Position
-            Eigen::Matrix<scalar, SO3::DOF, 1> orientation =  vstate.block<SO3::DOF, 1>(vec3::DOF, 0); //! Orientation
+            Eigen::Matrix<scalar, SO3::DOF, 1> axis_angle =  vstate.block<SO3::DOF, 1>(vec3::DOF, 0); //! Orientation
 
             if (type == EULER_ANGLES)
             {
-                orient = Eigen::Quaternion<scalar> (Eigen::AngleAxisd(orientation[2], Eigen::Vector3d::UnitZ())*
-                                Eigen::AngleAxisd(orientation[1], Eigen::Vector3d::UnitY()) *
-                                Eigen::AngleAxisd(orientation[0], Eigen::Vector3d::UnitX()));
+                orient = Eigen::Quaternion<scalar> (Eigen::AngleAxisd(axis_angle[2], Eigen::Vector3d::UnitZ())*
+                                Eigen::AngleAxisd(axis_angle[1], Eigen::Vector3d::UnitY()) *
+                                Eigen::AngleAxisd(axis_angle[0], Eigen::Vector3d::UnitX()));
             }
             else
             {
-                orient = Eigen::Quaternion<scalar> (1.0, orientation[0], orientation[1], orientation[2]);
+                orient = SO3::exp(axis_angle, 1);
             }
 
             velo = vstate.block<localization::vec3::DOF, 1>(vec3::DOF + SO3::DOF, 0); //! Linear Velocity
@@ -120,7 +120,7 @@ namespace localization
          * for the orientation.
          */
 
-        vectorized_type getVectorizedState (const VectorizedType type = EULER_ANGLES)
+        vectorized_type getVectorizedState (const VectorizedMode type = ANGLE_AXIS)
         {
 
             State::vectorized_type vstate;
@@ -136,7 +136,7 @@ namespace localization
             }
             else
             {
-                orientation << orient.x(), orient.y(), orient.z();
+                orientation << SO3::log(orient);
             }
 
             vstate.block<SO3::DOF, 1>(vec3::DOF, 0) = orientation;
@@ -154,18 +154,18 @@ namespace localization
         ::MTK::SubManifold<State, 0> statek; /** Oldest pose state(when first exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + 0> statek_l; /** Pose state (when second exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + State::DOF + 0> statek_i; /** Current Pose state (update to the proprioceptive measurements) */
-        ::MTK::SubManifold<MeasurementType, State::DOF + State::DOF + State::DOF + 0> featuresk; /** Features of the measurement have taken at t=k */
-        ::MTK::SubManifold<MeasurementType, State::DOF + State::DOF + State::DOF + 0> featuresk_l; /** Features of the measurement have taken at t=k+l */
+        localization::MeasurementType featuresk; /** Features of the measurement have taken at t=k */
+        localization::MeasurementType featuresk_l; /** Features of the measurement have taken at t=k+l */
 
         enum
         {
             DOF = State::DOF + State::DOF + State::DOF + 0
         };
 
-        enum VectorizedType
+        enum VectorizedMode
         {
             EULER_ANGLES = 0,
-            ERROR_QUATERNION = 1
+            ANGLE_AXIS = 1
         };
 
 
@@ -180,25 +180,75 @@ namespace localization
                 )
             : statek(statek), statek_l(statek_l), statek_i(statek_i), featuresk(featuresk), featuresk_l(featuresk_l)
             {}
+        /** @brief set the State from a vectorized type State
+         */
+        void set (const vectorized_type &vstate, const size_t size_featuresk, const size_t size_featuresk_l, const VectorizedMode type = ANGLE_AXIS)
+        {
+            Eigen::Matrix<scalar, State::DOF, 1> tmp_vstate;
+            tmp_vstate = vstate.block(0, 0 ,State::DOF, 1);
+            statek.set(tmp_vstate, localization::State::VectorizedMode(type));
 
-        int getDOF() const
+            tmp_vstate = vstate.block(State::DOF, 0 ,State::DOF, 1);
+            statek_l.set(tmp_vstate, localization::State::VectorizedMode(type));
+
+            tmp_vstate = vstate.block(2*State::DOF, 0 ,State::DOF, 1);
+            statek_i.set(tmp_vstate, localization::State::VectorizedMode(type));
+
+            featuresk.resize(size_featuresk, 1);
+            featuresk = vstate.block(3*State::DOF, 0, size_featuresk, 1);
+            //std::cout<<"set featuresk:\n"<<featuresk<<"\n";
+
+            featuresk_l.resize(size_featuresk_l, 1);
+            featuresk_l = vstate.block(3*State::DOF+size_featuresk, 0, size_featuresk_l, 1);
+            //std::cout<<"set featuresk_l:\n"<<featuresk_l<<"\n";
+
+            return;
+        }
+
+        unsigned int getDOF() const
         {
             return DOF+featuresk.size()+featuresk_l.size();
         }
 
-        void boxplus(const ::MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 )
+        void boxplus(AugmentedState & __state, scalar __scale = 1 )
         {
-            statek.boxplus(::MTK::subvector(__vec, &self::statek), __scale);
-            statek_l.boxplus(::MTK::subvector(__vec, &self::statek_l), __scale);
-            statek_i.boxplus(::MTK::subvector(__vec, &self::statek_i), __scale);
+            State::vectorized_type vectstate;
 
+            vectstate = __state.statek.getVectorizedState();
+            statek.boxplus(vectstate.data(), __scale);
+
+            vectstate = __state.statek_l.getVectorizedState();
+            statek_l.boxplus(vectstate.data(), __scale);
+
+            vectstate = __state.statek_i.getVectorizedState();
+            statek_i.boxplus(vectstate.data(), __scale);
+
+            featuresk = featuresk + __state.featuresk;
+
+            featuresk_l = featuresk_l + __state.featuresk_l;
         }
 
-        void boxminus(::MTK::vectview<scalar,DOF> __res, const AugmentedState& __oth) const
+        void boxminus(AugmentedState &__res, const AugmentedState& __oth) const
         {
-            statek.boxminus(::MTK::subvector(__res, &self::statek), __oth.statek);
-            statek_l.boxminus(::MTK::subvector(__res, &self::statek_l), __oth.statek_l);
-            statek_i.boxminus(::MTK::subvector(__res, &self::statek_i), __oth.statek_i);
+            State::vectorized_type vectstate;
+            //std::cout<<"in boxminus __res:\n "<<__res<<"\n";
+            //std::cout<<"in boxminus __oth:\n "<<__oth<<"\n";
+            vectstate = __res.statek.getVectorizedState();
+            statek.boxminus(vectstate.data(), __oth.statek);
+            __res.statek.set(vectstate);
+
+            vectstate = __res.statek_l.getVectorizedState();
+            statek_l.boxminus(vectstate.data(), __oth.statek_l);
+            __res.statek_l.set(vectstate);
+
+            vectstate = __res.statek_i.getVectorizedState();
+            statek_i.boxminus(vectstate.data(), __oth.statek_i);
+            __res.statek_i.set(vectstate);
+
+            __res.featuresk = __res.featuresk - __oth.featuresk;
+            __res.featuresk_l = __res.featuresk_l - __oth.featuresk_l;
+
+            //std::cout<<"after in boxminus __res:\n "<<__res<<"\n";
         }
 
         friend std::ostream& operator<<(std::ostream& __os, const AugmentedState& __var)
@@ -213,19 +263,18 @@ namespace localization
             return __is >> __var.statek >> __var.statek_l >> __var.statek_i >> __var.featuresk >> __var.featuresk_l;
         }
 
-        vectorized_type getVectorizedState (const VectorizedType type = EULER_ANGLES)
+        vectorized_type getVectorizedState (const VectorizedMode type = ANGLE_AXIS)
         {
             vectorized_type vstate(this->getDOF(), 1);
-            std::cout<<"size in vectorized_type: "<<vstate.size()<<"\n";
 
             /** statek **/
-            vstate.block<State::DOF, 1> (0,0) = statek.getVectorizedState(static_cast<State::VectorizedType>(type));
+            vstate.block<State::DOF, 1> (0,0) = statek.getVectorizedState(static_cast<State::VectorizedMode>(type));
 
             /** statek_l **/
-            vstate.block<State::DOF, 1> (State::DOF,0) = statek_l.getVectorizedState(static_cast<State::VectorizedType>(type));
+            vstate.block<State::DOF, 1> (State::DOF,0) = statek_l.getVectorizedState(static_cast<State::VectorizedMode>(type));
 
             /** statek_i **/
-            vstate.block<State::DOF, 1> (2*State::DOF,0) = statek_i.getVectorizedState(static_cast<State::VectorizedType>(type));
+            vstate.block<State::DOF, 1> (2*State::DOF,0) = statek_i.getVectorizedState(static_cast<State::VectorizedMode>(type));
 
             /** featuresk **/
             vstate.block(3*State::DOF, 0, this->featuresk.size(), 1) = featuresk;

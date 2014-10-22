@@ -28,6 +28,8 @@
 /** MTK's pose and orientation definition **/
 #include <mtk/startIdx.hpp>
 
+/** Localization includes **/
+#include <localization/tools/Util.hpp>
 
 //#define USCKF_DEBUG_PRINTS 1
 
@@ -251,17 +253,24 @@ namespace localization
                     typedef Eigen::Matrix<ScalarType, measurement_rows, 1> VectorizedMeasurement;
                     typedef std::vector<Measurement> measurement_vector;
                     typedef Eigen::Matrix<ScalarType, measurement_rows, measurement_rows> MeasurementCov;
-                    typedef Eigen::Matrix<ScalarType, _AugmentedState::DOF, measurement_rows> CrossCov;
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, measurement_rows> CrossCov;
 
-                    AugmentedStateSigma X(2 * DOF_AUGMENTED_STATE + 1);
-                    generateSigmaPoints(mu_state, Pk, X);
+                    AugmentedStateSigma X(2 * mu_state.getDOF() + 1);
+                    VectorizedAugmentedState mu_delta(mu_state.getDOF(), 1);
+                    mu_delta.setZero();
+                    std::cout<<"[USCKF_UPDATE] X.size(): "<< X.size() <<"\n";
+                    std::cout<<"[USCKF_UPDATE] mu_delta.size(): "<< mu_delta.size() <<"\n";
+                    generateSigmaPoints(mu_state, mu_delta, Pk, X);
 
                     std::vector<Measurement> Z(X.size());
                     std::transform(X.begin(), X.end(), Z.begin(), h);
 
                     const Measurement meanZ = meanSigmaPoints(Z);
-                    const MeasurementCov S = covSigmaPoints<measurement_rows>(meanZ, Z) + R();
-                    const CrossCov covXZ = crossCovSigmaPoints<measurement_rows>(mu_state, meanZ, X, Z);
+                    std::cout<<"meanZ: "<<meanZ<<"\n";
+                    std::cout<<"measurement_rows: "<<measurement_rows<<"\n";
+
+                    const MeasurementCov S = covSigmaPoints(meanZ, Z) + R();
+                    const CrossCov covXZ = crossCovSigmaPoints(mu_state, meanZ, X, Z);
 
                     MeasurementCov S_inverse;
                     S_inverse = S.inverse();
@@ -276,13 +285,16 @@ namespace localization
                     {
                             Pk -= K * S * K.transpose();
                             //applyDelta(K * innovation);
-                            mu_state = mu_state + K * innovation;
+                            std::cout<<"K "<<K.rows() <<" x "<<K.cols()<<"\n";
+                            _AugmentedState innovation_state;
+                            innovation_state.set(K * innovation, mu_state.featuresk.size(), mu_state.featuresk_l.size());
+                            mu_state = mu_state + innovation_state;
                     }
 
-                    #ifdef USCKF_DEBUG_PRINTS
+                    //#ifdef USCKF_DEBUG_PRINTS
                     std::cout << "[USCKF_UPDATE] innovation:" << std::endl << innovation << std::endl;
                     std::cout << "[USCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
-                    #endif
+                    //#endif
             }
 
             template<typename _Measurement>
@@ -450,44 +462,32 @@ namespace localization
     private:
 
             /**@brief Sigma Point Calculation for the complete Augmented State
-            */
-            void generateSigmaPoints(const _AugmentedState &mu, const AugmentedStateCovariance &sigma, AugmentedStateSigma &X) const
-            {
-                    generateSigmaPoints(mu, VectorizedAugmentedState::Zero(), sigma, X);
-            }
-
-            /**@brief Sigma Point Calculation for the complete Augmented State
              */
             void generateSigmaPoints(const _AugmentedState &mu, const VectorizedAugmentedState &delta,
                                     const AugmentedStateCovariance &sigma, AugmentedStateSigma &X) const
             {
-                    assert(X.size() == 2 * DOF_AUGMENTED_STATE + 1);
+                    assert(X.size() == static_cast<unsigned int> (2 * mu_state.getDOF() + 1));
 
-                    ukfom::lapack::cholesky<DOF_AUGMENTED_STATE> L(sigma);
+                    Eigen::LLT< AugmentedStateCovariance > lltOfSigma(sigma); // compute the Cholesky decomposition of A
+                    AugmentedStateCovariance L = lltOfSigma.matrixL(); // retrieve factor L  in the decomposition
 
-                    if (!L.isSPD())
-                    {
-                            std::cerr << std::endl << "sigma is not SPD:" << std::endl
-                                              << sigma << std::endl
-                                              << "---" << std::endl;
-                            Eigen::EigenSolver<AugmentedStateCovariance> eig(sigma);
-                            std::cerr << "eigen values: " << eig.eigenvalues().transpose() << std::endl;
-                    }
-
-                    assert(L.isSPD());
-
-
-                    /*std::cout << ">> L" << std::endl
-                                      << L.getL() << std::endl
+                    /*std::cout << "L is of size "<<L.rows()<<" x "<<L.cols()<<"\n";
+                    std::cout << ">> L" << std::endl
+                                      << L << std::endl
                                       << "<< L" << std::endl;
-                    */
+                     std::cout<<"L*L^T:\n"<< L * L.transpose()<<"\n";*/
 
-                    X[0] = mu + delta;
-                    for (std::size_t i = 1, j = 0; j < DOF_AUGMENTED_STATE; ++j)
+                    _AugmentedState delta_state;
+                    delta_state.set(delta, mu.featuresk.size(), mu.featuresk_l.size());
+
+                    X[0] = mu + delta_state;
+                    for (register unsigned int i = 1, j = 0; j < mu.getDOF(); ++j)
                     {
-                            //std::cout << "L.col(" << j << "): " << L.getL().col(j).transpose() << std::endl;
-                            X[i++] = mu + (delta + L.getL().col(j));
-                            X[i++] = mu + (delta - L.getL().col(j));
+                            //std::cout << "L.col(" << j << "): " << L.col(j).transpose() << std::endl;
+                            _AugmentedState l_state;
+                            l_state.set(L.col(j), mu.featuresk.size(), mu.featuresk_l.size());
+                            X[i++] = mu + (delta_state + l_state);
+                            X[i++] = mu + (delta_state - l_state);
                     }
                     #ifdef USCKF_DEBUG_PRINTS
                     printSigmaPoints<AugmentedStateSigma>(X);
@@ -567,7 +567,10 @@ namespace localization
             {
                     typedef Eigen::Matrix<ScalarType, _MeasurementRows, 1> Measurement;
 
-                    return std::accumulate(Z.begin(), Z.end(), Measurement(Measurement::Zero())) / Z.size();
+                    Measurement measurement_zero(Z[0].size(), 1);
+                    measurement_zero.setZero();
+
+                    return std::accumulate(Z.begin(), Z.end(), measurement_zero) / Z.size();
             }
 
 #ifdef VECT_H_
@@ -600,6 +603,25 @@ namespace localization
                     return 0.5 * c;
             }
 
+            Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>
+            covSigmaPoints(const Eigen::Matrix<ScalarType, Eigen::Dynamic, 1>  &mean,
+                    const std::vector< Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> > &V) const
+            {
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> CovMat;
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> CovCol;
+
+                    CovMat c(mean.size(), mean.size());
+                    c.setZero();
+
+                    for (typename std::vector< Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> >::const_iterator Vi = V.begin(); Vi != V.end(); ++Vi)
+                    {
+                            CovCol d = *Vi - mean;
+                            c += d * d.transpose();
+                    }
+
+                    return 0.5 * c;
+            }
+
             template<typename _State, int _MeasurementRows, typename _SigmaPoints, typename _Measurement>
             Eigen::Matrix<ScalarType, _State::DOF, _MeasurementRows>
             crossCovSigmaPoints(const _State &meanX, const _Measurement &meanZ,
@@ -617,6 +639,31 @@ namespace localization
                             for (;Zi != Z.end(); ++Xi, ++Zi)
                             {
                                     c += (*Xi - meanX) * (*Zi - meanZ).transpose();
+                            }
+                    }
+
+                    return 0.5 * c;
+            }
+
+            template<typename _State, typename _SigmaPoints>
+            Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>
+            crossCovSigmaPoints(const _State &meanX, const Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &meanZ,
+                                const _SigmaPoints &X, const std::vector< Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> > &Z) const
+            {
+                    assert(X.size() == Z.size());
+
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> CrossCov;
+
+                    CrossCov c(mu_state.getDOF(), meanZ.size());
+                    c.setZero();
+
+                    {
+                            typename _SigmaPoints::const_iterator Xi = X.begin();
+                            typename std::vector< Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> >::const_iterator Zi = Z.begin();
+                            for (;Zi != Z.end(); ++Xi, ++Zi)
+                            {
+                                    _State tempXi (*Xi - meanX);
+                                    c += tempXi.getVectorizedState() * (*Zi - meanZ).transpose();
                             }
                     }
 
