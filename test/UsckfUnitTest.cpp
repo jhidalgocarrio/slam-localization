@@ -170,44 +170,60 @@ BOOST_AUTO_TEST_CASE( OPERATIONS )
 
 BOOST_AUTO_TEST_CASE( USCKF )
 {
+    WAugmentedState vstate;
+    WSingleState state_single;
+
+    std::cout<<"[USCKF] state_single: "<<state_single<<"\n";
+
+    const double dt = 0.01; /** 100Hz */
+
+    /** Initial covariance matrix **/
+    StateFilter::SingleStateCovariance P0_single;
+    P0_single = 0.0025 * StateFilter::SingleStateCovariance::Identity();
+
+    std::cout<<"[USCKF] P0_single is of size "<<P0_single.rows() <<" x "<<P0_single.cols()<<std::endl;
+    std::cout<<"[USCKF] P0_single:\n"<<P0_single<<std::endl;
+
+    StateFilter filter(static_cast<const WSingleState> (state_single), static_cast<const StateFilter::SingleStateCovariance> (P0_single));
+
+    std::cout<<"[USCKF] filter state: "<<filter.muState()<<"\n";
+    std::cout<<"[USCKF] P0 is of size "<<filter.PkAugmentedState().rows() <<" x "<<filter.PkAugmentedState().cols()<<std::endl;
+    std::cout<<"[USCKF] P0:\n"<<filter.PkAugmentedState()<<std::endl;
+
+    /** First Measurements **/
     localization::MeasurementType featuresVO, featuresICP;
     featuresVO.resize(3,1);
     featuresVO<<3.34, 3.34, 3.34;
     featuresICP.resize(9,1);
     featuresICP<<1.34, 1.34, 1.34, 1.34,1.34, 1.34, 1.34, 1.34, 1.34;
 
-    WAugmentedState vstate;
-    vstate.featuresk = featuresVO;
-    vstate.featuresk_l = featuresICP;
+    Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, Eigen::Dynamic> featuresVOCov, featuresICPCov;
+    featuresVOCov.resize(featuresVO.size(), featuresVO.size());
+    featuresVOCov.setIdentity(); featuresVOCov = 0.008 * featuresVOCov;
+    featuresICPCov.resize(featuresICP.size(), featuresICP.size());
+    featuresICPCov.setIdentity(); featuresICPCov = 0.008 * featuresICPCov;
 
-    std::cout<<"[USCKF] vstate: "<<vstate<<"\n";
+    filter.setMeasurement<localization::MeasurementType, Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, Eigen::Dynamic> >(localization::STATEK, featuresVO, featuresVOCov);
 
-    const double dt = 0.01; /** 100Hz */
+    std::cout<<"[USCKF] filter state: "<<filter.muState()<<"\n";
+    std::cout<<"[USCKF] P0 is of size "<<filter.PkAugmentedState().rows() <<" x "<<filter.PkAugmentedState().cols()<<std::endl;
+    std::cout<<"[USCKF] P0:\n"<<filter.PkAugmentedState()<<std::endl;
 
-    /** Initial covariance matrix **/
-    StateFilter::AugmentedStateCovariance P0;
-    StateFilter::MultiStateCovariance P0_states;
+    filter.setMeasurement<localization::MeasurementType, Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, Eigen::Dynamic> >(localization::STATEK_L, featuresICP, featuresICPCov);
 
-    MTK::subblock (P0_states, &WAugmentedState::statek, &WAugmentedState::statek) = 0.0025 * StateFilter::SingleStateCovariance::Identity();
-    MTK::subblock (P0_states, &WAugmentedState::statek_l, &WAugmentedState::statek_l) = 0.0035 * StateFilter::SingleStateCovariance::Identity();
-    MTK::subblock (P0_states, &WAugmentedState::statek_i, &WAugmentedState::statek_i) = 0.0045 * StateFilter::SingleStateCovariance::Identity();
+    std::cout<<"[USCKF] filter state: "<<filter.muState()<<"\n";
+    std::cout<<"[USCKF] P0 is of size "<<filter.PkAugmentedState().rows() <<" x "<<filter.PkAugmentedState().cols()<<std::endl;
+    std::cout<<"[USCKF] P0:\n"<<filter.PkAugmentedState()<<std::endl;
 
-    MTK::subblock (P0_states, &WAugmentedState::statek, &WAugmentedState::statek_l) = 0.0011 * StateFilter::SingleStateCovariance::Identity();
-    MTK::subblock (P0_states, &WAugmentedState::statek, &WAugmentedState::statek_i) = 0.0012 * StateFilter::SingleStateCovariance::Identity();
-    MTK::subblock (P0_states, &WAugmentedState::statek_l, &WAugmentedState::statek) = MTK::subblock (P0_states, &WAugmentedState::statek, &WAugmentedState::statek_l);
-    MTK::subblock (P0_states, &WAugmentedState::statek_i, &WAugmentedState::statek) = MTK::subblock (P0_states, &WAugmentedState::statek, &WAugmentedState::statek_i);
+    featuresVO<<3.35, 3.35, 3.35;
+    featuresVOCov.setIdentity(); featuresVOCov = 0.05 * featuresVOCov;
 
-    MTK::subblock (P0_states, &WAugmentedState::statek_l, &WAugmentedState::statek_i) = 0.0021 * StateFilter::SingleStateCovariance::Identity();
-    MTK::subblock (P0_states, &WAugmentedState::statek_i, &WAugmentedState::statek_l) = MTK::subblock (P0_states, &WAugmentedState::statek_l, &WAugmentedState::statek_i);
+    filter.setMeasurement<localization::MeasurementType, Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, Eigen::Dynamic> >(localization::STATEK, featuresVO, featuresVOCov);
 
-    P0.resize(vstate.getDOF(), vstate.getDOF());
-    P0.block(0, 0, P0_states.rows(), P0_states.cols()) = P0_states;
+    std::cout<<"[USCKF] filter state: "<<filter.muState()<<"\n";
+    std::cout<<"[USCKF] P0 is of size "<<filter.PkAugmentedState().rows() <<" x "<<filter.PkAugmentedState().cols()<<std::endl;
+    std::cout<<"[USCKF] P0:\n"<<filter.PkAugmentedState()<<std::endl;
 
-    //std::cout<<"[USCKF] P0_states:\n"<<P0_states<<std::endl;
-    std::cout<<"[USCKF] P0 is of size "<<P0.rows() <<" x "<<P0.cols()<<std::endl;
-    std::cout<<"[USCKF] P0_states is of size "<<P0_states.rows() <<" x "<<P0_states.cols()<<std::endl;
-
-    StateFilter filter(static_cast<const WAugmentedState> (vstate), static_cast<const StateFilter::AugmentedStateCovariance> (P0));
 
     /***************************/
     /** PROPAGATION / PREDICT **/
@@ -243,9 +259,20 @@ BOOST_AUTO_TEST_CASE( USCKF )
 
     /** Measurement **/
     Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, 1> measurementVO;
-    measurementVO.resize(featuresVO.size(), 1);
-    measurementVO<<2.33, 3.35, 3.35;
-    std::cout<<"[USCKF] Measurement: "<<measurementVO<<"\n";
+    std::vector< Eigen::Matrix<double, 3, 1> > vector_featuresVO;
+    vector_featuresVO.resize(1);
+    vector_featuresVO[0]<<2.33, 3.35, 3.35;
+    measurementVO.resize(vector_featuresVO[0].rows()*vector_featuresVO.size(), 1);
+    measurementVO.setZero();
+    std::cout<<"[USCKF] MeasurementVO size is "<<measurementVO.size()<<"\n";
+    register int k = 0;
+    for (register size_t i=0; i<vector_featuresVO.size(); ++i)
+    {
+        measurementVO.block(0+k, 0, vector_featuresVO[i].rows(), vector_featuresVO[i].cols()) = vector_featuresVO[i];
+        k=k+vector_featuresVO[i].rows();
+    }
+
+    std::cout<<"[USCKF] Measurement:\n"<<measurementVO<<"\n";
     Eigen::Matrix<StateFilter::ScalarType, Eigen::Dynamic, Eigen::Dynamic> measurementNoiseVO;
     measurementNoiseVO.resize(measurementVO.size(), measurementVO.size());
     measurementNoiseVO.setIdentity();
