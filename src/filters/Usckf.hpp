@@ -304,11 +304,23 @@ namespace localization
                             mu_state = mu_state + innovation_state;
                     }
 
-                    //#ifdef USCKF_DEBUG_PRINTS
+                    #ifdef USCKF_DEBUG_PRINTS
                     std::cout << "[USCKF_UPDATE] innovation:" << std::endl << innovation << std::endl;
                     std::cout << "[USCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
-                    //#endif
+                    #endif
             }
+
+            template<typename _Measurement, typename _MeasurementModelMatrix,
+                    typename _MeasurementNoiseCovariance>
+            void updateEKF(const _Measurement &z, _MeasurementModelMatrix &H,
+                        _MeasurementNoiseCovariance &R)
+            {
+                typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> XStart;
+
+                XStart x_start; x_start.resize(mu_state.getDOF() + z.size(), 1);
+                std::cout << "[EKF_UPDATE] x_start is of size " << x_start.size()  << std::endl;
+            }
+
 
             template<typename _Measurement, typename _MeasurementNoiseCovariance>
             void setMeasurement(CloningMode mode, _Measurement &z_k_i, _MeasurementNoiseCovariance R)

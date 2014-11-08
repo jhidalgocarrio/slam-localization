@@ -35,7 +35,6 @@ namespace localization
 {
     // We can't use types having a comma inside AutoConstruct macros :(
     typedef ::MTK::vect<3, double> vec3;
-    typedef ::MTK::vect<Eigen::Dynamic, double> MeasurementType;
     typedef ::MTK::SO3<double> SO3;
 //    typedef std::vector<vec3> featureType;
 //    MTK_DEFINE_FEATURE_TYPE(vec3)
@@ -147,15 +146,18 @@ namespace localization
         }
     };
 
+    template < int _MeasurementDimension >
     struct AugmentedState
     {
         typedef AugmentedState self;
 
+        typedef ::MTK::vect<_MeasurementDimension, double> MeasurementType;
+
         ::MTK::SubManifold<State, 0> statek; /** Oldest pose state(when first exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + 0> statek_l; /** Pose state (when second exteroceptive measurement was taken) */
         ::MTK::SubManifold<State, State::DOF + State::DOF + 0> statek_i; /** Current Pose state (update to the proprioceptive measurements) */
-        localization::MeasurementType featuresk; /** Features of the measurement have taken at t=k */
-        localization::MeasurementType featuresk_l; /** Features of the measurement have taken at t=k+l */
+        MeasurementType featuresk; /** Features of the measurement have taken at t=k */
+        MeasurementType featuresk_l; /** Features of the measurement have taken at t=k+l */
 
         enum
         {
