@@ -3,6 +3,7 @@ set (LOCALIZATION_SRCS
     )
 
 set (LOCALIZATION_HDRS
+    Configuration.hpp
     core/DataModel.hpp
     core/DeadReckon.hpp
     core/Types.hpp
