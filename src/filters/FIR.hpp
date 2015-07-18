@@ -4,8 +4,6 @@
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Cholesky> /** For the Cholesky decomposition **/
 
-#include <localization/tools/Util.hpp> /**Helper class **/
-
 //#define FIR_DEBUG_PRINTS 1
 
 namespace localization
@@ -110,7 +108,7 @@ namespace localization
             {
 
                 /** Check if NaN values in the matrix **/
-                if (!Util::isnotnan(dataCov))
+                if (!base::isnotnan(dataCov))
                 {
                     #ifdef FIR_DEBUG_PRINTS
                     std::cout<<"[FIR] dataCov has NaN values\n";

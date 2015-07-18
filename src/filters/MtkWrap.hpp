@@ -117,6 +117,81 @@ namespace  localization
     };
 
     /**
+     * MtkMultiState<M> wraps an MTK-Manifold M to a usckf-compatible manifold.
+     * M has to have an enum DOF and implement the methods boxplus and boxminus.
+     */
+    template<class M>
+    struct MtkMultiStateWrap : public M
+    {
+            typedef MtkMultiStateWrap<M> self;
+    public:
+            typedef typename M::scalar scalar_type;
+            typedef typename M::VectorizedMode VectorizedMode;
+
+
+            typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> vectorized_type;
+
+            MtkMultiStateWrap(const M &m=M()) : M(m) {}
+
+            self& operator=(const self &state)
+            {
+                    this->statek = state.statek;
+                    this->sensorsk = state.sensorsk;
+                    return *this;
+            }
+
+            /*
+             * manifold operator (+)
+             *
+             */
+            self& operator+=(const self &delta_state)
+            {
+                    assert(delta_state.getDOF() == M::getDOF());
+
+                    M state; state = delta_state;
+                    M::boxplus(state);
+                    return *this;
+            }
+
+            const self operator+(const self &delta_state) const
+            {
+                    self result = *this;
+                    result += delta_state;
+
+                    return result;
+            }
+
+            /*
+             * manifold operator (-)
+             */
+            const self operator-(const self &other) const
+            {
+                    M result;
+                    assert(other.getDOF()==M::getDOF());
+
+                    /** Perform operation **/
+                    M::boxminus(result, other);
+
+                    return result;
+            }
+
+
+            bool operator==(const self &other) const
+            {
+                    vectorized_type diff = (*this) - other;
+                    return diff.isZero(1e-12);
+            }
+
+            bool operator!=(const self &other) const
+            {
+                    return !(*this == other);
+            }
+
+    public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    };
+
+    /**
      * MtkDynamicWrap<M> wraps an MTK-Manifold M to a usckf-compatible manifold.
      * M has to have an enum DOF and implement the methods boxplus and boxminus.
      */

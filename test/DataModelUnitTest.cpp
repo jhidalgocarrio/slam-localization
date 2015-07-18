@@ -4,7 +4,6 @@
 /** Library **/
 #include <localization/Configuration.hpp> /** Constant values of the library */
 #include <localization/core/DataModel.hpp> /** Data Model using Gaussian pdf **/
-#include <localization/tools/Util.hpp> /** Util function for localization **/
 
 /** Eigen **/
 #include <Eigen/Core> /** Core */

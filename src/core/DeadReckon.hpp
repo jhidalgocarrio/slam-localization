@@ -12,8 +12,6 @@
 #include <localization/core/Transform.hpp> /** Envire module which has transformation with uncertainty **/
 #include <localization/Configuration.hpp> /** For the localization framework constant and configuration values **/
 
-#include <localization/tools/Util.hpp> /**Helper class of the framework **/
-
 //#define DEAD_RECKON_DEBUG_PRINTS 1
 
 namespace localization	
@@ -160,7 +158,7 @@ namespace localization
             deltaPose.orientation = updateAttitude(delta_t, angularVelocities, angularVelCov);
 
             /** Set the uncertainty matrices **/
-            if (Util::isnotnan(cartesianVelCov))
+            if (base::isnotnan(cartesianVelCov))
             {
                 //deltaPose.cov_position <<  1.38911051e-04,   5.85928263e-08,  3.73528732e-05,
                 //                           5.85928263e-08,   1.39249391e-04,   2.03173653e-08,
@@ -322,7 +320,7 @@ namespace localization
             }
 
             /** Guarantee SPD covariance **/
-            localization::Util::guaranteeSPD(postCov);
+            base::guaranteeSPD(postCov);
 
             return;
         }

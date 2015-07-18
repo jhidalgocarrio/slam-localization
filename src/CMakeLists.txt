@@ -8,8 +8,8 @@ set (LOCALIZATION_HDRS
     core/DeadReckon.hpp
     core/Types.hpp
     core/Transform.hpp
-    tools/Util.hpp
     tools/Analysis.hpp
+    filters/Msckf.hpp
     filters/Usckf.hpp
     filters/UsckfError.hpp
     filters/MtkWrap.hpp

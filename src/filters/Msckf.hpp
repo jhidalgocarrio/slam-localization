@@ -1,5 +1,5 @@
-#ifndef _USCKF_HPP_
-#define _USCKF_HPP_
+#ifndef _MSCKF_HPP_
+#define _MSCKF_HPP_
 
 /** Standard libraries **/
 #include <vector> /** std::vector */
@@ -28,78 +28,57 @@
 /** MTK's pose and orientation definition **/
 #include <mtk/startIdx.hpp>
 
-//#define USCKF_DEBUG_PRINTS 1
+#define MSCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
 
-    /** Different cloning mechanism **/
-    enum CloningMode
+    template <typename _MultiState, typename _SingleState>
+    class Msckf
     {
-        STATEK = 1,
-        STATEK_L = 2,
-        STATEK_I = 3
-    };
-
-    template <typename _AugmentedState, typename _SingleState>
-    class Usckf
-    {
-        typedef Usckf self;
+        typedef Msckf self;
 
         public:
             enum
             {
-                    DOF_AUGMENTED_STATE = _AugmentedState::DOF
+                    DOF_MULTI_STATE = _MultiState::DOF
             };
+
             enum
             {
-                    DOF_SINGLE_STATE = _SingleState::DOF
+                    DOF_SINGLE_STATE = _MultiState::SingleState::DOF
+            };
+
+            enum
+            {
+                    SENSOR_DOF = _MultiState::SENSOR_DOF
             };
 
 
-            typedef typename _AugmentedState::scalar_type ScalarType;
 
-            /** Types related to Single State **/
+            typedef typename _MultiState::scalar_type ScalarType;
+
+            /** Types related to State **/
+            typedef typename _MultiState::vectorized_type VectorizedMultiState;
+            typedef Eigen::Matrix<ScalarType, int(_MultiState::DOF), int(_MultiState::DOF)> MultiStateCovariance;
+            typedef std::vector<_MultiState> MultiStateSigma;
+
+
             typedef typename _SingleState::vectorized_type VectorizedSingleState;
             typedef Eigen::Matrix<ScalarType, int(_SingleState::DOF), int(_SingleState::DOF)> SingleStateCovariance;
             typedef std::vector<_SingleState> SingleStateSigma;
 
-            /** Types related to Augmented State **/
-            typedef typename _AugmentedState::vectorized_type VectorizedAugmentedState;
-            typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> AugmentedStateCovariance;
-            typedef std::vector<_AugmentedState> AugmentedStateSigma;
-
-            /** Covariance only for the multi-state part **/
-            typedef Eigen::Matrix<ScalarType, int(_AugmentedState::DOF), int(_AugmentedState::DOF)> MultiStateCovariance;
-
         private:
 
-            _AugmentedState mu_state; /** Mean of the state vector **/
-            AugmentedStateCovariance Pk; /** Covariance of the State vector **/
+            _MultiState mu_state; /** Mean of the state and sensors pose vector **/
+            MultiStateCovariance Pk; /** Covariance of the State and sensor vector **/
 
         public:
             /**@brief Constructor
              */
-            Usckf(const _AugmentedState &state, const AugmentedStateCovariance &P0)
+            Msckf(const _MultiState &state, const MultiStateCovariance &P0)
                 : mu_state(state), Pk(P0)
             {
-            }
-
-            /**@brief Constructor
-             */
-            Usckf(const _SingleState &single_state, const SingleStateCovariance &P0_single)
-            {
-                mu_state.statek_i = single_state;
-                MultiStateCovariance Pk_states;
-                Pk_states.setZero();
-                MTK::subblock (Pk_states, &_AugmentedState::statek_i) = P0_single;
-                Pk = Pk_states;
-
-                /** Clone the state k+l = k+i **/
-                this->cloning(STATEK_I);
-
-                /** Clone the state k = k+l **/
-                this->cloning(STATEK_L);
             }
 
             /**@brief Filter prediction step
@@ -114,20 +93,19 @@ namespace localization
             void predict(_ProcessModel f, _ProcessNoiseCovariance Q)
             {
                 /** Get the current state vector to propagate **/
-                _SingleState statek_i = mu_state.statek_i;
-                MultiStateCovariance Pk_states(Pk.block(0, 0, Pk_states.rows(), Pk_states.cols()));
-                SingleStateCovariance Pk_i = MTK::subblock (Pk_states, &_AugmentedState::statek_i);
+                _SingleState statek_i = this->mu_state.statek;
+                SingleStateCovariance Pk_i = MTK::subblock (this->Pk, &_MultiState::statek);
 
-                #ifdef USCKF_DEBUG_PRINTS
-                std::cout<<"[USCKF_PREDICT] statek_i(k|k):\n"<<statek_i<<"\n";
-                std::cout<<"[USCKF_PREDICT] Pk_i(k|k):\n"<<Pk_i<<"\n";
+                #ifdef MSCKF_DEBUG_PRINTS
+                std::cout<<"[MSCKF_PREDICT] statek_i(k|k):\n"<<statek_i<<"\n";
+                std::cout<<"[MSCKF_PREDICT] Pk_i(k|k):\n"<<Pk_i<<"\n";
                 #endif
 
                 /** Propagation only uses the current state (DOF_SINGLE_STATE dimension ) **/
                 SingleStateSigma X(2 * DOF_SINGLE_STATE + 1);
 
                 /** Generates the sigma Points of a Single State **/
-                generateSigmaPoints(statek_i, Pk_i, X);
+                this->generateSigmaPoints(statek_i, Pk_i, X);
 
                 /** Create a copy before the transformation **/
                 SingleStateSigma XCopy(2 * DOF_SINGLE_STATE + 1);
@@ -140,21 +118,21 @@ namespace localization
                 /** Apply the non-linear transformation of the process model **/
                 std::transform(X.begin(), X.end(), X.begin(), f);
 
-                #ifdef USCKF_DEBUG_PRINTS
-                printSigmaPoints<SingleStateSigma>(X);
+                #ifdef MSCKF_DEBUG_PRINTS
+                //this->printSigmaPoints<SingleStateSigma>(X);
                 #endif
 
                 /** Compute the mean **/
-                mu_state.statek_i = meanSigmaPoints(X);
+                this->mu_state.statek = this->meanSigmaPoints(X);
 
                 /** Compute the cross-covariance matrix (cross because is between X and X before the transform) **/
                 SingleStateCovariance Pxy;
-                Pxy = crossCovSigmaPoints<_SingleState, _SingleState::DOF, SingleStateSigma,
-                    _SingleState> (statek_i, mu_state.statek_i, XCopy, X);
+                Pxy = this->crossCovSigmaPoints<_SingleState, DOF_SINGLE_STATE, SingleStateSigma, _SingleState>
+                    (statek_i, mu_state.statek, XCopy, X);
                 SingleStateCovariance Fk = Pxy.transpose()*Pk_i.inverse(); // Fk = Pyx * (Pk_i)^-1
 
-                #ifdef USCKF_DEBUG_PRINTS
-                std::cout<<"[USCKF_PREDICT] Fk:\n"<< Fk << std::endl;
+                #ifdef MSCKF_DEBUG_PRINTS
+                std::cout<<"[MSCKF_PREDICT] Fk:\n"<< Fk << std::endl;
                 #endif
 
                 /*************************/
@@ -166,8 +144,8 @@ namespace localization
                 /** Just for debugging purpose print **/
                 /** Pyy =  Fk*Pk_i*Fk^T and  Pk_i = Pyy+Q **/
                 /** After propagation/prediction, which means Pyy+Q = P(k+1|k) **/
-                #ifdef USCKF_DEBUG_PRINTS
-                std::cout<<"[USCKF_PREDICT] Fk*Pk_i*Fk^T + Qk:\n"<< Fk*Pk_i*Fk.transpose() + Qk<< std::endl;
+                #ifdef MSCKF_DEBUG_PRINTS
+                std::cout<<"[MSCKF_PREDICT] Fk*Pk_i*Fk^T + Qk:\n"<< Fk*Pk_i*Fk.transpose() + Qk<< std::endl;
                 #endif
 
                 /************************/
@@ -175,71 +153,31 @@ namespace localization
                 /************************/
 
                 /** Compute the Process model Covariance **/
-                Pk_i = covSigmaPoints<_SingleState::DOF, _SingleState>(mu_state.statek_i, X) + Qk;
+                Pk_i = this->covSigmaPoints<DOF_SINGLE_STATE, _SingleState>(mu_state.statek, X) + Qk;
 
-                /** Store the subcovariance matrix for statek_i **/
-                MTK::subblock (Pk_states, &_AugmentedState::statek_i) = Pk_i;
-
-                /** Compute the Cross Cov for the Copy States of the AugmentedState **/
-                SingleStateCovariance Pkkk;
+                /** Store the subcovariance matrix for statek **/
+                MTK::subblock (this->Pk, &_MultiState::statek) = Pk_i;
 
                 /*******************************/
                 /**  Cross-Covariance Matrix  **/
                 /*******************************/
 
-                /** Covariance between state(k) and state(k+i), Pk|k+i**/
-                Pkkk = MTK::subblock (Pk_states, &_AugmentedState::statek, &_AugmentedState::statek_i);
-                Pkkk = Pkkk * Fk.transpose();
-                MTK::subblock (Pk_states, &_AugmentedState::statek, &_AugmentedState::statek_i) = Pkkk;
+                Eigen::Matrix<ScalarType, _SingleState::DOF, _MultiState::SENSOR_DOF> Pkk;
 
-                /** Covariance between state(k+l) and state(k+i), Pk+l|k+i **/
-                Pkkk = MTK::subblock (Pk_states, &_AugmentedState::statek_l, &_AugmentedState::statek_i);
-                Pkkk = Pkkk * Fk.transpose();
-                MTK::subblock (Pk_states, &_AugmentedState::statek_l, &_AugmentedState::statek_i) = Pkkk;
+                /** Covariance between state and sensor poses **/
+                Pkk = Pk.template block<_SingleState::DOF, _MultiState::SENSOR_DOF>(0, _SingleState::DOF);
+                Pkk = Fk * Pkk;
+                Pk.template block<_SingleState::DOF, _MultiState::SENSOR_DOF>(0, _SingleState::DOF) = Pkk;
 
-                /** Covariance between state(k+i) and state(k), Pk+i|k **/
-                Pkkk = MTK::subblock (Pk_states, &_AugmentedState::statek_i, &_AugmentedState::statek);
-                Pkkk = Fk * Pkkk;
-                MTK::subblock (Pk_states, &_AugmentedState::statek_i, &_AugmentedState::statek) = Pkkk;
+                /** Covariance between sensor poses and state **/
+                Pkk.transpose() = Pk.template block<_MultiState::SENSOR_DOF,_SingleState::DOF>(_SingleState::DOF, 0);
+                Pkk.transpose() = Pkk.transpose() * Fk.transpose();
+                Pk.template block<_MultiState::SENSOR_DOF, _SingleState::DOF>(_SingleState::DOF, 0) = Pkk.transpose();
 
-                /** Covariance between state(k+i) and state(k+l), Pk+i|Pk+l **/
-                Pkkk = MTK::subblock (Pk_states, &_AugmentedState::statek_i, &_AugmentedState::statek_l);
-                Pkkk = Fk * Pkkk;
-                MTK::subblock (Pk_states, &_AugmentedState::statek_i, &_AugmentedState::statek_l) = Pkkk;
-
-                /** Store the Pk_states into the complete Pk **/
-                Pk.block(0, 0, Pk_states.rows(), Pk_states.cols()) = Pk_states;
-
-                /*******************/
-                /** Cross-Covariance with the features (Dynamic size part of the state vector) **/
-                /*******************/
-
-                Eigen::Matrix<ScalarType, _SingleState::DOF, Eigen::Dynamic> Pzk, Pzkl;
-                Pzk.resize(_SingleState::DOF, mu_state.featuresk.size());
-                Pzkl.resize(_SingleState::DOF, mu_state.featuresk_l.size());
-
-                /** Covariance between state(k+i) and features(k), Px_(k+i),z_k **/
-                Pzk = Pk.block(_AugmentedState::DOF-_SingleState::DOF, _AugmentedState::DOF, Pzk.rows(), Pzk.cols());
-                Pzk = Fk * Pzk;
-                Pk.block(_AugmentedState::DOF-_SingleState::DOF, _AugmentedState::DOF, Pzk.rows(), Pzk.cols()) = Pzk;
-
-                /** Covariance between features(k) and state(k+i), Pz_(k),x_(k+i) **/
-                Pk.block(_AugmentedState::DOF, _AugmentedState::DOF-_SingleState::DOF, Pzk.cols(), Pzk.rows()) = Pzk.transpose();
-
-                /** Covariance between state(k+i) and features(k+l), Px_(k+i),z_(k+l) **/
-                Pzkl = Pk.block(_AugmentedState::DOF-_SingleState::DOF, _AugmentedState::DOF+Pzk.cols(), Pzkl.rows(), Pzkl.cols());
-                Pzkl = Fk * Pzkl;
-                Pk.block(_AugmentedState::DOF-_SingleState::DOF, _AugmentedState::DOF+Pzk.cols(), Pzkl.rows(), Pzkl.cols()) = Pzkl;
-
-                /** Covariance between features(k+l) and state(k+i), Pz_(k+l),x_(k+i)**/
-                Pk.block(_AugmentedState::DOF+Pzk.transpose().rows(), _AugmentedState::DOF-_SingleState::DOF, Pzkl.cols(), Pzkl.rows()) = Pzkl.transpose();
-
-                /** No cross-Covariance across measurements **/
-
-                #ifdef  USCKF_DEBUG_PRINTS
-                std::cout << "[USCKF_PREDICT] statek_i(k+1|k):" << std::endl << mu_state.statek_i << std::endl;
-                std::cout << "[USCKF_PREDICT] Pk(k+1|k):"<< std::endl << Pk_i << std::endl;
-                std::cout << "[USCKF_PREDICT] Process Noise Cov Q(k):"<< std::endl << Q() << std::endl;
+                #ifdef  MSCKF_DEBUG_PRINTS
+                std::cout << "[MSCKF_PREDICT] statek_i(k+1|k):" << std::endl << mu_state.statek << std::endl;
+                std::cout << "[MSCKF_PREDICT] Pk(k+1|k):"<< std::endl << Pk_i << std::endl;
+                std::cout << "[MSCKF_PREDICT] Process Noise Cov Q(k):"<< std::endl << Q() << std::endl;
                 #endif
             }
 
@@ -265,14 +203,14 @@ namespace localization
                     const static int measurement_rows = ukfom::dof<_Measurement>::value;
                     typedef _Measurement Measurement;
                     typedef Eigen::Matrix<ScalarType, measurement_rows, 1> VectorizedMeasurement;
-                    typedef std::vector<Measurement> measurement_vector;
                     typedef Eigen::Matrix<ScalarType, measurement_rows, measurement_rows> MeasurementCov;
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, measurement_rows> CrossCov;
 
-                    AugmentedStateSigma X(2 * mu_state.getDOF() + 1);
-                    VectorizedAugmentedState mu_delta(mu_state.getDOF(), 1);
+                    MultiStateSigma X(2 * mu_state.getDOF() + 1);
+                    this->generateSigmaPoints(mu_state, Pk, X);
+
+                    VectorizedMultiState mu_delta(mu_state.getDOF(), 1);
                     mu_delta.setZero();
-                    generateSigmaPoints(mu_state, mu_delta, Pk, X);
 
                     std::vector<Measurement> Z(X.size());
                     std::transform(X.begin(), X.end(), Z.begin(), h);
@@ -296,246 +234,70 @@ namespace localization
                             Pk -= K * S * K.transpose();
                             //applyDelta(K * innovation);
                             std::cout<<"K "<<K.rows() <<" x "<<K.cols()<<"\n";
-                            _AugmentedState innovation_state;
+                            _MultiState innovation_state;
                             innovation_state.set(K * innovation, mu_state.featuresk.size(), mu_state.featuresk_l.size());
                             mu_state = mu_state + innovation_state;
                     }
 
-                    #ifdef USCKF_DEBUG_PRINTS
-                    std::cout << "[USCKF_UPDATE] innovation:" << std::endl << innovation << std::endl;
-                    std::cout << "[USCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
+                    #ifdef MSCKF_DEBUG_PRINTS
+                    std::cout << "[MSCKF_UPDATE] innovation:" << std::endl << innovation << std::endl;
+                    std::cout << "[MSCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
                     #endif
             }
 
-            template<typename _Measurement, typename _MeasurementModelMatrix,
-                    typename _MeasurementNoiseCovariance>
-            void updateEKF(const _Measurement &z, _MeasurementModelMatrix &H,
-                        _MeasurementNoiseCovariance &R)
-            {
-                typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> XStart;
 
-                XStart x_start; x_start.resize(mu_state.getDOF() + z.size(), 1);
-                std::cout << "[EKF_UPDATE] x_start is of size " << x_start.size()  << std::endl;
+            void muSingleState(const _SingleState & state)
+            {
+                mu_state.statek = state;
             }
 
-
-            template<typename _Measurement, typename _MeasurementNoiseCovariance>
-            void setMeasurement(CloningMode mode, _Measurement &z_k_i, _MeasurementNoiseCovariance R)
+            _SingleState muSingleState()
             {
-                assert (z_k_i.size() == R.rows());
-
-                assert (z_k_i.size() == R.cols());
-
-                MultiStateCovariance Pk_states(Pk.block(0, 0, Pk_states.rows(), Pk_states.cols()));
-
-                if (mode == STATEK)
-                {
-
-                    /** Push a new set of features measurements **/
-                    mu_state.featuresk = z_k_i;
-                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> Pz_l;
-
-                    /** Covariance for the features that stay. This is features(k+l) **/
-                    if (mu_state.featuresk_l.size() > 0)
-                    {
-                        Pz_l.resize(mu_state.featuresk_l.size(), mu_state.featuresk_l.size());
-                        Pz_l = Pk.block(_AugmentedState::DOF+mu_state.featuresk.size(), _AugmentedState::DOF+mu_state.featuresk.size(), mu_state.featuresk_l.size(), mu_state.featuresk_l.size());
-                    }
-
-                    /** Resize the process state covariance matrix to the new dimension **/
-                    Pk.resize(_AugmentedState::DOF + mu_state.featuresk.size() + mu_state.featuresk_l.size(),
-                        _AugmentedState::DOF + mu_state.featuresk.size() + mu_state.featuresk_l.size());
-                    Pk.setZero();
-
-                    /** Set the block for the state|measurement z(k) cross covariance matrices with the states **/
-                    Pk.block(0, _AugmentedState::DOF, _AugmentedState::DOF, mu_state.featuresk.size()).setZero();
-                    Pk.block(_AugmentedState::DOF, 0, mu_state.featuresk.size(), _AugmentedState::DOF).setZero();
-                    Pk.block(_AugmentedState::DOF, _AugmentedState::DOF, mu_state.featuresk.size(), mu_state.featuresk.size()) = R;
-                    if (mu_state.featuresk_l.size() > 0)
-                        Pk.block(_AugmentedState::DOF+ mu_state.featuresk.size(), _AugmentedState::DOF+ mu_state.featuresk.size(), mu_state.featuresk_l.size(), mu_state.featuresk_l.size()) = Pz_l;
-
-                }
-                else if (mode == STATEK_L)
-                {
-
-                    /** Push a new set of features measurements **/
-                    mu_state.featuresk_l = z_k_i;
-                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> Pz_k;
-
-                    /** Covariance for the features that stay. This is features(k) **/
-                    if (mu_state.featuresk.size() > 0)
-                    {
-                        Pz_k.resize(mu_state.featuresk.size(), mu_state.featuresk.size());
-                        Pz_k = Pk.block(_AugmentedState::DOF, _AugmentedState::DOF, mu_state.featuresk.size(), mu_state.featuresk.size());
-                    }
-
-
-                    /** Resize the process state covariance matrix to the new dimension **/
-                    Pk.resize(_AugmentedState::DOF + mu_state.featuresk.size() + mu_state.featuresk_l.size(),
-                        _AugmentedState::DOF + mu_state.featuresk.size() + mu_state.featuresk_l.size());
-                    Pk.setZero();
-
-                    /** Set the block for the state|measurement z(k) cross covariance matrices with the states **/
-                    Pk.block(0, _AugmentedState::DOF+mu_state.featuresk.size(), _AugmentedState::DOF, mu_state.featuresk_l.size()).setZero();
-                    Pk.block(_AugmentedState::DOF+mu_state.featuresk.size(), 0, mu_state.featuresk_l.size(), _AugmentedState::DOF).setZero();
-                    Pk.block(_AugmentedState::DOF+ mu_state.featuresk.size(), _AugmentedState::DOF+ mu_state.featuresk.size(), mu_state.featuresk_l.size(), mu_state.featuresk_l.size()) = R;
-                    if (mu_state.featuresk.size() > 0)
-                        Pk.block(_AugmentedState::DOF, _AugmentedState::DOF, mu_state.featuresk.size(), mu_state.featuresk.size()) = Pz_k;
-
-                }
-
-                /** The covariance for the states **/
-                Pk.block(0, 0, Pk_states.rows(), Pk_states.cols()) = Pk_states;
-            }
-
-            void cloning(int mode)
-            {
-                SingleStateCovariance Pk_i, Pk_l;
-                MultiStateCovariance Pk_states(Pk.block(0, 0, Pk_states.rows(), Pk_states.cols()));
-
-
-                switch (mode)
-                {
-                case STATEK_I:
-                    /** Augmented state cloning, state k+l = state k+i**/
-                    mu_state.statek_l = mu_state.statek_i;
-
-                    /** Covariance state cloning, Pk+l = Pk+i, Pk+l|k+i = Pk+i, Pk+i|k+l = Pk+i **/
-                    Pk_i = MTK::subblock (Pk_states, &_AugmentedState::statek_i);
-                    MTK::subblock (Pk_states, &_AugmentedState::statek_l, &_AugmentedState::statek_l) = Pk_i;
-                    MTK::subblock (Pk_states, &_AugmentedState::statek_l, &_AugmentedState::statek_i) = Pk_i;
-                    MTK::subblock (Pk_states, &_AugmentedState::statek_i, &_AugmentedState::statek_l) = Pk_i;
-
-                    /** Covariance state cloning, Pk|k+l = Pk+l|k+i, Pk+i|k = Pk+i|k+l **/
-                    MTK::subblock (Pk_states, &_AugmentedState::statek, &_AugmentedState::statek_i).setZero();
-                    MTK::subblock (Pk_states, &_AugmentedState::statek_i, &_AugmentedState::statek).setZero();
-                    MTK::subblock (Pk_states, &_AugmentedState::statek, &_AugmentedState::statek_l).setZero();
-                    MTK::subblock (Pk_states, &_AugmentedState::statek_l, &_AugmentedState::statek).setZero();
-
-                    break;
-
-                case STATEK_L:
-                    /** Augmented state cloning, state k = state k+l **/
-                    mu_state.statek = mu_state.statek_l;
-
-                    /** Covariance state cloning, Pk = Pk+l, Pk|k+l = Pk+l, Pk+l|k = Pk+l **/
-                    Pk_l = MTK::subblock (Pk_states, &_AugmentedState::statek_l);
-                    MTK::subblock (Pk_states, &_AugmentedState::statek, &_AugmentedState::statek) = Pk_l;
-                    MTK::subblock (Pk_states, &_AugmentedState::statek, &_AugmentedState::statek_l) = Pk_l;
-                    MTK::subblock (Pk_states, &_AugmentedState::statek_l, &_AugmentedState::statek) = Pk_l;
-                    break;
-
-                default:
-                    break;
-                }
-
-                Pk.block(0, 0, Pk_states.rows(), Pk_states.cols()) = Pk_states;
-            }
-
-            void setSingleState(const _SingleState & state, int order = STATEK_I)
-            {
-                switch (order)
-                {
-                case STATEK_I:
-                    mu_state.statek_i = state;
-                    break;
-
-                case STATEK_L:
-                    mu_state.statek_l = state;
-                    break;
-
-                case STATEK:
-                    mu_state.statek_l = state;
-                    break;
-
-                default:
-                    break;
-                }
-
-            }
-
-            _SingleState muSingleState(int state = STATEK_I)
-            {
-                _SingleState statek_i;
-
-                switch(state)
-                {
-                case STATEK_I:
-                    statek_i = mu_state.statek_i;
-                    break;
-                case STATEK_L:
-                    statek_i =  mu_state.statek_l;
-                    break;
-                case STATEK:
-                    statek_i = mu_state.statek;
-                    break;
-                default:
-                    statek_i = mu_state.statek_i;
-                    break;
-                }
+                _SingleState statek_i = mu_state.statek;
 
                 return statek_i;
             }
 
-            void setPkSingleState(const SingleStateCovariance & Pk_i, int order = STATEK_I)
+            void setPkState(const SingleStateCovariance & Pk_i)
             {
-                switch (order)
-                {
-                case STATEK_I:
-                    MTK::subblock (Pk, &_AugmentedState::statek_i) = Pk_i;
-                    break;
-                default:
-                    break;
-                }
-
+                MTK::subblock (Pk, &_MultiState::statek) = Pk_i;
             }
 
-            SingleStateCovariance PkSingleState(int state = STATEK_I)
+            SingleStateCovariance getPkState()
             {
                 SingleStateCovariance Pk_i;
-                MultiStateCovariance Pk_states;
-                Pk_states = Pk.block(0, 0, Pk_states.rows(), Pk_states.cols());
-
-                switch(state)
-                {
-                case STATEK_I:
-                    Pk_i = MTK::subblock (Pk_states, &_AugmentedState::statek_i);
-                    break;
-                case STATEK_L:
-                    Pk_i = MTK::subblock (Pk_states, &_AugmentedState::statek_l);
-                    break;
-                case STATEK:
-                    Pk_i = MTK::subblock (Pk_states, &_AugmentedState::statek);
-                    break;
-                default:
-                    Pk_i = MTK::subblock (Pk_states, &_AugmentedState::statek_i);
-                    break;
-                }
+                Pk_i = Pk.block(0, 0, Pk_i.rows(), Pk_i.cols());
 
                 return Pk_i;
             }
 
-            const _AugmentedState& muState() const
+            const _MultiState& muState() const
             {
                 return mu_state;
             }
 
-            const AugmentedStateCovariance &PkAugmentedState() const
+            const MultiStateCovariance &getPk() const
             {
                 return Pk;
             }
 
     private:
+            /**@brief Sigma Point Calculation for the complete Multi State
+            */
+            void generateSigmaPoints(const _MultiState &mu, const MultiStateCovariance &sigma, MultiStateSigma &X) const
+            {
+                    generateSigmaPoints(mu, VectorizedMultiState::Zero(), sigma, X);
+            }
 
-            /**@brief Sigma Point Calculation for the complete Augmented State
+            /**@brief Sigma Point Calculation for the complete Multi State
              */
-            void generateSigmaPoints(const _AugmentedState &mu, const VectorizedAugmentedState &delta,
-                                    const AugmentedStateCovariance &sigma, AugmentedStateSigma &X) const
+            void generateSigmaPoints(const _MultiState &mu, const VectorizedMultiState &delta,
+                                    const MultiStateCovariance &sigma, MultiStateSigma &X) const
             {
                     assert(X.size() == static_cast<unsigned int> (2 * mu_state.getDOF() + 1));
 
-                    Eigen::LLT< AugmentedStateCovariance > lltOfSigma(sigma); // compute the Cholesky decomposition of A
-                    AugmentedStateCovariance L = lltOfSigma.matrixL(); // retrieve factor L  in the decomposition
+                    Eigen::LLT< MultiStateCovariance > lltOfSigma(sigma); // compute the Cholesky decomposition of A
+                    MultiStateCovariance L = lltOfSigma.matrixL(); // retrieve factor L  in the decomposition
 
                     /*std::cout << "L is of size "<<L.rows()<<" x "<<L.cols()<<"\n";
                     std::cout << ">> L" << std::endl
@@ -543,20 +305,15 @@ namespace localization
                                       << "<< L" << std::endl;
                      std::cout<<"L*L^T:\n"<< L * L.transpose()<<"\n";*/
 
-                    _AugmentedState delta_state;
-                    delta_state.set(delta, mu.featuresk.size(), mu.featuresk_l.size());
-
-                    X[0] = mu + delta_state;
+                    X[0] = mu + delta;
                     for (register unsigned int i = 1, j = 0; j < mu.getDOF(); ++j)
                     {
                             //std::cout << "L.col(" << j << "): " << L.col(j).transpose() << std::endl;
-                            _AugmentedState l_state;
-                            l_state.set(L.col(j), mu.featuresk.size(), mu.featuresk_l.size());
-                            X[i++] = mu + (delta_state + l_state);
-                            X[i++] = mu + (delta_state - l_state);
+                            X[i++] = mu + (delta + L.col(j));
+                            X[i++] = mu + (delta - L.col(j));
                     }
-                    #ifdef USCKF_DEBUG_PRINTS
-                    printSigmaPoints<AugmentedStateSigma>(X);
+                    #ifdef MSCKF_DEBUG_PRINTS
+                    this->printSigmaPoints<MultiStateSigma>(X);
                     #endif
             }
 
@@ -592,8 +349,8 @@ namespace localization
                             X[i++] = mu + (delta - L.col(j));
                     }
 
-                    #ifdef USCKF_DEBUG_PRINTS
-                    printSigmaPoints<SingleStateSigma>(X);
+                    #ifdef MSCKF_DEBUG_PRINTS
+                    this->printSigmaPoints<SingleStateSigma>(X);
                     #endif
             }
 
@@ -736,16 +493,16 @@ namespace localization
                     return 0.5 * c;
             }
 
-            void applyDeltaAugmentedState(const VectorizedAugmentedState &delta)
+            void applyDeltaMultiState(const VectorizedMultiState &delta)
             {
-                    AugmentedStateSigma X(2 * DOF_AUGMENTED_STATE + 1);
+                    MultiStateSigma X(2 * DOF_MULTI_STATE + 1);
                     generateSigmaPoints(mu_state, delta, Pk, X);
 
                     mu_state = meanSigmaPoints(X);
-                    Pk = covSigmaPoints<_AugmentedState::DOF>(mu_state, X);
+                    Pk = covSigmaPoints<_MultiState::DOF>(mu_state, X);
             }
 
-            void applyDeltaSingleState(_SingleState &statek_i, SingleStateCovariance &Pk_i, const VectorizedSingleState &delta)
+            void applyDeltaState(_SingleState &statek_i, SingleStateCovariance &Pk_i, const VectorizedSingleState &delta)
             {
                     SingleStateSigma X(2 * DOF_SINGLE_STATE + 1);
                     generateSigmaPoints(statek_i, delta, Pk_i, X);
@@ -768,12 +525,12 @@ namespace localization
     public:
             void checkSigmaPoints()
             {
-                AugmentedStateSigma X(2 * DOF_AUGMENTED_STATE + 1);
+                MultiStateSigma X(2 * DOF_MULTI_STATE + 1);
                 generateSigmaPoints(mu_state, Pk, X);
 
-                _AugmentedState muX = meanSigmaPoints(X);
+                _MultiState muX = meanSigmaPoints(X);
 
-                AugmentedStateCovariance Pktest = covSigmaPoints<_AugmentedState::DOF>(muX, X);
+                MultiStateCovariance Pktest = covSigmaPoints<_MultiState::DOF>(muX, X);
                 if((Pktest - Pk).cwise().abs().maxCoeff()>1e-6){
                         std::cerr << Pktest << "\n\n" << Pk;
                         assert(false);
@@ -794,7 +551,7 @@ namespace localization
             template <typename _ScalarType>
             static bool accept_mahalanobis_distance(const _ScalarType &mahalanobis2, const int dof)
             {
-                #ifdef USCKF_DEBUG_PRINTS
+                #ifdef MSCKF_DEBUG_PRINTS
                 std::cout << "[MAHALANOBIS_DISTANCE] mahalanobis2: " << mahalanobis2 <<std::endl;
                 std::cout << "[MAHALANOBIS_DISTANCE] dof: " << dof <<std::endl;
                 #endif
@@ -857,4 +614,4 @@ namespace localization
 	
 } // namespace localization
 
-#endif // __USCKF_HPP_
+#endif // __MSCKF_HPP_

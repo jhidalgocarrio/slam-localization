@@ -115,8 +115,6 @@ namespace localization
         }
 
         /**@brief Create a vectorize state of a single state vector
-         * but not in the form of Manifold in the form of error quaternion
-         * for the orientation.
          */
 
         vectorized_type getVectorizedState (const VectorizedMode type = ANGLE_AXIS)
@@ -141,6 +139,251 @@ namespace localization
             vstate.block<SO3::DOF, 1>(vec3::DOF, 0) = orientation;
             vstate.block<localization::vec3::DOF, 1>(vec3::DOF + SO3::DOF, 0) = velo; //! Linear Velocity
             vstate.block<localization::vec3::DOF, 1>(2*vec3::DOF + SO3::DOF, 0) = angvelo; //! Angular Velocity
+
+            return vstate;
+        }
+    };
+
+    struct SensorState
+    {
+        typedef SensorState self;
+
+        ::MTK::SubManifold<vec3, 0> pos;
+        ::MTK::SubManifold<SO3, vec3::DOF + 0> orient;
+
+        enum
+        {
+            DOF = vec3::DOF + SO3::DOF + 0
+        };
+
+        enum VectorizedMode
+        {
+            EULER_ANGLES = 0,
+            ANGLE_AXIS = 1
+        };
+
+        typedef vec3::scalar scalar;
+        typedef Eigen::Matrix<scalar, DOF, 1> vectorized_type;
+
+        SensorState ( const vec3& pos = vec3(), const SO3& orient = SO3())
+            : pos(pos), orient(orient)
+        {}
+
+        /** @brief set the Sensor state from a vectorized type Sensor State
+         */
+        void set (const vectorized_type &vstate, const VectorizedMode type = ANGLE_AXIS)
+        {
+            pos = vstate.block<vec3::DOF, 1>(0,0); //! Position
+            Eigen::Matrix<scalar, SO3::DOF, 1> axis_angle =  vstate.block<SO3::DOF, 1>(vec3::DOF, 0); //! Orientation
+
+            if (type == EULER_ANGLES)
+            {
+                orient = Eigen::Quaternion<scalar> (Eigen::AngleAxisd(axis_angle[2], Eigen::Vector3d::UnitZ())*
+                                Eigen::AngleAxisd(axis_angle[1], Eigen::Vector3d::UnitY()) *
+                                Eigen::AngleAxisd(axis_angle[0], Eigen::Vector3d::UnitX()));
+            }
+            else
+            {
+                orient = SO3::exp(axis_angle, 1);
+            }
+        }
+
+        void boxplus(const ::MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 )
+        {
+            pos.boxplus(::MTK::subvector(__vec, &self::pos), __scale);
+            orient.boxplus(::MTK::subvector(__vec, &self::orient), __scale);
+        }
+
+        void boxminus(::MTK::vectview<scalar,DOF> __res, const SensorState& __oth) const
+        {
+            pos.boxminus(::MTK::subvector(__res, &self::pos), __oth.pos);
+            orient.boxminus(::MTK::subvector(__res, &self::orient), __oth.orient);
+        }
+
+        friend std::ostream& operator<<(std::ostream& __os, const SensorState& __var)
+        {
+            return __os << __var.pos << " " << " " << __var.orient << " " ;
+        }
+
+        friend std::istream& operator>>(std::istream& __is, SensorState& __var)
+        {
+            return __is >> __var.pos >> __var.orient;
+        }
+
+        /**@brief Create a vectorize state of a single state vector
+         */
+
+        vectorized_type getVectorizedState (const VectorizedMode type = ANGLE_AXIS)
+        {
+
+            SensorState::vectorized_type vstate;
+
+            vstate.block<vec3::DOF, 1>(0,0) = pos; //! Position
+            Eigen::Matrix<scalar, SO3::DOF, 1> orientation; //! Orientation
+
+            if (type == EULER_ANGLES)
+            {
+                orientation[2] = orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+                orientation[1] = orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+                orientation[0] = orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+            }
+            else
+            {
+                orientation << SO3::log(orient);
+            }
+
+            vstate.block<SO3::DOF, 1>(vec3::DOF, 0) = orientation;
+
+            return vstate;
+        }
+    };
+
+    template < unsigned int _Dimension >
+    struct MultiState
+    {
+        typedef MultiState self;
+
+        ::MTK::SubManifold<State, 0> statek; /** Current Pose state (update to the proprioceptive measurements) */
+        std::vector<SensorState> sensorsk; /** Multi state sensor poses **/
+
+        enum
+        {
+            SENSOR_DOF = static_cast<unsigned int>(_Dimension * SensorState::DOF) + 0
+        };
+
+        enum
+        {
+            DOF = State::DOF + static_cast<unsigned int>(SENSOR_DOF) + 0
+        };
+
+        enum VectorizedMode
+        {
+            EULER_ANGLES = 0,
+            ANGLE_AXIS = 1
+        };
+
+
+        typedef vec3::scalar scalar;
+        typedef Eigen::Matrix<scalar, Eigen::Dynamic, 1> vectorized_type;
+
+        typedef State SingleState;
+
+        MultiState ( const State& statek = State(),
+                const  std::vector<SensorState> &sensorsk = std::vector<SensorState>(_Dimension)
+                )
+            : statek(statek), sensorsk(sensorsk)
+            {}
+
+        unsigned int getDOF() const
+        {
+            return MultiState::DOF;
+        }
+
+        /** @brief set the State from a vectorized type State
+         */
+        void set (const vectorized_type &vstate, const VectorizedMode type = ANGLE_AXIS)
+        {
+            /** Set state **/
+            Eigen::Matrix<scalar, State::DOF, 1> tmp_vstate;
+            tmp_vstate = vstate.block(0, 0, State::DOF, 1);
+            statek.set(tmp_vstate, localization::State::VectorizedMode(type));
+
+            /** Set sensor poses states **/
+            register size_t sensor_idx = 0;
+            for (std::vector<SensorState>::iterator it = sensorsk.begin();
+                    it != sensorsk.end(); ++it)
+            {
+                Eigen::Matrix<scalar, SensorState::DOF, 1> tmp_vsensor;
+                tmp_vsensor = vstate.block(State::DOF +(sensor_idx*SensorState::DOF), 0, SensorState::DOF, 1);
+                it->set(tmp_vsensor, localization::SensorState::VectorizedMode(type));
+                sensor_idx++;
+            }
+
+            return;
+        }
+
+        void boxplus(MultiState & __state, scalar __scale = 1 )
+        {
+            State::vectorized_type vectstate;
+
+            vectstate = __state.statek.getVectorizedState();
+            statek.boxplus(vectstate.data(), __scale);
+
+            std::vector<SensorState>::iterator it_this_sensorsk = sensorsk.begin();
+            std::vector<SensorState>::iterator it_state_sensorsk = __state.sensorsk.begin();
+            for ( ;it_state_sensorsk != __state.sensorsk.end(); ++it_state_sensorsk, ++it_this_sensorsk)
+            {
+                SensorState::vectorized_type vectsensor;
+                vectsensor = it_state_sensorsk->getVectorizedState();
+                it_this_sensorsk->boxplus(vectsensor.data(), __scale);
+            }
+        }
+
+        void boxminus(MultiState &__res, const MultiState& __oth) const
+        {
+            State::vectorized_type vectstate;
+            //std::cout<<"in boxminus __res:\n "<<__res<<"\n";
+            //std::cout<<"in boxminus __oth:\n "<<__oth<<"\n";
+            vectstate = __res.statek.getVectorizedState();
+            statek.boxminus(vectstate.data(), __oth.statek);
+            __res.statek.set(vectstate);
+
+            std::vector<SensorState>::const_iterator it_this_sensorsk = sensorsk.begin();
+            std::vector<SensorState>::iterator it_res_sensorsk = __res.sensorsk.begin();
+            std::vector<SensorState>::const_iterator it_oth_sensorsk = __oth.sensorsk.begin();
+            for ( ;it_res_sensorsk != __res.sensorsk.end();
+                    ++it_res_sensorsk, ++it_this_sensorsk, ++it_oth_sensorsk)
+            {
+                SensorState::vectorized_type vectsensor;
+                vectsensor = it_res_sensorsk->getVectorizedState();
+                it_this_sensorsk->boxminus(vectsensor.data(), *it_oth_sensorsk);
+                it_res_sensorsk->set(vectsensor);
+            }
+
+            //std::cout<<"after in boxminus __res:\n "<<__res<<"\n";
+        }
+
+        friend std::ostream& operator<<(std::ostream& __os, const MultiState& __var)
+        {
+            __os << "\n" << __var.statek << "\n";
+
+            for (std::vector<SensorState>::const_iterator it = __var.sensorsk.begin();
+                    it != __var.sensorsk.end(); ++it)
+            {
+                __os << *it << "\n";
+            }
+
+            return __os;
+        }
+
+        friend std::istream& operator>>(std::istream& __is, MultiState& __var)
+        {
+            __is >> __var.statek;
+
+            for (std::vector<SensorState>::iterator it = __var.sensorsk.begin();
+                    it != __var.sensorsk.end(); ++it)
+            {
+                __is >> *it;
+            }
+
+            return __is;
+        }
+
+        vectorized_type getVectorizedState (const VectorizedMode type = ANGLE_AXIS)
+        {
+            vectorized_type vstate(static_cast<unsigned int>(DOF), 1);
+
+            /** Statek **/
+            vstate.block(0, 0, State::DOF, 1) = statek.getVectorizedState(static_cast<State::VectorizedMode>(type));
+
+            /** Sensors **/
+            register size_t sensor_idx = 0;
+            for (std::vector<SensorState>::iterator it = sensorsk.begin();
+                    it != sensorsk.end(); ++it)
+            {
+                vstate.block(State::DOF + (sensor_idx*SensorState::DOF), 0, SensorState::DOF, 1) = it->getVectorizedState(static_cast<SensorState::VectorizedMode>(type));
+                sensor_idx++;
+            }
 
             return vstate;
         }

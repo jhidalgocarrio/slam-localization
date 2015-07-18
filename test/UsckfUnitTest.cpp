@@ -336,7 +336,7 @@ BOOST_AUTO_TEST_CASE( USCKF_STATIC )
 
     std::cout<<"[USCKF_STATIC] state_single: "<<state_single<<"\n";
 
-    const double dt = 0.01; /** 100Hz */
+    //const double dt = 0.01; /** 100Hz */
 
     /** Initial covariance matrix **/
     StateFilterStatic::SingleStateCovariance P0_single;

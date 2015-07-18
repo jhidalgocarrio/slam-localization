@@ -4,8 +4,6 @@
 #include <Eigen/Core> /** Core methods of Eigen implementation **/
 #include <Eigen/Cholesky> /** For the Cholesky decomposition **/
 
-#include <localization/tools/Util.hpp> /**Helper class **/
-
 //#define IIR_DEBUG_PRINTS 1
 
 namespace localization
@@ -116,7 +114,7 @@ namespace localization
             {
 
                 /** Check if NaN values in the matrix **/
-                if (!Util::isnotnan(dataCov))
+                if (!base::isnotnan(dataCov))
                 {
                     #ifdef IIR_DEBUG_PRINTS
                     std::cout<<"[IIR] dataCov has NaN values\n";
