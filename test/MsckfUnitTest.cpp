@@ -23,7 +23,7 @@
 
 /** Wrap the Multi State **/
 typedef localization::MtkWrap<localization::State> WSingleState;
-typedef localization::MtkMultiStateWrap< localization::MultiState<4> > WMultiState;
+typedef localization::MtkMultiStateWrap< localization::MultiState<localization::SensorState> > WMultiState;
 typedef localization::Msckf<WMultiState, WSingleState> MultiStateFilter;
 typedef ::MTK::vect<Eigen::Dynamic, double> MeasurementType;
 
@@ -99,33 +99,41 @@ BOOST_AUTO_TEST_CASE( OPERATIONS )
 BOOST_AUTO_TEST_CASE( MATRIX_OPERATIONS )
 {
 
-    typedef Eigen::Matrix<double, int(WMultiState::DOF), int(WMultiState::DOF)> MultiStateCovariance;
+    typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MultiStateCovariance;
     typedef std::vector<WMultiState> MultiStateSigma;
-
 
     typedef typename WMultiState::SingleState SingleState;
     typedef typename WMultiState::SingleState::vectorized_type VectorizedSingleState;
     typedef Eigen::Matrix<double, int(WMultiState::SingleState::DOF), int(WMultiState::SingleState::DOF)> SingleStateCovariance;
     typedef std::vector<WMultiState::SingleState> SingleStateSigma;
 
-    MultiStateCovariance Pk; Pk.setIdentity();
-    MTK::setDiagonal (Pk, &WMultiState::statek, 4);
-    Pk.diagonal().segment<WMultiState::SENSOR_DOF>(WMultiState::SingleState::DOF).setConstant(6);
-    Eigen::Matrix<double, WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF> Pkk;
-    Pkk = Pk.block<WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF>(0, WMultiState::SingleState::DOF);
-    Pkk = 3.5 * Eigen::Matrix<double, WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF>::Ones();
-    Pk.block<WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF>(0, WMultiState::SingleState::DOF) = Pkk;
-    Pk.block<WMultiState::SENSOR_DOF, WMultiState::SingleState::DOF>(WMultiState::SingleState::DOF, 0) = Pkk.transpose();
+    const unsigned int number_sensor_poses = 4;
+
+    MultiStateCovariance Pk;
+    Pk.resize(WSingleState::DOF + WMultiState::SENSOR_DOF * number_sensor_poses, WSingleState::DOF + WMultiState::SENSOR_DOF * number_sensor_poses); Pk.setIdentity();
+    Pk.diagonal().segment(0, WMultiState::SingleState::DOF).setConstant(4);
+    Pk.diagonal().segment(WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF * number_sensor_poses).setConstant(6);
+
+    Eigen::Matrix<double, WMultiState::SingleState::DOF, Eigen::Dynamic> Pkk;
+    Pkk.resize(WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF * number_sensor_poses);
+
+    Pkk = Pk.block(0, WMultiState::SingleState::DOF, WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF*number_sensor_poses);
+    Pkk = 3.5 * Eigen::MatrixXd::Ones(WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF * number_sensor_poses);
+    Pk.block(0, WMultiState::SingleState::DOF, WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF*number_sensor_poses) = Pkk;
+    Pk.block(WMultiState::SingleState::DOF, 0, WMultiState::SENSOR_DOF*number_sensor_poses, WMultiState::SingleState::DOF) = Pkk.transpose();
     std::cout<<"Pk ["<<Pk.rows() <<" x "<<Pk.cols()<<"]\n";
     std::cout<<"Pk:\n"<<Pk<<"\n";
 }
 
 BOOST_AUTO_TEST_CASE( MSCKF )
 {
-    typedef Eigen::Matrix<double, int(WMultiState::DOF), int(WMultiState::DOF)> MultiStateCovariance;
+    typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> MultiStateCovariance;
+    const unsigned int number_sensor_poses = 4;
 
     WMultiState statek_0;
     MultiStateCovariance Pk_0;
+    Pk_0.resize(WSingleState::DOF + WMultiState::SENSOR_DOF * number_sensor_poses, WSingleState::DOF + WMultiState::SENSOR_DOF * number_sensor_poses);
+    Pk_0 = 0.025 * Eigen::MatrixXd::Ones(WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF * number_sensor_poses);
     Pk_0 = 0.025 * Pk_0.setIdentity();
 
     /** Delta pose to integrate **/
@@ -152,8 +160,8 @@ BOOST_AUTO_TEST_CASE( MSCKF )
     std::cout<<"[MSCKF] P0 is of size "<<filter->getPk().rows() <<" x "<<filter->getPk().cols()<<std::endl;
     std::cout<<"[MSCKF] P0\n"<<filter->getPk()<<"\n";
     std::cout<<"[MSCKF] statek_0.statek\n"<<filter->muSingleState()<<"\n";
-    std::cout<<"[MSCKF] P0_statek is of size "<<filter->getPkState().rows()<<" x "<<filter->getPkState().cols()<<std::endl;
-    std::cout<<"[MSCKF] P0_statek\n"<<filter->getPkState()<<"\n";
+    std::cout<<"[MSCKF] P0_statek is of size "<<filter->getPkSingleState().rows()<<" x "<<filter->getPkSingleState().cols()<<std::endl;
+    std::cout<<"[MSCKF] P0_statek\n"<<filter->getPkSingleState()<<"\n";
 
     /***************************/
     /** PROPAGATION / PREDICT **/

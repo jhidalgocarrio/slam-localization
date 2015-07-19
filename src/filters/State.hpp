@@ -238,22 +238,22 @@ namespace localization
         }
     };
 
-    template < unsigned int _Dimension >
+    template <class _SensorState>
     struct MultiState
     {
         typedef MultiState self;
 
         ::MTK::SubManifold<State, 0> statek; /** Current Pose state (update to the proprioceptive measurements) */
-        std::vector<SensorState> sensorsk; /** Multi state sensor poses **/
+        std::vector<_SensorState> sensorsk; /** Multi state sensor poses **/
 
         enum
         {
-            SENSOR_DOF = static_cast<unsigned int>(_Dimension * SensorState::DOF) + 0
+            SENSOR_DOF = _SensorState::DOF
         };
 
         enum
         {
-            DOF = State::DOF + static_cast<unsigned int>(SENSOR_DOF) + 0
+            DOF = State::DOF + 0
         };
 
         enum VectorizedMode
@@ -268,15 +268,16 @@ namespace localization
 
         typedef State SingleState;
 
-        MultiState ( const State& statek = State(),
-                const  std::vector<SensorState> &sensorsk = std::vector<SensorState>(_Dimension)
+        MultiState (
+                const State& statek = State(),
+                const  std::vector<_SensorState> &sensorsk = std::vector<_SensorState>()
                 )
             : statek(statek), sensorsk(sensorsk)
             {}
 
         unsigned int getDOF() const
         {
-            return MultiState::DOF;
+            return State::DOF + (SENSOR_DOF * sensorsk.size());
         }
 
         /** @brief set the State from a vectorized type State
@@ -290,12 +291,12 @@ namespace localization
 
             /** Set sensor poses states **/
             register size_t sensor_idx = 0;
-            for (std::vector<SensorState>::iterator it = sensorsk.begin();
+            for (typename std::vector<_SensorState>::iterator it = sensorsk.begin();
                     it != sensorsk.end(); ++it)
             {
-                Eigen::Matrix<scalar, SensorState::DOF, 1> tmp_vsensor;
-                tmp_vsensor = vstate.block(State::DOF +(sensor_idx*SensorState::DOF), 0, SensorState::DOF, 1);
-                it->set(tmp_vsensor, localization::SensorState::VectorizedMode(type));
+                Eigen::Matrix<scalar, _SensorState::DOF, 1> tmp_vsensor;
+                tmp_vsensor = vstate.block(State::DOF +(sensor_idx*_SensorState::DOF), 0, _SensorState::DOF, 1);
+                it->set(tmp_vsensor, _SensorState::VectorizedMode(type));
                 sensor_idx++;
             }
 
@@ -309,11 +310,11 @@ namespace localization
             vectstate = __state.statek.getVectorizedState();
             statek.boxplus(vectstate.data(), __scale);
 
-            std::vector<SensorState>::iterator it_this_sensorsk = sensorsk.begin();
-            std::vector<SensorState>::iterator it_state_sensorsk = __state.sensorsk.begin();
+            typename std::vector<_SensorState>::iterator it_this_sensorsk = sensorsk.begin();
+            typename std::vector<_SensorState>::iterator it_state_sensorsk = __state.sensorsk.begin();
             for ( ;it_state_sensorsk != __state.sensorsk.end(); ++it_state_sensorsk, ++it_this_sensorsk)
             {
-                SensorState::vectorized_type vectsensor;
+                typename _SensorState::vectorized_type vectsensor;
                 vectsensor = it_state_sensorsk->getVectorizedState();
                 it_this_sensorsk->boxplus(vectsensor.data(), __scale);
             }
@@ -328,13 +329,13 @@ namespace localization
             statek.boxminus(vectstate.data(), __oth.statek);
             __res.statek.set(vectstate);
 
-            std::vector<SensorState>::const_iterator it_this_sensorsk = sensorsk.begin();
-            std::vector<SensorState>::iterator it_res_sensorsk = __res.sensorsk.begin();
-            std::vector<SensorState>::const_iterator it_oth_sensorsk = __oth.sensorsk.begin();
+            typename std::vector<_SensorState>::const_iterator it_this_sensorsk = sensorsk.begin();
+            typename std::vector<_SensorState>::iterator it_res_sensorsk = __res.sensorsk.begin();
+            typename std::vector<_SensorState>::const_iterator it_oth_sensorsk = __oth.sensorsk.begin();
             for ( ;it_res_sensorsk != __res.sensorsk.end();
                     ++it_res_sensorsk, ++it_this_sensorsk, ++it_oth_sensorsk)
             {
-                SensorState::vectorized_type vectsensor;
+                typename _SensorState::vectorized_type vectsensor;
                 vectsensor = it_res_sensorsk->getVectorizedState();
                 it_this_sensorsk->boxminus(vectsensor.data(), *it_oth_sensorsk);
                 it_res_sensorsk->set(vectsensor);
@@ -347,7 +348,7 @@ namespace localization
         {
             __os << "\n" << __var.statek << "\n";
 
-            for (std::vector<SensorState>::const_iterator it = __var.sensorsk.begin();
+            for (typename std::vector<_SensorState>::const_iterator it = __var.sensorsk.begin();
                     it != __var.sensorsk.end(); ++it)
             {
                 __os << *it << "\n";
@@ -360,7 +361,7 @@ namespace localization
         {
             __is >> __var.statek;
 
-            for (std::vector<SensorState>::iterator it = __var.sensorsk.begin();
+            for (typename std::vector<_SensorState>::iterator it = __var.sensorsk.begin();
                     it != __var.sensorsk.end(); ++it)
             {
                 __is >> *it;
@@ -378,10 +379,10 @@ namespace localization
 
             /** Sensors **/
             register size_t sensor_idx = 0;
-            for (std::vector<SensorState>::iterator it = sensorsk.begin();
+            for (typename std::vector<_SensorState>::iterator it = sensorsk.begin();
                     it != sensorsk.end(); ++it)
             {
-                vstate.block(State::DOF + (sensor_idx*SensorState::DOF), 0, SensorState::DOF, 1) = it->getVectorizedState(static_cast<SensorState::VectorizedMode>(type));
+                vstate.block(State::DOF + (sensor_idx*_SensorState::DOF), 0, _SensorState::DOF, 1) = it->getVectorizedState(static_cast<typename _SensorState::VectorizedMode >(type));
                 sensor_idx++;
             }
 
