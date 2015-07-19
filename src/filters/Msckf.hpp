@@ -280,9 +280,20 @@ namespace localization
                 return mu_state;
             }
 
+            _MultiState& muState()
+            {
+                return mu_state;
+            }
+
             const MultiStateCovariance &getPk() const
             {
                 return Pk;
+            }
+
+            void setPk (const MultiStateCovariance &Pk_i)
+            {
+                Pk.resize(Pk_i.rows(), Pk_i.cols());
+                this->Pk = Pk_i;
             }
 
     private:
