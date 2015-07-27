@@ -28,7 +28,7 @@
 /** MTK's pose and orientation definition **/
 #include <mtk/startIdx.hpp>
 
-#define MSCKF_DEBUG_PRINTS 1
+//#define MSCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -238,9 +238,7 @@ namespace localization
                             Pk -= K * S * K.transpose();
                             //applyDelta(K * innovation);
                             std::cout<<"K "<<K.rows() <<" x "<<K.cols()<<"\n";
-                            _MultiState innovation_state;
-                            innovation_state.set(K * innovation, mu_state.featuresk.size(), mu_state.featuresk_l.size());
-                            mu_state = mu_state + innovation_state;
+                            mu_state = mu_state + K * innovation;
                     }
 
                     #ifdef MSCKF_DEBUG_PRINTS
