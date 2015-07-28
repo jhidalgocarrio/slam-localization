@@ -28,7 +28,7 @@
 /** MTK's pose and orientation definition **/
 #include <mtk/startIdx.hpp>
 
-//#define MSCKF_DEBUG_PRINTS 1
+#define MSCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -213,16 +213,17 @@ namespace localization
                     MultiStateSigma X(2 * mu_state.getDOF() + 1);
                     this->generateSigmaPoints(mu_state, Pk, X);
 
-                    VectorizedMultiState mu_delta(mu_state.getDOF(), 1);
-                    mu_delta.setZero();
-
                     std::vector<Measurement> Z(X.size());
                     std::transform(X.begin(), X.end(), Z.begin(), h);
 
                     const Measurement meanZ = meanSigmaPoints(Z);
 
-                    const MeasurementCov S = covSigmaPoints(meanZ, Z) + R();
+                    /** Remove outliers and compute innovation **/
+
+                    const MeasurementCov S = covSigmaPoints(meanZ, Z) + R(); //S = Pzz + R
                     const CrossCov covXZ = crossCovSigmaPoints(mu_state, meanZ, X, Z);
+
+                    //H = Pzx * (P^)-1
 
                     MeasurementCov S_inverse;
                     S_inverse = S.inverse();
@@ -238,7 +239,6 @@ namespace localization
                             Pk -= K * S * K.transpose();
                             //applyDelta(K * innovation);
                             std::cout<<"K "<<K.rows() <<" x "<<K.cols()<<"\n";
-                            mu_state = mu_state + K * innovation;
                     }
 
                     #ifdef MSCKF_DEBUG_PRINTS
@@ -506,16 +506,16 @@ namespace localization
                     return 0.5 * c;
             }
 
-            void applyDeltaMultiState(const VectorizedMultiState &delta)
+            void applyDelta(const VectorizedMultiState &delta)
             {
-                    MultiStateSigma X(2 * DOF_MULTI_STATE + 1);
+                    MultiStateSigma X(2 * mu_state.getDOF() + 1);
                     generateSigmaPoints(mu_state, delta, Pk, X);
 
                     mu_state = meanSigmaPoints(X);
                     Pk = covSigmaPoints<_MultiState::DOF>(mu_state, X);
             }
 
-            void applyDeltaState(_SingleState &statek_i, SingleStateCovariance &Pk_i, const VectorizedSingleState &delta)
+            void applyDelta(_SingleState &statek_i, SingleStateCovariance &Pk_i, const VectorizedSingleState &delta)
             {
                     SingleStateSigma X(2 * DOF_SINGLE_STATE + 1);
                     generateSigmaPoints(statek_i, delta, Pk_i, X);

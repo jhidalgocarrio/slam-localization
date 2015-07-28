@@ -24,7 +24,7 @@ MTKintFeature adios(100, Eigen::Vector3d::Zero() );
 
 /** Wrap the AugmentedState **/
 typedef localization::MtkWrap<localization::State> WSingleState;
-typedef localization::MtkDynamicWrap<localization::AugmentedState<Eigen::Dynamic> > WAugmentedState;
+typedef localization::MtkMultiStateWrap<localization::AugmentedState<Eigen::Dynamic> > WAugmentedState;
 typedef localization::MtkWrap<localization::AugmentedState<3*NUMBER_MEASUREMENTS> > WAugmentedStateStatic;
 typedef localization::Usckf<WAugmentedState, WSingleState > StateFilterDynamic;
 typedef localization::Usckf<WAugmentedStateStatic, WSingleState > StateFilterStatic;

@@ -296,7 +296,7 @@ namespace localization
             {
                 Eigen::Matrix<scalar, _SensorState::DOF, 1> tmp_vsensor;
                 tmp_vsensor = vstate.block(State::DOF +(sensor_idx*_SensorState::DOF), 0, _SensorState::DOF, 1);
-                it->set(tmp_vsensor, _SensorState::VectorizedMode(type));
+                it->set(tmp_vsensor, typename _SensorState::VectorizedMode(type));
                 sensor_idx++;
             }
 
@@ -320,28 +320,69 @@ namespace localization
             }
         }
 
-        void boxminus(MultiState &__res, const MultiState& __oth) const
+        void boxplus(const vectorized_type & __vecstate, scalar __scale = 1 )
+        {
+            if (__vecstate.size() == this->getDOF())
+            {
+                State::vectorized_type vectstate = __vecstate.block(0, 0, State::DOF, 1);
+                this->statek.boxplus(vectstate.data(), __scale);
+
+                typename std::vector<_SensorState>::iterator it_this_sensorsk = this->sensorsk.begin();
+                for ( ;it_this_sensorsk != this->sensorsk.end(); ++it_this_sensorsk)
+                {
+                    unsigned int index = it_this_sensorsk - this->sensorsk.begin();
+                    typename _SensorState::vectorized_type vectsensor;
+                    vectsensor = __vecstate.block(State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1);
+                    it_this_sensorsk->boxplus(vectsensor.data(), __scale);
+                }
+            }
+        }
+
+        //void boxminus(MultiState &__res, const MultiState& __oth) const
+        //{
+        //    State::vectorized_type vectstate;
+        //    //std::cout<<"in boxminus __res:\n "<<__res<<"\n";
+        //    //std::cout<<"in boxminus __oth:\n "<<__oth<<"\n";
+        //    vectstate = __res.statek.getVectorizedState();
+        //    statek.boxminus(vectstate.data(), __oth.statek);
+        //    __res.statek.set(vectstate);
+
+        //    typename std::vector<_SensorState>::const_iterator it_this_sensorsk = sensorsk.begin();
+        //    typename std::vector<_SensorState>::iterator it_res_sensorsk = __res.sensorsk.begin();
+        //    typename std::vector<_SensorState>::const_iterator it_oth_sensorsk = __oth.sensorsk.begin();
+        //    for ( ;it_res_sensorsk != __res.sensorsk.end();
+        //            ++it_res_sensorsk, ++it_this_sensorsk, ++it_oth_sensorsk)
+        //    {
+        //        typename _SensorState::vectorized_type vectsensor;
+        //        vectsensor = it_res_sensorsk->getVectorizedState();
+        //        it_this_sensorsk->boxminus(vectsensor.data(), *it_oth_sensorsk);
+        //        it_res_sensorsk->set(vectsensor);
+        //    }
+
+        //    //std::cout<<"after in boxminus __res:\n "<<__res<<"\n";
+        //}
+
+        void boxminus(vectorized_type *__res, const MultiState& __oth) const
         {
             State::vectorized_type vectstate;
+            vectstate = __res->block(0, 0, State::DOF, 1);
             //std::cout<<"in boxminus __res:\n "<<__res<<"\n";
             //std::cout<<"in boxminus __oth:\n "<<__oth<<"\n";
-            vectstate = __res.statek.getVectorizedState();
-            statek.boxminus(vectstate.data(), __oth.statek);
-            __res.statek.set(vectstate);
+            this->statek.boxminus(vectstate.data(), __oth.statek);
+            __res->block(0, 0, State::DOF, 1) = vectstate;
 
-            typename std::vector<_SensorState>::const_iterator it_this_sensorsk = sensorsk.begin();
-            typename std::vector<_SensorState>::iterator it_res_sensorsk = __res.sensorsk.begin();
+            typename std::vector<_SensorState>::const_iterator it_this_sensorsk = this->sensorsk.begin();
             typename std::vector<_SensorState>::const_iterator it_oth_sensorsk = __oth.sensorsk.begin();
-            for ( ;it_res_sensorsk != __res.sensorsk.end();
-                    ++it_res_sensorsk, ++it_this_sensorsk, ++it_oth_sensorsk)
+            for ( ;it_this_sensorsk != this->sensorsk.end(); ++it_this_sensorsk, ++it_oth_sensorsk)
             {
+                unsigned int index = it_this_sensorsk - this->sensorsk.begin();
                 typename _SensorState::vectorized_type vectsensor;
-                vectsensor = it_res_sensorsk->getVectorizedState();
+                vectsensor = __res->block(State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1);
                 it_this_sensorsk->boxminus(vectsensor.data(), *it_oth_sensorsk);
-                it_res_sensorsk->set(vectsensor);
+                __res->block(State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1) = vectsensor;
             }
 
-            //std::cout<<"after in boxminus __res:\n "<<__res<<"\n";
+            //std::cout<<"after in boxminus __res:\n "<<*__res<<"\n";
         }
 
         friend std::ostream& operator<<(std::ostream& __os, const MultiState& __var)

@@ -117,13 +117,13 @@ namespace  localization
     };
 
     /**
-     * MtkMultiState<M> wraps an MTK-Manifold M to a usckf-compatible manifold.
+     * MtkDynamicWrap<M> wraps an MTK-Manifold M to a usckf-compatible manifold.
      * M has to have an enum DOF and implement the methods boxplus and boxminus.
      */
     template<class M>
-    struct MtkMultiStateWrap : public M
+    struct MtkDynamicWrap : public M
     {
-            typedef MtkMultiStateWrap<M> self;
+            typedef MtkDynamicWrap<M> self;
     public:
             typedef typename M::scalar scalar_type;
             typedef typename M::VectorizedMode VectorizedMode;
@@ -131,8 +131,20 @@ namespace  localization
 
             typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> vectorized_type;
 
-            MtkMultiStateWrap(const M &m=M()) : M(m) {}
+            MtkDynamicWrap(const M &m=M()) : M(m) {}
 
+            /* @brief operator=
+             * with a vector type
+             */
+            self& operator=(const vectorized_type &vstate)
+            {
+                this->set(vstate);
+                return *this;
+            }
+
+            /* @brief operator=
+             * with no vector type
+             */
             self& operator=(const self &state)
             {
                     this->statek = state.statek;
@@ -141,8 +153,9 @@ namespace  localization
             }
 
             /*
-             * manifold operator (+)
-             *
+             * manifold operator (+) with no vector type
+             * this is just to simplify operation among
+             * objects of the same type
              */
             self& operator+=(const self &delta_state)
             {
@@ -162,15 +175,54 @@ namespace  localization
             }
 
             /*
-             * manifold operator (-)
+             * manifold operator (+)
+             * with vector type
              */
-            const self operator-(const self &other) const
+            self& operator+=(const vectorized_type &delta_state)
             {
-                    M result;
-                    assert(other.getDOF()==M::getDOF());
+                    assert(delta_state.size() == M::getDOF());
+
+                    M::boxplus(delta_state);
+                    return *this;
+            }
+
+            const self operator+(const vectorized_type &delta_state) const
+            {
+                    self result = *this;
+                    result += delta_state;
+
+                    return result;
+            }
+
+
+            /*
+             * manifold operator (-) with no vector type
+             * this is just to simplify operation among
+             * objects of the same type
+             */
+            //const self operator-(const self &other) const
+            //{
+            //        M result;
+            //        assert(other.getDOF()==M::getDOF());
+
+            //        /** Perform operation **/
+            //        M::boxminus(result, other);
+
+            //        return result;
+            //}
+
+            /*
+             * manifold operator (-)
+             * with vector type
+             */
+            const vectorized_type operator-(const self &other) const
+            {
+                    vectorized_type result;
+                    result.resize(M::getDOF(), 1);
+                    assert(result.size()==other.getDOF());
 
                     /** Perform operation **/
-                    M::boxminus(result, other);
+                    M::boxminus(&result, other);
 
                     return result;
             }
@@ -192,13 +244,13 @@ namespace  localization
     };
 
     /**
-     * MtkDynamicWrap<M> wraps an MTK-Manifold M to a usckf-compatible manifold.
+     * MtkMultiStateWrap<M> wraps an MTK-Manifold M to a usckf-compatible manifold.
      * M has to have an enum DOF and implement the methods boxplus and boxminus.
      */
     template<class M>
-    struct MtkDynamicWrap : public M
+    struct MtkMultiStateWrap  : public M
     {
-            typedef MtkDynamicWrap<M> self;
+            typedef MtkMultiStateWrap <M> self;
     public:
             typedef typename M::scalar scalar_type;
             typedef typename M::VectorizedMode VectorizedMode;
@@ -206,7 +258,7 @@ namespace  localization
 
             typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> vectorized_type;
 
-            MtkDynamicWrap(const M &m=M()) : M(m) {}
+            MtkMultiStateWrap(const M &m=M()) : M(m) {}
 
             self& operator=(const self &state)
             {

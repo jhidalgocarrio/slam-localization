@@ -23,7 +23,7 @@
 
 /** Wrap the Multi State **/
 typedef localization::MtkWrap<localization::State> WSingleState;
-typedef localization::MtkMultiStateWrap< localization::MultiState<localization::SensorState> > WMultiState;
+typedef localization::MtkDynamicWrap< localization::MultiState<localization::SensorState> > WMultiState;
 typedef localization::Msckf<WMultiState, WSingleState> MultiStateFilter;
 typedef ::MTK::vect<Eigen::Dynamic, double> MeasurementType;
 
@@ -51,12 +51,19 @@ BOOST_AUTO_TEST_CASE( STATES )
 {
     WMultiState mstate;
 
-    std::cout<<"[MULTI STATE] mstate::DOF is "<<mstate.DOF<<"\n";
-    std::cout<<"[MULTI STATE] mstate::SENSOR_DOF is "<<mstate.SENSOR_DOF<<"\n";
-    std::cout<<"[MULTI STATE] mstate.statek is "<<mstate.statek<<"\n";
-    std::cout<<"[MULTI STATE] mstate: "<<mstate<<"\n";
-    std::cout<<"[MULTI STATE] vectorized state:\n"<<mstate.getVectorizedState()<<"\n";
-    std::cout<<"[MULTI STATE] vectorized state size :\n"<<mstate.getVectorizedState().size()<<"\n";
+    BOOST_TEST_MESSAGE("[MULTI STATE] mstate::DOF is "<<mstate.DOF);
+    BOOST_TEST_MESSAGE("[MULTI STATE] mstate.getDOF() is "<<mstate.getDOF());
+    BOOST_TEST_MESSAGE("[MULTI STATE] mstate::SENSOR_DOF is "<<mstate.SENSOR_DOF);
+    BOOST_TEST_MESSAGE("[MULTI STATE] mstate.statek is "<<mstate.statek);
+    BOOST_TEST_MESSAGE("[MULTI STATE] mstate: "<<mstate);
+    BOOST_TEST_MESSAGE("[MULTI STATE] vectorized state:\n"<<mstate.getVectorizedState());
+    BOOST_TEST_MESSAGE("[MULTI STATE] vectorized state size :\n"<<mstate.getVectorizedState().size());
+    BOOST_CHECK(mstate.getDOF() == mstate.getVectorizedState().size());
+    BOOST_CHECK(mstate == mstate);
+
+    WMultiState mstatebis;
+    mstatebis.set(mstate.getVectorizedState());
+    BOOST_CHECK(mstate == mstatebis);
 
 }
 
@@ -80,20 +87,30 @@ BOOST_AUTO_TEST_CASE( OPERATIONS )
         it->set(sstate.getVectorizedState());
     }
 
+    BOOST_TEST_MESSAGE("[OPERATIONS] mstate\n"<< mstate  );
+    BOOST_TEST_MESSAGE("[OPERATIONS] mstatebis\n"<< mstatebis  );
     /** Operation with states **/
     WMultiState sumstate, resstate;
-    resstate = mstate - mstatebis;
-    sumstate = mstate + mstatebis;
-    std::cout<<"[OPERATIONS] vstate - vstatebis\n"<< mstate - mstatebis <<"\n";
-    std::cout<<"[OPERATIONS] vstate + vstatebis\n"<< mstate + mstatebis <<"\n";
+    WMultiState::vectorized_type vresstate, deltastate;
+    deltastate.resize(sumstate.getDOF(), 1);
+    vresstate.resize(sumstate.getDOF(), 1);
 
-    std::cout<<"[OPERATIONS] resstate\n"<< resstate <<"\n";
-    std::cout<<"[OPERATIONS] sumstate\n"<< sumstate <<"\n";
-    std::cout<<"[OPERATIONS] resstate+sumstate\n"<< resstate + sumstate <<"\n";
-    std::cout<<"[OPERATIONS] sumstate-resstate\n"<< sumstate - resstate <<"\n";
+    vresstate = mstate - mstatebis;
+    deltastate = vresstate;
+    resstate.set(vresstate);
+    BOOST_TEST_MESSAGE("[OPERATIONS] mstate - mstatebis\n"<< mstate - mstatebis );
+    BOOST_TEST_MESSAGE("[OPERATIONS] mstate + deltastate\n"<< mstate + deltastate );
+    sumstate = mstate + deltastate;
+    BOOST_CHECK(resstate == sumstate);
+    deltastate = -vresstate;
+    sumstate = mstate + deltastate;
+    BOOST_CHECK(mstatebis == sumstate);
 
-    mstatebis = mstate;
-    std::cout<<"[OPERATIONS] mstatebis = mstate\n"<< mstatebis <<"\n";
+    BOOST_TEST_MESSAGE("[OPERATIONS] resstate\n"<< resstate );
+    BOOST_TEST_MESSAGE("[OPERATIONS] sumstate\n"<< sumstate );
+
+   // mstatebis = mstate;
+   // BOOST_TEST_MESSAGE("[OPERATIONS] mstatebis = mstate\n"<< mstatebis );
 }
 
 BOOST_AUTO_TEST_CASE( MATRIX_OPERATIONS )
@@ -121,8 +138,8 @@ BOOST_AUTO_TEST_CASE( MATRIX_OPERATIONS )
     Pkk = 3.5 * Eigen::MatrixXd::Ones(WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF * number_sensor_poses);
     Pk.block(0, WMultiState::SingleState::DOF, WMultiState::SingleState::DOF, WMultiState::SENSOR_DOF*number_sensor_poses) = Pkk;
     Pk.block(WMultiState::SingleState::DOF, 0, WMultiState::SENSOR_DOF*number_sensor_poses, WMultiState::SingleState::DOF) = Pkk.transpose();
-    std::cout<<"Pk ["<<Pk.rows() <<" x "<<Pk.cols()<<"]\n";
-    std::cout<<"Pk:\n"<<Pk<<"\n";
+    BOOST_TEST_MESSAGE("Pk ["<<Pk.rows() <<" x "<<Pk.cols());
+    BOOST_TEST_MESSAGE("Pk:\n"<<Pk);
 }
 
 BOOST_AUTO_TEST_CASE( MSCKF )
@@ -156,19 +173,19 @@ BOOST_AUTO_TEST_CASE( MSCKF )
     boost::shared_ptr<MultiStateFilter> filter;
     filter.reset(new MultiStateFilter(statek_0, Pk_0));
 
-    std::cout<<"[MSCKF] statek_0\n"<<filter->muState()<<"\n";
-    std::cout<<"[MSCKF] P0 is of size "<<filter->getPk().rows() <<" x "<<filter->getPk().cols()<<std::endl;
-    std::cout<<"[MSCKF] P0\n"<<filter->getPk()<<"\n";
-    std::cout<<"[MSCKF] statek_0.statek\n"<<filter->muSingleState()<<"\n";
-    std::cout<<"[MSCKF] P0_statek is of size "<<filter->getPkSingleState().rows()<<" x "<<filter->getPkSingleState().cols()<<std::endl;
-    std::cout<<"[MSCKF] P0_statek\n"<<filter->getPkSingleState()<<"\n";
+    BOOST_TEST_MESSAGE("[MSCKF] statek_0\n"<<filter->muState());
+    BOOST_TEST_MESSAGE("[MSCKF] P0 is of size "<<filter->getPk().rows() <<" x "<<filter->getPk().cols());
+    BOOST_TEST_MESSAGE("[MSCKF] P0\n"<<filter->getPk());
+    BOOST_TEST_MESSAGE("[MSCKF] statek_0.statek\n"<<filter->muSingleState());
+    BOOST_TEST_MESSAGE("[MSCKF] P0_statek is of size "<<filter->getPkSingleState().rows()<<" x "<<filter->getPkSingleState().cols());
+    BOOST_TEST_MESSAGE("[MSCKF] P0_statek\n"<<filter->getPkSingleState());
 
     /***************************/
     /** PROPAGATION / PREDICT **/
     /***************************/
-    std::cout<<"***************\n";
-    std::cout<<"*** PREDICT ***\n";
-    std::cout<<"***************\n";
+    BOOST_TEST_MESSAGE("***************");
+    BOOST_TEST_MESSAGE("*** PREDICT ***");
+    BOOST_TEST_MESSAGE("***************");
 
     for (register int i=0; i<2; ++i)
     {
@@ -185,24 +202,24 @@ BOOST_AUTO_TEST_CASE( MSCKF )
     /***************************/
     /** CORRECTION / UPDATE   **/
     /***************************/
-    std::cout<<"**************\n";
-    std::cout<<"*** UPDATE ***\n";
-    std::cout<<"**************\n";
+    BOOST_TEST_MESSAGE("**************");
+    BOOST_TEST_MESSAGE("*** UPDATE ***");
+    BOOST_TEST_MESSAGE("**************");
 
     MeasurementType vo_features;
     std::vector<Eigen::Vector2d> vector_features(4, Eigen::Vector2d::Ones());
     vo_features.resize(2*vector_features.size(), 1);
-    std::cout<<"vector_features.size()\n"<<vector_features.size()<<"\n";
-    std::cout<<"vo_features.size()\n"<<vo_features.size()<<"\n";
+    BOOST_TEST_MESSAGE("vector_features.size()\n"<<vector_features.size());
+    BOOST_TEST_MESSAGE("vo_features.size()\n"<<vo_features.size());
 
     register size_t idx = 0;
     for (std::vector<Eigen::Vector2d>::iterator it = vector_features.begin();
             it != vector_features.end(); ++it)
     {
         *it << idx, idx;
-        std::cout<<"it:\n"<<*it<<"\n";
+        BOOST_TEST_MESSAGE("it:\n"<<*it);
         vo_features.block(idx * it->size(), 0, it->size(), 1) = *it;
-        std::cout<<"vo_features\n"<<vo_features.block(idx * it->size(), 0, it->size(), 1)<<"\n";
+        BOOST_TEST_MESSAGE("vo_features\n"<<vo_features.block(idx * it->size(), 0, it->size(), 1));
         idx++;
     }
 
