@@ -36,8 +36,101 @@ namespace localization
     // We can't use types having a comma inside AutoConstruct macros :(
     typedef ::MTK::vect<3, double> vec3;
     typedef ::MTK::SO3<double> SO3;
-//    typedef std::vector<vec3> featureType;
-//    MTK_DEFINE_FEATURE_TYPE(vec3)
+
+    struct ReducedState
+    {
+        typedef ReducedState self;
+
+        ::MTK::SubManifold<vec3, 0> pos;
+        ::MTK::SubManifold<SO3, vec3::DOF + 0> orient;
+
+        enum
+        {
+            DOF = vec3::DOF + SO3::DOF + 0
+        };
+
+        enum VectorizedMode
+        {
+            EULER_ANGLES = 0,
+            ANGLE_AXIS = 1
+        };
+
+        typedef vec3::scalar scalar;
+        typedef Eigen::Matrix<scalar, DOF, 1> vectorized_type;
+
+        ReducedState ( const vec3& pos = vec3(), const SO3& orient = SO3() )
+            : pos(pos), orient(orient)
+        {}
+
+        /** @brief set the ReducedState from a vectorized type ReducedState
+         */
+        void set (const vectorized_type &vstate, const VectorizedMode type = ANGLE_AXIS)
+        {
+            pos = vstate.block<vec3::DOF, 1>(0,0); //! Position
+            Eigen::Matrix<scalar, SO3::DOF, 1> axis_angle =  vstate.block<SO3::DOF, 1>(vec3::DOF, 0); //! Orientation
+
+            if (type == EULER_ANGLES)
+            {
+                orient = Eigen::Quaternion<scalar> (Eigen::AngleAxisd(axis_angle[2], Eigen::Vector3d::UnitZ())*
+                                Eigen::AngleAxisd(axis_angle[1], Eigen::Vector3d::UnitY()) *
+                                Eigen::AngleAxisd(axis_angle[0], Eigen::Vector3d::UnitX()));
+            }
+            else
+            {
+                orient = SO3::exp(axis_angle, 1);
+            }
+
+        }
+
+        void boxplus(const ::MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 )
+        {
+            pos.boxplus(::MTK::subvector(__vec, &self::pos), __scale);
+            orient.boxplus(::MTK::subvector(__vec, &self::orient), __scale);
+        }
+
+        void boxminus(::MTK::vectview<scalar,DOF> __res, const ReducedState& __oth) const
+        {
+            pos.boxminus(::MTK::subvector(__res, &self::pos), __oth.pos);
+            orient.boxminus(::MTK::subvector(__res, &self::orient), __oth.orient);
+        }
+
+        friend std::ostream& operator<<(std::ostream& __os, const ReducedState& __var)
+        {
+            return __os << __var.pos << " " << __var.orient << " ";
+        }
+
+        friend std::istream& operator>>(std::istream& __is, ReducedState& __var)
+        {
+            return __is >> __var.pos >> __var.orient ;
+        }
+
+        /**@brief Create a vectorize state of a single state vector
+         */
+
+        vectorized_type getVectorizedState (const VectorizedMode type = ANGLE_AXIS)
+        {
+
+            ReducedState::vectorized_type vstate;
+
+            vstate.block<vec3::DOF, 1>(0,0) = pos; //! Position
+            Eigen::Matrix<scalar, SO3::DOF, 1> orientation; //! Orientation
+
+            if (type == EULER_ANGLES)
+            {
+                orientation[2] = orient.toRotationMatrix().eulerAngles(2,1,0)[0];//Yaw
+                orientation[1] = orient.toRotationMatrix().eulerAngles(2,1,0)[1];//Pitch
+                orientation[0] = orient.toRotationMatrix().eulerAngles(2,1,0)[2];//Roll
+            }
+            else
+            {
+                orientation << SO3::log(orient);
+            }
+
+            vstate.block<SO3::DOF, 1>(vec3::DOF, 0) = orientation;
+
+            return vstate;
+        }
+    };
 
     struct State
     {
@@ -238,12 +331,12 @@ namespace localization
         }
     };
 
-    template <class _SensorState>
+    template <class _State, class _SensorState>
     struct MultiState
     {
         typedef MultiState self;
 
-        ::MTK::SubManifold<State, 0> statek; /** Current Pose state (update to the proprioceptive measurements) */
+        ::MTK::SubManifold<_State, 0> statek; /** Current Pose state (update to the proprioceptive measurements) */
         std::vector<_SensorState> sensorsk; /** Multi state sensor poses **/
 
         enum
@@ -253,7 +346,7 @@ namespace localization
 
         enum
         {
-            DOF = State::DOF + 0
+            DOF = _State::DOF + 0
         };
 
         enum VectorizedMode
@@ -266,10 +359,10 @@ namespace localization
         typedef vec3::scalar scalar;
         typedef Eigen::Matrix<scalar, Eigen::Dynamic, 1> vectorized_type;
 
-        typedef State SingleState;
+        typedef _State SingleState;
 
         MultiState (
-                const State& statek = State(),
+                const _State& statek = _State(),
                 const  std::vector<_SensorState> &sensorsk = std::vector<_SensorState>()
                 )
             : statek(statek), sensorsk(sensorsk)
@@ -277,7 +370,7 @@ namespace localization
 
         unsigned int getDOF() const
         {
-            return State::DOF + (SENSOR_DOF * sensorsk.size());
+            return _State::DOF + (SENSOR_DOF * sensorsk.size());
         }
 
         /** @brief set the State from a vectorized type State
@@ -285,9 +378,9 @@ namespace localization
         void set (const vectorized_type &vstate, const VectorizedMode type = ANGLE_AXIS)
         {
             /** Set state **/
-            Eigen::Matrix<scalar, State::DOF, 1> tmp_vstate;
-            tmp_vstate = vstate.block(0, 0, State::DOF, 1);
-            statek.set(tmp_vstate, localization::State::VectorizedMode(type));
+            Eigen::Matrix<scalar, _State::DOF, 1> tmp_vstate;
+            tmp_vstate = vstate.block(0, 0, _State::DOF, 1);
+            statek.set(tmp_vstate, typename _State::VectorizedMode(type));
 
             /** Set sensor poses states **/
             register size_t sensor_idx = 0;
@@ -295,7 +388,7 @@ namespace localization
                     it != sensorsk.end(); ++it)
             {
                 Eigen::Matrix<scalar, _SensorState::DOF, 1> tmp_vsensor;
-                tmp_vsensor = vstate.block(State::DOF +(sensor_idx*_SensorState::DOF), 0, _SensorState::DOF, 1);
+                tmp_vsensor = vstate.block(_State::DOF +(sensor_idx*_SensorState::DOF), 0, _SensorState::DOF, 1);
                 it->set(tmp_vsensor, typename _SensorState::VectorizedMode(type));
                 sensor_idx++;
             }
@@ -305,7 +398,7 @@ namespace localization
 
         void boxplus(MultiState & __state, scalar __scale = 1 )
         {
-            State::vectorized_type vectstate;
+            typename _State::vectorized_type vectstate;
 
             vectstate = __state.statek.getVectorizedState();
             statek.boxplus(vectstate.data(), __scale);
@@ -324,7 +417,7 @@ namespace localization
         {
             if (__vecstate.size() == this->getDOF())
             {
-                State::vectorized_type vectstate = __vecstate.block(0, 0, State::DOF, 1);
+                typename _State::vectorized_type vectstate = __vecstate.block(0, 0, _State::DOF, 1);
                 this->statek.boxplus(vectstate.data(), __scale);
 
                 typename std::vector<_SensorState>::iterator it_this_sensorsk = this->sensorsk.begin();
@@ -332,7 +425,7 @@ namespace localization
                 {
                     unsigned int index = it_this_sensorsk - this->sensorsk.begin();
                     typename _SensorState::vectorized_type vectsensor;
-                    vectsensor = __vecstate.block(State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1);
+                    vectsensor = __vecstate.block(_State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1);
                     it_this_sensorsk->boxplus(vectsensor.data(), __scale);
                 }
             }
@@ -340,7 +433,7 @@ namespace localization
 
         //void boxminus(MultiState &__res, const MultiState& __oth) const
         //{
-        //    State::vectorized_type vectstate;
+        //    _State::vectorized_type vectstate;
         //    //std::cout<<"in boxminus __res:\n "<<__res<<"\n";
         //    //std::cout<<"in boxminus __oth:\n "<<__oth<<"\n";
         //    vectstate = __res.statek.getVectorizedState();
@@ -364,12 +457,12 @@ namespace localization
 
         void boxminus(vectorized_type *__res, const MultiState& __oth) const
         {
-            State::vectorized_type vectstate;
-            vectstate = __res->block(0, 0, State::DOF, 1);
+            typename _State::vectorized_type vectstate;
+            vectstate = __res->block(0, 0, _State::DOF, 1);
             //std::cout<<"in boxminus __res:\n "<<__res<<"\n";
             //std::cout<<"in boxminus __oth:\n "<<__oth<<"\n";
             this->statek.boxminus(vectstate.data(), __oth.statek);
-            __res->block(0, 0, State::DOF, 1) = vectstate;
+            __res->block(0, 0, _State::DOF, 1) = vectstate;
 
             typename std::vector<_SensorState>::const_iterator it_this_sensorsk = this->sensorsk.begin();
             typename std::vector<_SensorState>::const_iterator it_oth_sensorsk = __oth.sensorsk.begin();
@@ -377,9 +470,9 @@ namespace localization
             {
                 unsigned int index = it_this_sensorsk - this->sensorsk.begin();
                 typename _SensorState::vectorized_type vectsensor;
-                vectsensor = __res->block(State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1);
+                vectsensor = __res->block(_State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1);
                 it_this_sensorsk->boxminus(vectsensor.data(), *it_oth_sensorsk);
-                __res->block(State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1) = vectsensor;
+                __res->block(_State::DOF+(index*_SensorState::DOF), 0, _SensorState::DOF, 1) = vectsensor;
             }
 
             //std::cout<<"after in boxminus __res:\n "<<*__res<<"\n";
@@ -416,14 +509,14 @@ namespace localization
             vectorized_type vstate(static_cast<unsigned int>(DOF), 1);
 
             /** Statek **/
-            vstate.block(0, 0, State::DOF, 1) = statek.getVectorizedState(static_cast<State::VectorizedMode>(type));
+            vstate.block(0, 0, _State::DOF, 1) = statek.getVectorizedState(static_cast<typename _State::VectorizedMode>(type));
 
             /** Sensors **/
             register size_t sensor_idx = 0;
             for (typename std::vector<_SensorState>::iterator it = sensorsk.begin();
                     it != sensorsk.end(); ++it)
             {
-                vstate.block(State::DOF + (sensor_idx*_SensorState::DOF), 0, _SensorState::DOF, 1) = it->getVectorizedState(static_cast<typename _SensorState::VectorizedMode >(type));
+                vstate.block(_State::DOF + (sensor_idx*_SensorState::DOF), 0, _SensorState::DOF, 1) = it->getVectorizedState(static_cast<typename _SensorState::VectorizedMode >(type));
                 sensor_idx++;
             }
 

@@ -23,7 +23,7 @@
 
 /** Wrap the Multi State **/
 typedef localization::MtkWrap<localization::State> WSingleState;
-typedef localization::MtkDynamicWrap< localization::MultiState<localization::SensorState> > WMultiState;
+typedef localization::MtkDynamicWrap< localization::MultiState<localization::State, localization::SensorState> > WMultiState;
 typedef localization::Msckf<WMultiState, WSingleState> MultiStateFilter;
 typedef ::MTK::vect<Eigen::Dynamic, double> MeasurementType;
 
@@ -64,6 +64,12 @@ BOOST_AUTO_TEST_CASE( STATES )
     WMultiState mstatebis;
     mstatebis.set(mstate.getVectorizedState());
     BOOST_CHECK(mstate == mstatebis);
+
+    typedef localization::MtkDynamicWrap< localization::MultiState<localization::ReducedState, localization::SensorState> > WReducedMultiState;
+    WReducedMultiState rmstate;
+    BOOST_TEST_MESSAGE("[MULTI STATE] rmstate::DOF is "<<rmstate.DOF);
+    BOOST_CHECK(rmstate.DOF == 6);
+
 
 }
 
