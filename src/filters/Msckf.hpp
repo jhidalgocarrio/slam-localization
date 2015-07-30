@@ -28,7 +28,7 @@
 /** MTK's pose and orientation definition **/
 #include <mtk/startIdx.hpp>
 
-#define MSCKF_DEBUG_PRINTS 1
+//#define MSCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -39,10 +39,6 @@ namespace localization
         typedef Msckf self;
 
         public:
-            enum
-            {
-                    DOF_MULTI_STATE = _MultiState::DOF
-            };
 
             enum
             {
@@ -188,7 +184,7 @@ namespace localization
             template<typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
             void update(const _Measurement &z, _MeasurementModel h, _MeasurementNoiseCovariance R)
             {
-                    update(z, h, R, ukfom::accept_any_mahalanobis_distance<ScalarType>);
+                    update(z, h, R, accept_mahalanobis_distance<ScalarType>);
             }
 
             template<typename _Measurement, typename _MeasurementModel>
@@ -196,7 +192,7 @@ namespace localization
                         const Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> &R)
             {
                     typedef Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> measurement_cov;
-                    update(z, h, boost::bind(ukfom::id<measurement_cov>, R), ukfom::accept_any_mahalanobis_distance<ScalarType>);
+                    update(z, h, boost::bind(ukfom::id<measurement_cov>, R), accept_mahalanobis_distance<ScalarType>);
             }
 
             template<typename _Measurement, typename _MeasurementModel,
@@ -204,47 +200,63 @@ namespace localization
             void update(const _Measurement &z, _MeasurementModel h,
                         _MeasurementNoiseCovariance R, _SignificanceTest mt)
             {
-                    const static int measurement_rows = ukfom::dof<_Measurement>::value;
-                    typedef _Measurement Measurement;
-                    typedef Eigen::Matrix<ScalarType, measurement_rows, 1> VectorizedMeasurement;
-                    typedef Eigen::Matrix<ScalarType, measurement_rows, measurement_rows> MeasurementCov;
-                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, measurement_rows> CrossCov;
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> VectorXd;
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXd;
 
+                    std::cout<<"** UPDATE **\n";
+                    std::cout<<"Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
                     MultiStateSigma X(2 * mu_state.getDOF() + 1);
-                    this->generateSigmaPoints(mu_state, Pk, X);
+                    generateSigmaPoints(mu_state, Pk, X);
+                    std::cout<<"created "<<X.size()<<" X sigma points\n";
 
-                    std::vector<Measurement> Z(X.size());
+                    std::vector<VectorXd> Z(X.size());
                     std::transform(X.begin(), X.end(), Z.begin(), h);
+                    std::cout<<"created "<<Z.size()<<" Z sigma points\n";
 
-                    const Measurement meanZ = meanSigmaPoints(Z);
+                    const VectorXd mean_z = meanSigmaPoints(Z);
+                    std::cout<<"mean_z "<<mean_z.rows()<<" x "<<mean_z.cols()<<"\n";
+                    std::cout<<"mean_z\n"<<mean_z<<"\n";
+                    std::cout<<"z\n"<<z<<"\n";
 
-                    /** Remove outliers and compute innovation **/
+                    VectorXd innovation = z - mean_z;
+                    std::cout<<"innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
+                    std::cout<<"innovation \n"<<innovation<<"\n";
 
-                    const MeasurementCov S = covSigmaPoints(meanZ, Z) + R(); //S = Pzz + R
-                    const CrossCov covXZ = crossCovSigmaPoints(mu_state, meanZ, X, Z);
+                    std::cout<<"R() size "<<R().rows()<<" x "<<R().cols()<<"\n";
+                    std::cout<<"R()\n "<<R()<<"\n";
+                    const MatrixXd S = this->covSigmaPoints(mean_z, Z) + R(); //S = Pzz + R
+                    std::cout<<"S size "<<S.rows()<<" x "<<S.cols()<<"\n";
+                    std::cout<<"S\n "<<S<<"\n";
 
-                    //H = Pzx * (P^)-1
+                    MatrixXd S_inverse = S.inverse();
+                    std::cout<<"S_inverse size "<<S_inverse.rows()<<" x "<<S_inverse.cols()<<"\n";
+                    std::cout<<"S_inverse\n "<<S_inverse<<"\n";
 
-                    MeasurementCov S_inverse;
-                    S_inverse = S.inverse();
+                    MatrixXd covXZ = this->crossCovSigmaPoints(mu_state, mean_z, X, Z);
+                    std::cout<<"covXZ size "<<covXZ.rows()<<" x "<<covXZ.cols()<<"\n";
 
-                    const CrossCov K = covXZ * S_inverse;
-
-                    const VectorizedMeasurement innovation = z - meanZ;
-
-                    const ScalarType mahalanobis2 = (innovation.transpose() * S_inverse * innovation)(0);
-
-                    if (mt(mahalanobis2))
+                    removeOutliers (innovation, S_inverse, covXZ, mt, 2);
+                    std::cout<<"innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
+                    std::cout<<"S_inverse size "<<S_inverse.rows()<<" x "<<S_inverse.cols()<<"\n";
+                    std::cout<<"covXZ size "<<covXZ.rows()<<" x "<<covXZ.cols()<<"\n";
+                    if (innovation.rows() > 0)
                     {
-                            Pk -= K * S * K.transpose();
-                            //applyDelta(K * innovation);
-                            std::cout<<"K "<<K.rows() <<" x "<<K.cols()<<"\n";
+
+                        const MatrixXd K = covXZ * S_inverse;
+
+                        Pk -= K * S * K.transpose();
+                        this->applyDelta(K * innovation);
+                        std::cout<<"K "<<K.rows() <<" x "<<K.cols()<<"\n";
+                        std::cout<<"Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
                     }
 
-                    #ifdef MSCKF_DEBUG_PRINTS
-                    std::cout << "[MSCKF_UPDATE] innovation:" << std::endl << innovation << std::endl;
+                   // #ifdef MSCKF_DEBUG_PRINTS
+                    std::cout << "[MSCKF_UPDATE] innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
+                    for (register int i = 0; i<innovation.size(); ++i)
+                        std::cout<<innovation[i]<<"\n";
                     std::cout << "[MSCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
-                    #endif
+                    std::cout << "[MSCKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
+                   // #endif
             }
 
 
@@ -299,7 +311,7 @@ namespace localization
             */
             void generateSigmaPoints(const _MultiState &mu, const MultiStateCovariance &sigma, MultiStateSigma &X) const
             {
-                    generateSigmaPoints(mu, VectorizedMultiState::Zero(), sigma, X);
+                    generateSigmaPoints(mu, VectorizedMultiState::Zero(mu.getDOF(), 1), sigma, X);
             }
 
             /**@brief Sigma Point Calculation for the complete Multi State
@@ -421,6 +433,8 @@ namespace localization
             }
 #endif // VECT_H_
 
+            /*@brief covariance of sigma point when using static size manifold vector
+             */
             template<int _CovSize, typename T>
             Eigen::Matrix<ScalarType, _CovSize, _CovSize>
             covSigmaPoints(const T &mean, const std::vector<T> &V) const
@@ -439,6 +453,27 @@ namespace localization
                     return 0.5 * c;
             }
 
+            /*@brief covariance of sigma points when using the _MultiState
+             */
+            Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>
+            covSigmaPoints(const _MultiState &mean, const std::vector<_MultiState> &V) const
+            {
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> CovMat;
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> CovCol;
+
+                    CovMat c(CovMat::Zero(mean.getDOF(), mean.getDOF()));
+
+                    for (typename std::vector< _MultiState >::const_iterator Vi = V.begin(); Vi != V.end(); ++Vi)
+                    {
+                            CovCol d = *Vi - mean;
+                            c += d * d.transpose();
+                    }
+
+                    return 0.5 * c;
+            }
+
+            /*@brief covariance of sigma points for the dynamic size measurement vector
+             */
             Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>
             covSigmaPoints(const Eigen::Matrix<ScalarType, Eigen::Dynamic, 1>  &mean,
                     const std::vector< Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> > &V) const
@@ -460,7 +495,7 @@ namespace localization
 
             template<typename _State, int _MeasurementRows, typename _SigmaPoints, typename _Measurement>
             Eigen::Matrix<ScalarType, _State::DOF, _MeasurementRows>
-            crossCovSigmaPoints(const _State &meanX, const _Measurement &meanZ,
+            crossCovSigmaPoints(const _State &mean_x, const _Measurement &mean_z,
                                 const _SigmaPoints &X, const std::vector<_Measurement> &Z) const
             {
                     assert(X.size() == Z.size());
@@ -474,7 +509,7 @@ namespace localization
                             typename std::vector<_Measurement>::const_iterator Zi = Z.begin();
                             for (;Zi != Z.end(); ++Xi, ++Zi)
                             {
-                                    c += (*Xi - meanX) * (*Zi - meanZ).transpose();
+                                    c += (*Xi - mean_x) * (*Zi - mean_z).transpose();
                             }
                     }
 
@@ -483,14 +518,14 @@ namespace localization
 
             template<typename _State, typename _SigmaPoints>
             Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>
-            crossCovSigmaPoints(const _State &meanX, const Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &meanZ,
+            crossCovSigmaPoints(const _State &mean_x, const Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &mean_z,
                                 const _SigmaPoints &X, const std::vector< Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> > &Z) const
             {
                     assert(X.size() == Z.size());
 
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> CrossCov;
 
-                    CrossCov c(mu_state.getDOF(), meanZ.size());
+                    CrossCov c(mu_state.getDOF(), mean_z.size());
                     c.setZero();
 
                     {
@@ -498,8 +533,7 @@ namespace localization
                             typename std::vector< Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> >::const_iterator Zi = Z.begin();
                             for (;Zi != Z.end(); ++Xi, ++Zi)
                             {
-                                    _State tempXi (*Xi - meanX);
-                                    c += tempXi.getVectorizedState() * (*Zi - meanZ).transpose();
+                                    c += (*Xi - mean_x) * (*Zi - mean_z).transpose();
                             }
                     }
 
@@ -512,7 +546,7 @@ namespace localization
                     generateSigmaPoints(mu_state, delta, Pk, X);
 
                     mu_state = meanSigmaPoints(X);
-                    Pk = covSigmaPoints<_MultiState::DOF>(mu_state, X);
+                    Pk = covSigmaPoints(mu_state, X);
             }
 
             void applyDelta(_SingleState &statek_i, SingleStateCovariance &Pk_i, const VectorizedSingleState &delta)
@@ -535,15 +569,81 @@ namespace localization
                     }
             }
 
+            static void removeRow(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &vector, unsigned int rowToRemove)
+            {
+                unsigned int numRows = vector.rows()-1;
+
+                if( rowToRemove < numRows )
+                    vector.block(rowToRemove,0,numRows-rowToRemove, 1) =
+                        vector.block(rowToRemove+1,0,numRows-rowToRemove, 1);
+
+                vector.conservativeResize(numRows);
+            }
+
+            static void removeRow(Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &matrix, unsigned int rowToRemove)
+            {
+                unsigned int numRows = matrix.rows()-1;
+                unsigned int numCols = matrix.cols();
+
+                if( rowToRemove < numRows )
+                    matrix.block(rowToRemove,0,numRows-rowToRemove,numCols) =
+                        matrix.block(rowToRemove+1,0,numRows-rowToRemove,numCols);
+
+                matrix.conservativeResize(numRows,numCols);
+            }
+
+            static void removeColumn(Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>& matrix, unsigned int colToRemove)
+            {
+                unsigned int numRows = matrix.rows();
+                unsigned int numCols = matrix.cols()-1;
+
+                if( colToRemove < numCols )
+                    matrix.block(0,colToRemove,numRows,numCols-colToRemove) =
+                        matrix.block(0,colToRemove+1,numRows,numCols-colToRemove);
+
+                matrix.conservativeResize(numRows,numCols);
+            }
+
+
+            template <typename _SignificanceTest>
+            void removeOutliers(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &information_matrix,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &cov_xz,
+                    _SignificanceTest mt,
+                    const unsigned int dof)
+            {
+                /** Process the innovation by block of dof size **/
+                register unsigned int i=0;
+                while (i<innovation.size()/dof)
+                {
+                    const ScalarType mahalanobis2 = (innovation.block(dof*i, 0, dof, 1).transpose() * information_matrix.block(dof*i, dof*i, dof, dof) * innovation.block(dof*i, 0, dof, 1))[0];
+                    std::cout<<"feature["<<i<<"]:\n"<<innovation.block(dof*i, 0, dof, 1) <<"\n";
+                    if (!mt(mahalanobis2, dof))
+                    {
+                        std::cout<<"OUTLIER!!\n";
+                        removeRow(innovation, dof*i);  removeRow(innovation, (dof*i)+1);
+                        removeRow(information_matrix, dof*i); removeColumn(information_matrix, dof*i);
+                        removeRow(information_matrix, (dof*i)+1); removeColumn(information_matrix, (dof*i)+1);
+                        removeColumn(cov_xz, dof*i);removeColumn(cov_xz, (dof*i)+1);
+                    }
+                    else
+                    {
+                        i++;
+                    }
+                }
+
+                return;
+            }
+
     public:
             void checkSigmaPoints()
             {
-                MultiStateSigma X(2 * DOF_MULTI_STATE + 1);
+                MultiStateSigma X(2 * mu_state.getDOF() + 1);
                 generateSigmaPoints(mu_state, Pk, X);
 
                 _MultiState muX = meanSigmaPoints(X);
 
-                MultiStateCovariance Pktest = covSigmaPoints<_MultiState::DOF>(muX, X);
+                MultiStateCovariance Pktest = covSigmaPoints(muX, X);
                 if((Pktest - Pk).cwise().abs().maxCoeff()>1e-6){
                         std::cerr << Pktest << "\n\n" << Pk;
                         assert(false);
@@ -564,10 +664,10 @@ namespace localization
             template <typename _ScalarType>
             static bool accept_mahalanobis_distance(const _ScalarType &mahalanobis2, const int dof)
             {
-                #ifdef MSCKF_DEBUG_PRINTS
+                //#ifdef MSCKF_DEBUG_PRINTS
                 std::cout << "[MAHALANOBIS_DISTANCE] mahalanobis2: " << mahalanobis2 <<std::endl;
                 std::cout << "[MAHALANOBIS_DISTANCE] dof: " << dof <<std::endl;
-                #endif
+                //#endif
 
 
                 /** Only significance of alpha = 5% is computed **/
