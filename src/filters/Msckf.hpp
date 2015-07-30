@@ -224,23 +224,22 @@ namespace localization
 
                     std::cout<<"R() size "<<R().rows()<<" x "<<R().cols()<<"\n";
                     std::cout<<"R()\n "<<R()<<"\n";
-                    const MatrixXd S = this->covSigmaPoints(mean_z, Z) + R(); //S = Pzz + R
+                    MatrixXd S = this->covSigmaPoints(mean_z, Z) + R(); //S = Pzz + R
                     std::cout<<"S size "<<S.rows()<<" x "<<S.cols()<<"\n";
                     std::cout<<"S\n "<<S<<"\n";
-
-                    MatrixXd S_inverse = S.inverse();
-                    std::cout<<"S_inverse size "<<S_inverse.rows()<<" x "<<S_inverse.cols()<<"\n";
-                    std::cout<<"S_inverse\n "<<S_inverse<<"\n";
 
                     MatrixXd covXZ = this->crossCovSigmaPoints(mu_state, mean_z, X, Z);
                     std::cout<<"covXZ size "<<covXZ.rows()<<" x "<<covXZ.cols()<<"\n";
 
-                    removeOutliers (innovation, S_inverse, covXZ, mt, 2);
+                    removeOutliers (innovation, S, covXZ, mt, 2);
                     std::cout<<"innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
-                    std::cout<<"S_inverse size "<<S_inverse.rows()<<" x "<<S_inverse.cols()<<"\n";
+                    std::cout<<"S size "<<S.rows()<<" x "<<S.cols()<<"\n";
                     std::cout<<"covXZ size "<<covXZ.rows()<<" x "<<covXZ.cols()<<"\n";
                     if (innovation.rows() > 0)
                     {
+                        const MatrixXd S_inverse = S.inverse();
+                        std::cout<<"S_inverse size "<<S_inverse.rows()<<" x "<<S_inverse.cols()<<"\n";
+                        std::cout<<"S_inverse\n "<<S_inverse<<"\n";
 
                         const MatrixXd K = covXZ * S_inverse;
 
@@ -607,7 +606,7 @@ namespace localization
 
             template <typename _SignificanceTest>
             void removeOutliers(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
-                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &information_matrix,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &cov_matrix,
                     Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &cov_xz,
                     _SignificanceTest mt,
                     const unsigned int dof)
@@ -616,14 +615,14 @@ namespace localization
                 register unsigned int i=0;
                 while (i<innovation.size()/dof)
                 {
-                    const ScalarType mahalanobis2 = (innovation.block(dof*i, 0, dof, 1).transpose() * information_matrix.block(dof*i, dof*i, dof, dof) * innovation.block(dof*i, 0, dof, 1))[0];
+                    const ScalarType mahalanobis2 = (innovation.block(dof*i, 0, dof, 1).transpose() * cov_matrix.block(dof*i, dof*i, dof, dof).inverse() * innovation.block(dof*i, 0, dof, 1))[0];
                     std::cout<<"feature["<<i<<"]:\n"<<innovation.block(dof*i, 0, dof, 1) <<"\n";
                     if (!mt(mahalanobis2, dof))
                     {
                         std::cout<<"OUTLIER!!\n";
                         removeRow(innovation, dof*i);  removeRow(innovation, (dof*i)+1);
-                        removeRow(information_matrix, dof*i); removeColumn(information_matrix, dof*i);
-                        removeRow(information_matrix, (dof*i)+1); removeColumn(information_matrix, (dof*i)+1);
+                        removeRow(cov_matrix, dof*i); removeColumn(cov_matrix, dof*i);
+                        removeRow(cov_matrix, (dof*i)+1); removeColumn(cov_matrix, (dof*i)+1);
                         removeColumn(cov_xz, dof*i);removeColumn(cov_xz, (dof*i)+1);
                     }
                     else
