@@ -189,10 +189,10 @@ namespace localization
 
             template<typename _Measurement, typename _MeasurementModel>
             void update(const _Measurement &z, _MeasurementModel h,
-                        const Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> &R)
+                        const Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &R)
             {
                     typedef Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> measurement_cov;
-                    update(z, h, boost::bind(ukfom::id<measurement_cov>, R), accept_mahalanobis_distance<ScalarType>);
+                    update(z, h, R, accept_mahalanobis_distance<ScalarType>);
             }
 
             template<typename _Measurement, typename _MeasurementModel,
@@ -203,45 +203,31 @@ namespace localization
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> VectorXd;
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXd;
 
-                    std::cout<<"** UPDATE **\n";
-                    std::cout<<"Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
                     MultiStateSigma X(2 * mu_state.getDOF() + 1);
                     generateSigmaPoints(mu_state, Pk, X);
-                    std::cout<<"created "<<X.size()<<" X sigma points\n";
 
                     std::vector<VectorXd> Z(X.size());
                     std::transform(X.begin(), X.end(), Z.begin(), h);
-                    std::cout<<"created "<<Z.size()<<" Z sigma points\n";
 
                     const VectorXd mean_z = meanSigmaPoints(Z);
-                    std::cout<<"mean_z "<<mean_z.rows()<<" x "<<mean_z.cols()<<"\n";
-                    std::cout<<"mean_z\n"<<mean_z<<"\n";
-                    std::cout<<"z\n"<<z<<"\n";
 
                     VectorXd innovation = z - mean_z;
-                    std::cout<<"innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
-                    std::cout<<"innovation \n"<<innovation<<"\n";
-
-                    std::cout<<"R() size "<<R().rows()<<" x "<<R().cols()<<"\n";
-                    std::cout<<"R()\n "<<R()<<"\n";
-                    MatrixXd S = this->covSigmaPoints(mean_z, Z) + R(); //S = Pzz + R
-                    std::cout<<"S size "<<S.rows()<<" x "<<S.cols()<<"\n";
-                    std::cout<<"S\n "<<S<<"\n";
 
                     MatrixXd covXZ = this->crossCovSigmaPoints(mu_state, mean_z, X, Z);
-                    std::cout<<"covXZ size "<<covXZ.rows()<<" x "<<covXZ.cols()<<"\n";
 
-                    removeOutliers (innovation, S, covXZ, mt, 2);
-                    std::cout<<"innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
-                    std::cout<<"S size "<<S.rows()<<" x "<<S.cols()<<"\n";
-                    std::cout<<"covXZ size "<<covXZ.rows()<<" x "<<covXZ.cols()<<"\n";
+                    MatrixXd H = covXZ.transpose() * Pk.inverse(); //H = Pzx * (Pk)^-1
+                    std::cout<<"H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+
+
+                    removeOutliers (innovation, H, Pk, R, mt, 2);
+                    std::cout<<"H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+                    std::cout<<"Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
+                    std::cout<<"R size "<<R.rows()<<" x "<<R.cols()<<"\n";
+
                     if (innovation.rows() > 0)
                     {
-                        const MatrixXd S_inverse = S.inverse();
-                        std::cout<<"S_inverse size "<<S_inverse.rows()<<" x "<<S_inverse.cols()<<"\n";
-                        std::cout<<"S_inverse\n "<<S_inverse<<"\n";
-
-                        const MatrixXd K = covXZ * S_inverse;
+                        const MatrixXd S = H * Pk * H.transpose() + R;
+                        const MatrixXd K = Pk * H.transpose() * S.inverse();
 
                         Pk -= K * S * K.transpose();
                         this->applyDelta(K * innovation);
@@ -251,8 +237,6 @@ namespace localization
 
                    // #ifdef MSCKF_DEBUG_PRINTS
                     std::cout << "[MSCKF_UPDATE] innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
-                    for (register int i = 0; i<innovation.size(); ++i)
-                        std::cout<<innovation[i]<<"\n";
                     std::cout << "[MSCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
                     std::cout << "[MSCKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
                    // #endif
@@ -606,24 +590,29 @@ namespace localization
 
             template <typename _SignificanceTest>
             void removeOutliers(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
-                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &cov_matrix,
-                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &cov_xz,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &h_matrix,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &p_matrix,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &r_matrix,
                     _SignificanceTest mt,
                     const unsigned int dof)
             {
+                /** Information matrix **/
+                Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> information  =
+                    ((h_matrix * p_matrix * h_matrix.transpose()) + r_matrix).inverse();
+
                 /** Process the innovation by block of dof size **/
                 register unsigned int i=0;
                 while (i<innovation.size()/dof)
                 {
-                    const ScalarType mahalanobis2 = (innovation.block(dof*i, 0, dof, 1).transpose() * cov_matrix.block(dof*i, dof*i, dof, dof).inverse() * innovation.block(dof*i, 0, dof, 1))[0];
+                    const ScalarType mahalanobis2 = (innovation.block(dof*i, 0, dof, 1).transpose() * information.block(dof*i, dof*i, dof, dof) * innovation.block(dof*i, 0, dof, 1))[0];
                     std::cout<<"feature["<<i<<"]:\n"<<innovation.block(dof*i, 0, dof, 1) <<"\n";
                     if (!mt(mahalanobis2, dof))
                     {
                         std::cout<<"OUTLIER!!\n";
-                        removeRow(innovation, dof*i);  removeRow(innovation, (dof*i)+1);
-                        removeRow(cov_matrix, dof*i); removeColumn(cov_matrix, dof*i);
-                        removeRow(cov_matrix, (dof*i)+1); removeColumn(cov_matrix, (dof*i)+1);
-                        removeColumn(cov_xz, dof*i);removeColumn(cov_xz, (dof*i)+1);
+                        removeRow(innovation, dof*i); removeRow(innovation, (dof*i)+1);
+                        removeRow(r_matrix, dof*i); removeColumn(r_matrix, dof*i);
+                        removeRow(r_matrix, (dof*i)+1); removeColumn(r_matrix, (dof*i)+1);
+                        removeRow(h_matrix, dof*i);removeRow(h_matrix, (dof*i)+1);
                     }
                     else
                     {
