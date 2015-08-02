@@ -218,7 +218,6 @@ namespace localization
                     MatrixXd H = covXZ.transpose() * Pk.inverse(); //H = Pzx * (Pk)^-1
                     std::cout<<"H size "<<H.rows()<<" x "<<H.cols()<<"\n";
 
-
                     removeOutliers (innovation, H, Pk, R, mt, 2);
                     std::cout<<"H size "<<H.rows()<<" x "<<H.cols()<<"\n";
                     std::cout<<"Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
@@ -226,6 +225,7 @@ namespace localization
 
                     if (innovation.rows() > 0)
                     {
+                        reduceDimension (innovation, H, R);
                         const MatrixXd S = H * Pk * H.transpose() + R;
                         const MatrixXd K = Pk * H.transpose() * S.inverse();
 
@@ -619,6 +619,31 @@ namespace localization
                         i++;
                     }
                 }
+
+                return;
+            }
+
+            void reduceDimension(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &h_matrix,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &r_matrix)
+            {
+                typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXd;
+
+                Eigen::HouseholderQR<MatrixXd> qr(h_matrix);
+                MatrixXd Q = qr.householderQ();
+                MatrixXd R = qr.matrixQR().template triangularView<Eigen::Upper>();
+
+                MatrixXd thinQ(MatrixXd::Identity(h_matrix.rows(), h_matrix.cols()));
+                thinQ = qr.householderQ() * thinQ;
+
+                /** Reduced H matrix **/
+                h_matrix = R.block(0, 0, this->mu_state.getDOF(), this->mu_state.getDOF());
+
+                /** Reduced innovation **/
+                innovation = thinQ.transpose() * innovation;
+
+                /** Reduced noise matrix **/
+                r_matrix = thinQ.transpose() * r_matrix * thinQ;
 
                 return;
             }
