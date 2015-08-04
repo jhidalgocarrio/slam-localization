@@ -212,34 +212,39 @@ namespace localization
                     const VectorXd mean_z = meanSigmaPoints(Z);
 
                     VectorXd innovation = z - mean_z;
+                    for (register int i = 0; i<z.size(); ++i)
+                    {
+                        std::cout<<"z["<<i<<"]:\t"<<z[i]<<" - "<<mean_z[i]<<" = "<<innovation[i]<<"\n";
+                    }
 
                     MatrixXd covXZ = this->crossCovSigmaPoints(mu_state, mean_z, X, Z);
 
                     MatrixXd H = covXZ.transpose() * Pk.inverse(); //H = Pzx * (Pk)^-1
-                    std::cout<<"H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+                    std::cout<<"[MSCKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
 
                     removeOutliers (innovation, H, Pk, R, mt, 2);
-                    std::cout<<"H size "<<H.rows()<<" x "<<H.cols()<<"\n";
-                    std::cout<<"Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
-                    std::cout<<"R size "<<R.rows()<<" x "<<R.cols()<<"\n";
+                    std::cout<<"[MSCKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+                    std::cout<<"[MSCKF_UPDATE] Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
+                    std::cout<<"[MSCKF_UPDATE] R size "<<R.rows()<<" x "<<R.cols()<<"\n";
 
                     if (innovation.rows() > 0)
                     {
-                        reduceDimension (innovation, H, R);
+                        //reduceDimension (innovation, H, R);
                         const MatrixXd S = H * Pk * H.transpose() + R;
                         const MatrixXd K = Pk * H.transpose() * S.inverse();
+                        std::cout << "[MSCKF_UPDATE] innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
+                        std::cout << "[MSCKF_UPDATE] innovation\n"<<innovation<<"\n";
 
                         Pk -= K * S * K.transpose();
                         this->applyDelta(K * innovation);
-                        std::cout<<"K "<<K.rows() <<" x "<<K.cols()<<"\n";
-                        std::cout<<"Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
+                        std::cout<<"[MSCKF_UPDATE] K "<<K.rows() <<" x "<<K.cols()<<"\n";
+                        std::cout<<"[MSCKF_UPDATE] Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
                     }
 
-                   // #ifdef MSCKF_DEBUG_PRINTS
-                    std::cout << "[MSCKF_UPDATE] innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
+                    //#ifdef MSCKF_DEBUG_PRINTS
                     std::cout << "[MSCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
                     std::cout << "[MSCKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
-                   // #endif
+                    //#endif
             }
 
 
@@ -605,10 +610,10 @@ namespace localization
                 while (i<innovation.size()/dof)
                 {
                     const ScalarType mahalanobis2 = (innovation.block(dof*i, 0, dof, 1).transpose() * information.block(dof*i, dof*i, dof, dof) * innovation.block(dof*i, 0, dof, 1))[0];
-                    std::cout<<"feature["<<i<<"]:\n"<<innovation.block(dof*i, 0, dof, 1) <<"\n";
+                    //std::cout<<"feature["<<i<<"]:\n"<<innovation.block(dof*i, 0, dof, 1) <<"\n";
                     if (!mt(mahalanobis2, dof))
                     {
-                        std::cout<<"OUTLIER!!\n";
+                        //std::cout<<"OUTLIER!!\n";
                         removeRow(innovation, dof*i); removeRow(innovation, (dof*i)+1);
                         removeRow(r_matrix, dof*i); removeColumn(r_matrix, dof*i);
                         removeRow(r_matrix, (dof*i)+1); removeColumn(r_matrix, (dof*i)+1);
@@ -677,10 +682,10 @@ namespace localization
             template <typename _ScalarType>
             static bool accept_mahalanobis_distance(const _ScalarType &mahalanobis2, const int dof)
             {
-                //#ifdef MSCKF_DEBUG_PRINTS
+                #ifdef MSCKF_DEBUG_PRINTS
                 std::cout << "[MAHALANOBIS_DISTANCE] mahalanobis2: " << mahalanobis2 <<std::endl;
                 std::cout << "[MAHALANOBIS_DISTANCE] dof: " << dof <<std::endl;
-                //#endif
+                #endif
 
 
                 /** Only significance of alpha = 5% is computed **/
