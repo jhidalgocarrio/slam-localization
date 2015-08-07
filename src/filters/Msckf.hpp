@@ -200,7 +200,7 @@ namespace localization
 
             template<typename _Measurement, typename _MeasurementModel,
                     typename _MeasurementNoiseCovariance, typename _SignificanceTest>
-            void update(const _Measurement &z, _MeasurementModel h,
+            void update(const _Measurement &z, _MeasurementModel &h,
                         _MeasurementNoiseCovariance &R, _SignificanceTest mt)
             {
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> VectorXd;
@@ -280,7 +280,7 @@ namespace localization
              */
             template<typename _Measurement, typename _MeasurementModel,
                     typename _MeasurementNoiseCovariance, typename _SignificanceTest>
-            void update(const _Measurement &z, _MeasurementModel h,
+            void update(const _Measurement &z, _MeasurementModel &h,
                         Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &H,
                         _MeasurementNoiseCovariance &R, _SignificanceTest mt)
             {
@@ -291,7 +291,6 @@ namespace localization
 
                     VectorXd innovation = z - mean_z;
 
-                    std::cout<<"[MSCKF_EKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
                     removeOutliers (innovation, H, Pk, R, mt, 2);
                     #ifdef MSCKF_DEBUG_PRINTS
                     std::cout<<"[MSCKF_EKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
@@ -315,7 +314,7 @@ namespace localization
                         #endif
 
                         Pk -= K * S * K.transpose();
-                        this->applyDelta(K * innovation);
+                        this->mu_state = this->mu_state + K * innovation;
 
                         #ifdef MSCKF_DEBUG_PRINTS
                         std::cout<<"[MSCKF_EKF_UPDATE] K "<<K.rows() <<" x "<<K.cols()<<"\n";
