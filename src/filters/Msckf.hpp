@@ -28,6 +28,9 @@
 /** MTK's pose and orientation definition **/
 #include <mtk/startIdx.hpp>
 
+/** Base types **/
+#include <base/Eigen.hpp>
+
 //#define MSCKF_DEBUG_PRINTS 1
 
 namespace localization
@@ -182,7 +185,7 @@ namespace localization
             }
 
             template<typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
-            void update(const _Measurement &z, _MeasurementModel h, _MeasurementNoiseCovariance R)
+            void update(const _Measurement &z, _MeasurementModel h, _MeasurementNoiseCovariance &R)
             {
                     update(z, h, R, accept_mahalanobis_distance<ScalarType>);
             }
@@ -198,7 +201,7 @@ namespace localization
             template<typename _Measurement, typename _MeasurementModel,
                     typename _MeasurementNoiseCovariance, typename _SignificanceTest>
             void update(const _Measurement &z, _MeasurementModel h,
-                        _MeasurementNoiseCovariance R, _SignificanceTest mt)
+                        _MeasurementNoiseCovariance &R, _SignificanceTest mt)
             {
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> VectorXd;
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXd;
@@ -212,41 +215,121 @@ namespace localization
                     const VectorXd mean_z = meanSigmaPoints(Z);
 
                     VectorXd innovation = z - mean_z;
-                    for (register int i = 0; i<z.size(); ++i)
-                    {
-                        std::cout<<"z["<<i<<"]:\t"<<z[i]<<" - "<<mean_z[i]<<" = "<<innovation[i]<<"\n";
-                    }
 
                     MatrixXd covXZ = this->crossCovSigmaPoints(mu_state, mean_z, X, Z);
 
                     MatrixXd H = covXZ.transpose() * Pk.inverse(); //H = Pzx * (Pk)^-1
-                    std::cout<<"[MSCKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
 
+                    std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
                     removeOutliers (innovation, H, Pk, R, mt, 2);
-                    std::cout<<"[MSCKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
-                    std::cout<<"[MSCKF_UPDATE] Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
-                    std::cout<<"[MSCKF_UPDATE] R size "<<R.rows()<<" x "<<R.cols()<<"\n";
+                    #ifdef MSCKF_DEBUG_PRINTS
+                    std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+                    std::cout<<"[MSCKF_UKF_UPDATE] H \n"<<H<<"\n";
+                    std::cout<<"[MSCKF_UKF_UPDATE] Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
+                    std::cout<<"[MSCKF_UKF_UPDATE] R size "<<R.rows()<<" x "<<R.cols()<<"\n";
+                    #endif
 
                     if (innovation.rows() > 0)
                     {
-                        //reduceDimension (innovation, H, R);
+                        #ifdef MSCKF_DEBUG_PRINTS
+                        std::cout << "[MSCKF_UKF_UPDATE] innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
+                        std::cout << "[MSCKF_UKF_UPDATE] innovation\n"<<innovation<<"\n";
+                        #endif
+
+                        reduceDimension (innovation, H, R);
                         const MatrixXd S = H * Pk * H.transpose() + R;
                         const MatrixXd K = Pk * H.transpose() * S.inverse();
-                        std::cout << "[MSCKF_UPDATE] innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
-                        std::cout << "[MSCKF_UPDATE] innovation\n"<<innovation<<"\n";
+                        #ifdef MSCKF_DEBUG_PRINTS
+                        std::cout << "[MSCKF_UKF_UPDATE] innovation\n"<<innovation<<"\n";
+                        #endif
 
                         Pk -= K * S * K.transpose();
                         this->applyDelta(K * innovation);
-                        std::cout<<"[MSCKF_UPDATE] K "<<K.rows() <<" x "<<K.cols()<<"\n";
-                        std::cout<<"[MSCKF_UPDATE] Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
+
+                        #ifdef MSCKF_DEBUG_PRINTS
+                        std::cout<<"[MSCKF_UKF_UPDATE] K "<<K.rows() <<" x "<<K.cols()<<"\n";
+                        std::cout<<"[MSCKF_UKF_UPDATE] Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
+                        #endif
+
+                        base::guaranteeSPD(Pk);
                     }
 
-                    //#ifdef MSCKF_DEBUG_PRINTS
-                    std::cout << "[MSCKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
-                    std::cout << "[MSCKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
-                    //#endif
+                    #ifdef MSCKF_DEBUG_PRINTS
+                    std::cout << "[MSCKF_UKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
+                    std::cout << "[MSCKF_UKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
+                    #endif
             }
 
+            /**@brief update
+             *
+             * EKF update
+             *
+             */
+            template<typename _Measurement, typename _MeasurementModel>
+            void update(const _Measurement &z, _MeasurementModel h,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &H,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &R)
+            {
+                    update(z, h, H, R, accept_mahalanobis_distance<ScalarType>);
+            }
+
+            /**@brief update
+             *
+             * EKF update
+             *
+             */
+            template<typename _Measurement, typename _MeasurementModel,
+                    typename _MeasurementNoiseCovariance, typename _SignificanceTest>
+            void update(const _Measurement &z, _MeasurementModel h,
+                        Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &H,
+                        _MeasurementNoiseCovariance &R, _SignificanceTest mt)
+            {
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> VectorXd;
+                    typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXd;
+
+                    const VectorXd mean_z = h(this->mu_state, H);
+
+                    VectorXd innovation = z - mean_z;
+
+                    std::cout<<"[MSCKF_EKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+                    removeOutliers (innovation, H, Pk, R, mt, 2);
+                    #ifdef MSCKF_DEBUG_PRINTS
+                    std::cout<<"[MSCKF_EKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+                    std::cout<<"[MSCKF_EKF_UPDATE] H \n"<<H<<"\n";
+                    std::cout<<"[MSCKF_EKF_UPDATE] Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
+                    std::cout<<"[MSCKF_EKF_UPDATE] R size "<<R.rows()<<" x "<<R.cols()<<"\n";
+                    #endif
+
+                    if (innovation.rows() > 0)
+                    {
+                        #ifdef MSCKF_DEBUG_PRINTS
+                        std::cout << "[MSCKF_EKF_UPDATE] innovation size "<<innovation.rows()<<" x "<<innovation.cols()<<"\n";
+                        std::cout << "[MSCKF_EKF_UPDATE] innovation\n"<<innovation<<"\n";
+                        #endif
+
+                        reduceDimension (innovation, H, R);
+                        const MatrixXd S = H * Pk * H.transpose() + R;
+                        const MatrixXd K = Pk * H.transpose() * S.inverse();
+                        #ifdef MSCKF_DEBUG_PRINTS
+                        std::cout << "[MSCKF_EKF_UPDATE] innovation\n"<<innovation<<"\n";
+                        #endif
+
+                        Pk -= K * S * K.transpose();
+                        this->applyDelta(K * innovation);
+
+                        #ifdef MSCKF_DEBUG_PRINTS
+                        std::cout<<"[MSCKF_EKF_UPDATE] K "<<K.rows() <<" x "<<K.cols()<<"\n";
+                        std::cout<<"[MSCKF_EKF_UPDATE] Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
+                        #endif
+
+                        base::guaranteeSPD(Pk);
+                    }
+
+                    #ifdef MSCKF_DEBUG_PRINTS
+                    std::cout << "[MSCKF_EKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
+                    std::cout << "[MSCKF_EKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
+                    #endif
+            }
 
             void muSingleState(const _SingleState & state)
             {
