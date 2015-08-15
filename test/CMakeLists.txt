@@ -10,3 +10,5 @@ rock_testsuite(MsckfUnitTest MsckfUnitTest.cpp
 rock_testsuite(DataModelUnitTest DataModelUnitTest.cpp
     DEPS localization)
 
+rock_testsuite(EigenTest test_eigen.cpp)
+
