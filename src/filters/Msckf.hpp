@@ -29,6 +29,7 @@
 #include <mtk/startIdx.hpp>
 
 /** Base types **/
+#include <base/Float.hpp>
 #include <base/Eigen.hpp>
 
 //#define MSCKF_DEBUG_PRINTS 1
@@ -88,12 +89,15 @@ namespace localization
             template<typename _ProcessModel>
             void predict(_ProcessModel f, const SingleStateCovariance &Q)
             {
-                predict(f, boost::bind(ukfom::id<SingleStateCovariance>, Q));
+                Eigen::Matrix<ScalarType, _SingleState::DOF, 4> Nk;
+                Nk = base::NaN<double>() * Eigen::Matrix<ScalarType, _SingleState::DOF, 4>::Identity();
+                predict(f, boost::bind(ukfom::id<SingleStateCovariance>, Q), Nk);
             }
 
-            template<typename _ProcessModel, typename _ProcessNoiseCovariance>
-            void predict(_ProcessModel f, _ProcessNoiseCovariance Q)
+            template<typename _ProcessModel, typename _ProcessNoiseCovariance, typename _NullSpaceMatrix>
+            void predict(_ProcessModel f, _ProcessNoiseCovariance Q, _NullSpaceMatrix Nk)
             {
+
                 /** Get the current state vector to propagate **/
                 _SingleState statek_i = this->mu_state.statek;
                 SingleStateCovariance Pk_i = this->Pk.block(0, 0, _SingleState::DOF, _SingleState::DOF);
@@ -164,18 +168,18 @@ namespace localization
                 /**  Cross-Covariance Matrix  **/
                 /*******************************/
 
-                Eigen::Matrix<ScalarType, _SingleState::DOF, Eigen::Dynamic> Pkk;
-                Pkk.resize(_SingleState::DOF, _MultiState::SENSOR_DOF * mu_state.sensorsk.size());
+                //Eigen::Matrix<ScalarType, _SingleState::DOF, Eigen::Dynamic> Pkk;
+                //Pkk.resize(_SingleState::DOF, _MultiState::SENSOR_DOF * mu_state.sensorsk.size());
 
-                /** Covariance between state and sensor poses **/
-                Pkk = Pk.block(0, _SingleState::DOF, _SingleState::DOF, _MultiState::SENSOR_DOF*mu_state.sensorsk.size());
-                Pkk = Fk * Pkk;
-                Pk.block(0, _SingleState::DOF, _SingleState::DOF, _MultiState::SENSOR_DOF*mu_state.sensorsk.size()) = Pkk;
+                ///** Covariance between state and sensor poses **/
+                //Pkk = Pk.block(0, _SingleState::DOF, _SingleState::DOF, _MultiState::SENSOR_DOF*mu_state.sensorsk.size());
+                //Pkk = Fk * Pkk;
+                //Pk.block(0, _SingleState::DOF, _SingleState::DOF, _MultiState::SENSOR_DOF*mu_state.sensorsk.size()) = Pkk;
 
-                /** Covariance between sensor poses and state **/
-                Pkk.transpose() = Pk.block(_SingleState::DOF, 0, _MultiState::SENSOR_DOF*mu_state.sensorsk.size(), _SingleState::DOF);
-                Pkk.transpose() = Pkk.transpose() * Fk.transpose();
-                Pk.block(_SingleState::DOF, 0, _MultiState::SENSOR_DOF*mu_state.sensorsk.size(), _SingleState::DOF) = Pkk.transpose();
+                ///** Covariance between sensor poses and state **/
+                //Pkk.transpose() = Pk.block(_SingleState::DOF, 0, _MultiState::SENSOR_DOF*mu_state.sensorsk.size(), _SingleState::DOF);
+                //Pkk.transpose() = Pkk.transpose() * Fk.transpose();
+                //Pk.block(_SingleState::DOF, 0, _MultiState::SENSOR_DOF*mu_state.sensorsk.size(), _SingleState::DOF) = Pkk.transpose();
 
                 #ifdef  MSCKF_DEBUG_PRINTS
                 std::cout << "[MSCKF_PREDICT] statek_i(k+1|k):" << std::endl << mu_state.statek << std::endl;
@@ -222,6 +226,7 @@ namespace localization
 
                     std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
                     removeOutliers (innovation, H, Pk, R, mt, 2);
+
                     #ifdef MSCKF_DEBUG_PRINTS
                     std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
                     std::cout<<"[MSCKF_UKF_UPDATE] H \n"<<H<<"\n";
