@@ -454,19 +454,49 @@ namespace localization
                     #endif
             }
 
-            // manifold mean
-            template<typename _Manifold>
-            _Manifold meanSigmaPoints(const std::vector<_Manifold> &X) const
+            // manifold mean for single state
+            _SingleState meanSigmaPoints(const std::vector<_SingleState> &X) const
             {
-                    _Manifold reference = X[0];
-                    typename _Manifold::vectorized_type mean_delta;
+                    _SingleState reference = X[0];
+                    typename _SingleState::vectorized_type mean_delta;
                     const static std::size_t max_it = 10000;
 
                     std::size_t i = 0;
                     do {
                             mean_delta.setZero();
-                            for (typename std::vector<_Manifold>::const_iterator Xi = X.begin(); Xi != X.end(); ++Xi)
+                            for (typename std::vector<_SingleState>::const_iterator Xi = X.begin(); Xi != X.end(); ++Xi)
                             {
+                                    std::cout<<"*Xi: "<<*Xi<<"\n";
+                                    mean_delta += *Xi - reference;
+                            }
+                            mean_delta /= X.size();
+                            reference += mean_delta;
+                    } while (mean_delta.norm() > 1e-6
+                                     && ++i < max_it);
+
+                    if (i >= max_it)
+                    {
+                            std::cerr << "ERROR: meanSigmaPoints() did not converge. norm(mean_delta)=" << mean_delta.norm() << std::endl;
+                            assert(false);
+                    }
+
+                    return reference;
+            }
+
+            // manifold mean for multi state
+            _MultiState meanSigmaPoints(const std::vector<_MultiState> &X) const
+            {
+                    _MultiState reference = X[0];
+                    typename _MultiState::vectorized_type mean_delta;
+                    mean_delta.resize(reference.getDOF(), 1);
+                    const static std::size_t max_it = 10000;
+
+                    std::size_t i = 0;
+                    do {
+                            mean_delta.setZero();
+                            for (typename std::vector<_MultiState>::const_iterator Xi = X.begin(); Xi != X.end(); ++Xi)
+                            {
+                                    std::cout<<"*Xi: "<<*Xi<<"\n";
                                     mean_delta += *Xi - reference;
                             }
                             mean_delta /= X.size();
