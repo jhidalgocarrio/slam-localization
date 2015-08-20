@@ -32,7 +32,7 @@
 #include <base/Float.hpp>
 #include <base/Eigen.hpp>
 
-//#define MSCKF_DEBUG_PRINTS 1
+#define MSCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -189,22 +189,22 @@ namespace localization
             }
 
             template<typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
-            void update(const _Measurement &z, _MeasurementModel h, _MeasurementNoiseCovariance &R)
+            unsigned int update(const _Measurement &z, _MeasurementModel h, _MeasurementNoiseCovariance &R)
             {
-                    update(z, h, R, accept_mahalanobis_distance<ScalarType>);
+                    return update(z, h, R, accept_mahalanobis_distance<ScalarType>);
             }
 
             template<typename _Measurement, typename _MeasurementModel>
-            void update(const _Measurement &z, _MeasurementModel h,
+            unsigned int update(const _Measurement &z, _MeasurementModel h,
                         const Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &R)
             {
                     typedef Eigen::Matrix<ScalarType, ukfom::dof<_Measurement>::value, ukfom::dof<_Measurement>::value> measurement_cov;
-                    update(z, h, R, accept_mahalanobis_distance<ScalarType>);
+                    return update(z, h, R, accept_mahalanobis_distance<ScalarType>);
             }
 
             template<typename _Measurement, typename _MeasurementModel,
                     typename _MeasurementNoiseCovariance, typename _SignificanceTest>
-            void update(const _Measurement &z, _MeasurementModel &h,
+            unsigned int update(const _Measurement &z, _MeasurementModel &h,
                         _MeasurementNoiseCovariance &R, _SignificanceTest mt)
             {
                     typedef Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> VectorXd;
@@ -224,8 +224,8 @@ namespace localization
 
                     MatrixXd H = covXZ.transpose() * Pk.inverse(); //H = Pzx * (Pk)^-1
 
-                    std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
-                    removeOutliers (innovation, H, Pk, R, mt, 2);
+                    //std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
+                    const unsigned int number_outliers = removeOutliers (innovation, H, Pk, R, mt, 2);
 
                     #ifdef MSCKF_DEBUG_PRINTS
                     std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
@@ -255,14 +255,14 @@ namespace localization
                         std::cout<<"[MSCKF_UKF_UPDATE] K "<<K.rows() <<" x "<<K.cols()<<"\n";
                         std::cout<<"[MSCKF_UKF_UPDATE] Pk "<<Pk.rows() <<" x "<<Pk.cols()<<"\n";
                         #endif
-
-                        base::guaranteeSPD(Pk);
                     }
 
                     #ifdef MSCKF_DEBUG_PRINTS
                     std::cout << "[MSCKF_UKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
                     std::cout << "[MSCKF_UKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
                     #endif
+
+                    return number_outliers;
             }
 
             /**@brief update
@@ -271,11 +271,11 @@ namespace localization
              *
              */
             template<typename _Measurement, typename _MeasurementModel>
-            void update(const _Measurement &z, _MeasurementModel h,
+            unsigned int update(const _Measurement &z, _MeasurementModel h,
                     Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &H,
                     Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &R)
             {
-                    update(z, h, H, R, accept_mahalanobis_distance<ScalarType>);
+                    return update(z, h, H, R, accept_mahalanobis_distance<ScalarType>);
             }
 
             /**@brief update
@@ -285,7 +285,7 @@ namespace localization
              */
             template<typename _Measurement, typename _MeasurementModel,
                     typename _MeasurementNoiseCovariance, typename _SignificanceTest>
-            void update(const _Measurement &z, _MeasurementModel &h,
+            unsigned int update(const _Measurement &z, _MeasurementModel &h,
                         Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &H,
                         _MeasurementNoiseCovariance &R, _SignificanceTest mt)
             {
@@ -296,7 +296,7 @@ namespace localization
 
                     VectorXd innovation = z - mean_z;
 
-                    removeOutliers (innovation, H, Pk, R, mt, 2);
+                    const unsigned int number_outliers = removeOutliers (innovation, H, Pk, R, mt, 2);
                     #ifdef MSCKF_DEBUG_PRINTS
                     std::cout<<"[MSCKF_EKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
                     std::cout<<"[MSCKF_EKF_UPDATE] H \n"<<H<<"\n";
@@ -333,6 +333,8 @@ namespace localization
                     std::cout << "[MSCKF_EKF_UPDATE] mu_state':" << std::endl << mu_state << std::endl;
                     std::cout << "[MSCKF_EKF_UPDATE] Pk':" << std::endl << Pk << std::endl;
                     #endif
+
+                    return number_outliers;
             }
 
             void muSingleState(const _SingleState & state)
@@ -466,7 +468,6 @@ namespace localization
                             mean_delta.setZero();
                             for (typename std::vector<_SingleState>::const_iterator Xi = X.begin(); Xi != X.end(); ++Xi)
                             {
-                                    std::cout<<"*Xi: "<<*Xi<<"\n";
                                     mean_delta += *Xi - reference;
                             }
                             mean_delta /= X.size();
@@ -496,7 +497,6 @@ namespace localization
                             mean_delta.setZero();
                             for (typename std::vector<_MultiState>::const_iterator Xi = X.begin(); Xi != X.end(); ++Xi)
                             {
-                                    std::cout<<"*Xi: "<<*Xi<<"\n";
                                     mean_delta += *Xi - reference;
                             }
                             mean_delta /= X.size();
@@ -711,7 +711,7 @@ namespace localization
 
 
             template <typename _SignificanceTest>
-            void removeOutliers(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
+            unsigned int removeOutliers(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
                     Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &h_matrix,
                     Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &p_matrix,
                     Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &r_matrix,
@@ -723,6 +723,7 @@ namespace localization
                     ((h_matrix * p_matrix * h_matrix.transpose()) + r_matrix).inverse();
 
                 /** Process the innovation by block of dof size **/
+                unsigned int number_outliers = 0;
                 register unsigned int i=0;
                 while (i<innovation.size()/dof)
                 {
@@ -735,6 +736,7 @@ namespace localization
                         removeRow(r_matrix, dof*i); removeColumn(r_matrix, dof*i);
                         removeRow(r_matrix, (dof*i)+1); removeColumn(r_matrix, (dof*i)+1);
                         removeRow(h_matrix, dof*i);removeRow(h_matrix, (dof*i)+1);
+                        number_outliers++;
                     }
                     else
                     {
@@ -742,7 +744,7 @@ namespace localization
                     }
                 }
 
-                return;
+                return number_outliers;
             }
 
             void reduceDimension(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
