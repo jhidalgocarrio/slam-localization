@@ -32,7 +32,7 @@
 #include <base/Float.hpp>
 #include <base/Eigen.hpp>
 
-#define MSCKF_DEBUG_PRINTS 1
+//#define MSCKF_DEBUG_PRINTS 1
 
 namespace localization
 {
@@ -188,12 +188,22 @@ namespace localization
                 #endif
             }
 
+            /**@brief update
+             *
+             * UKF update
+             *
+             */
             template<typename _Measurement, typename _MeasurementModel, typename _MeasurementNoiseCovariance>
             unsigned int update(const _Measurement &z, _MeasurementModel h, _MeasurementNoiseCovariance &R)
             {
                     return update(z, h, R, accept_mahalanobis_distance<ScalarType>);
             }
 
+            /**@brief update
+             *
+             * UKF update
+             *
+             */
             template<typename _Measurement, typename _MeasurementModel>
             unsigned int update(const _Measurement &z, _MeasurementModel h,
                         const Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &R)
@@ -202,6 +212,11 @@ namespace localization
                     return update(z, h, R, accept_mahalanobis_distance<ScalarType>);
             }
 
+            /**@brief update
+             *
+             * UKF update
+             *
+             */
             template<typename _Measurement, typename _MeasurementModel,
                     typename _MeasurementNoiseCovariance, typename _SignificanceTest>
             unsigned int update(const _Measurement &z, _MeasurementModel &h,
@@ -220,18 +235,16 @@ namespace localization
 
                     VectorXd innovation = z - mean_z;
 
+                    MatrixXd S = this->covSigmaPoints(mean_z, Z) + R;
                     MatrixXd covXZ = this->crossCovSigmaPoints(mu_state, mean_z, X, Z);
 
-                    MatrixXd H = covXZ.transpose() * Pk.inverse(); //H = Pzx * (Pk)^-1
-
-                    //std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
-                    const unsigned int number_outliers = removeOutliers (innovation, H, Pk, R, mt, 2);
+                    const unsigned int number_outliers = removeOutliers (innovation, covXZ, S, mt, 2);
 
                     #ifdef MSCKF_DEBUG_PRINTS
-                    std::cout<<"[MSCKF_UKF_UPDATE] H size "<<H.rows()<<" x "<<H.cols()<<"\n";
-                    std::cout<<"[MSCKF_UKF_UPDATE] H \n"<<H<<"\n";
                     std::cout<<"[MSCKF_UKF_UPDATE] Pk size "<<Pk.rows()<<" x "<<Pk.cols()<<"\n";
                     std::cout<<"[MSCKF_UKF_UPDATE] R size "<<R.rows()<<" x "<<R.cols()<<"\n";
+                    std::cout<<"[MSCKF_UKF_UPDATE] S size "<<S.rows()<<" x "<<S.cols()<<"\n";
+                    std::cout<<"[MSCKF_UKF_UPDATE] S \n"<<S<<"\n";
                     #endif
 
                     if (innovation.rows() > 0)
@@ -241,9 +254,7 @@ namespace localization
                         std::cout << "[MSCKF_UKF_UPDATE] innovation\n"<<innovation<<"\n";
                         #endif
 
-                        reduceDimension (innovation, H, R);
-                        const MatrixXd S = H * Pk * H.transpose() + R;
-                        const MatrixXd K = Pk * H.transpose() * S.inverse();
+                        const MatrixXd K = covXZ * S.inverse();
                         #ifdef MSCKF_DEBUG_PRINTS
                         std::cout << "[MSCKF_UKF_UPDATE] innovation\n"<<innovation<<"\n";
                         #endif
@@ -709,6 +720,38 @@ namespace localization
                 matrix.conservativeResize(numRows,numCols);
             }
 
+            template <typename _SignificanceTest>
+            unsigned int removeOutliers(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &crossxz_matrix,
+                    Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> &s_matrix,
+                    _SignificanceTest mt,
+                    const unsigned int dof)
+            {
+
+                /** Process the innovation by block of dof size **/
+                unsigned int number_outliers = 0;
+                register unsigned int i=0;
+                while (i<innovation.size()/dof)
+                {
+                    const ScalarType mahalanobis2 = (innovation.block(dof*i, 0, dof, 1).transpose() * s_matrix.block(dof*i, dof*i, dof, dof).inverse() * innovation.block(dof*i, 0, dof, 1))[0];
+                    //std::cout<<"feature["<<i<<"]:\n"<<innovation.block(dof*i, 0, dof, 1) <<"\n";
+                    if (!mt(mahalanobis2, dof))
+                    {
+                        //std::cout<<"OUTLIER!!\n";
+                        removeRow(innovation, dof*i); removeRow(innovation, (dof*i)+1);
+                        removeRow(s_matrix, dof*i); removeColumn(s_matrix, dof*i);
+                        removeRow(s_matrix, (dof*i)+1); removeColumn(s_matrix, (dof*i)+1);
+                        removeColumn(crossxz_matrix, dof*i);removeColumn(crossxz_matrix, (dof*i)+1);
+                        number_outliers++;
+                    }
+                    else
+                    {
+                        i++;
+                    }
+                }
+
+                return number_outliers;
+            }
 
             template <typename _SignificanceTest>
             unsigned int removeOutliers(Eigen::Matrix<ScalarType, Eigen::Dynamic, 1> &innovation,
