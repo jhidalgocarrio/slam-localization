@@ -15,4 +15,6 @@
   <depend package="base/types" />
   <depend package="slam/mtk" />
 
+  <tags>stable</tags>
+
 </package>
