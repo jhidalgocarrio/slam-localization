@@ -43,6 +43,8 @@ namespace localization
 
         ::MTK::SubManifold<vec3, 0> pos;
         ::MTK::SubManifold<SO3, vec3::DOF + 0> orient;
+        ::MTK::SubManifold<vec3, vec3::DOF + SO3::DOF + 0> velo;
+
 
         enum
         {
@@ -58,8 +60,8 @@ namespace localization
         typedef vec3::scalar scalar;
         typedef Eigen::Matrix<scalar, DOF, 1> vectorized_type;
 
-        ReducedState ( const vec3& pos = vec3(), const SO3& orient = SO3() )
-            : pos(pos), orient(orient)
+        ReducedState ( const vec3& pos = vec3(), const SO3& orient = SO3(), const vec3& velo = vec3())
+            : pos(pos), orient(orient), velo(velo)
         {}
 
         /** @brief set the ReducedState from a vectorized type ReducedState
