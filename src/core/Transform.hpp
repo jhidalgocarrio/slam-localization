@@ -2,7 +2,7 @@
 #define _LOCALIZATION_CORE_TRANSFORM_HPP_
 
 #include <Eigen/Core>
-#include <base/samples/rigid_body_state.h>
+#include <base/samples/RigidBodyState.hpp>
 
 namespace localization
 {
